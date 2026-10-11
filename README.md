@@ -9,6 +9,13 @@ processes; it does not collect. Bring a collection from the triage tool you alre
 
 Each parser is driven by a module file, so adding a tool is a file drop rather than code.
 
+## Why this exists
+
+ArtefactForge started as a side project. I can find my way around code, but mostly I wanted to
+put Claude through its paces on something I'd actually use. That something was a tool that takes
+a pile of triage collections and processes them all in one go, so I could stop babysitting each
+one. It held up better than I expected. Bug reports are welcome, and so is applause for the robot.
+
 ---
 
 ## What it does
