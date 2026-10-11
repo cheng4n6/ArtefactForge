@@ -39,6 +39,20 @@ one. It held up better than I expected. Bug reports are welcome, and so is appla
   export), so no ext4 driver is needed. Where no Windows tool exists, such as the systemd journal,
   ArtefactForge carries its own parser.
 
+## Screenshots
+
+![Setup tab with the module list](.github/images/setup-modules.png)
+*Setup: point it at the evidence, pick the modules by category, and set the worker counts.*
+
+![Setup tab with the detected collections](.github/images/setup-collections.png)
+*Collections: each collection's layout is detected, with the modules that apply to it.*
+
+![Run tab with a batch in progress](.github/images/run-in-progress.png)
+*Run: a Windows and a Linux collection processed in one batch, with live status per module.*
+
+![Results tab](.github/images/results.png)
+*Results: every module's status and run time, and the reason for anything skipped.*
+
 ## Quick start
 
 1. Download the latest zip from [Releases](../../releases) and extract it anywhere. It needs the
