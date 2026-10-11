@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-10-11
 
 First public release, 0.1.0, a beta published as a GitHub pre-release. ArtefactForge was developed
 privately as ArtifactForge up to 1.6.0; this repository starts its history and its version numbers
