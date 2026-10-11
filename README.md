@@ -1,5 +1,10 @@
 # ArtefactForge
 
+> [!WARNING]
+> **Beta.** ArtefactForge is in its 0.x beta: it works, but expect rough edges, and things may
+> change between releases. Use it at your own risk, check its output before you rely on it in a
+> case, and report anything odd in [Issues](../../issues).
+
 A forensic artefact processing tool. Point it at collected evidence, pick modules, get parsed
 CSV — with the collection layout detected, the tools run in parallel, and every invocation
 recorded.
