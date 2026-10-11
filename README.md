@@ -6,7 +6,7 @@
 > case, and report anything odd in [Issues](../../issues).
 
 A forensic artefact processing tool. Point it at collected evidence, pick modules, get parsed
-CSV — with the collection layout detected, the tools run in parallel, and every invocation
+CSV - with the collection layout detected, the tools run in parallel, and every invocation
 recorded.
 
 Windows and Linux evidence, from a WPF interface or a command line over the same engine. It
@@ -54,7 +54,7 @@ ArtefactForgeCli run  "D:\Collections\HOST01" "D:\Cases" --case HOST01
 ArtefactForgeCli run  "D:\Collections" "D:\Cases" --batch --profile EventLogs-triage --workers 6
 ```
 
-The full manual — GUI tabs, every command, output layout, statuses, resume — is on
+The full manual - GUI tabs, every command, output layout, statuses, resume - is on
 [cheng4n6.com](https://cheng4n6.com/).
 
 ---
