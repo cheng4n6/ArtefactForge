@@ -1,0 +1,23 @@
+Description: Linux cron jobs and periodic scripts
+Category: Persistence
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxCron
+# Covers every location a scheduled job can hide: the system crontab, /etc/cron.d, the
+# hourly/daily/weekly/monthly directories, per-user crontabs under /var/spool/cron, and pending
+# at-jobs (/var/spool/cron/atjobs on Debian, /var/spool/at on RHEL) with their scheduled time.
+#
+# /etc/crontab and /etc/cron.d entries carry a user field between the schedule and the command;
+# per-user crontabs do not. Parsing both with one rule would attribute commands to the wrong
+# account, so the two are handled separately.
+Requires:
+  - '%root%/etc'
+Platform: linux
+Priority: 30
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxCron.ps1" -Root "%root%" -Out "%destinationDirectory%"
+    ExportFormat: csv

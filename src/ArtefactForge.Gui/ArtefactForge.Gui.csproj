@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArtefactForge.Core\ArtefactForge.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>ArtefactForge</AssemblyName>
+    <!-- One icon, kept with its SVG masters in design\icon. -->
+    <ApplicationIcon>..\..\design\icon\artefactforge.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\design\icon\artefactforge.ico" Link="artefactforge.ico" />
+  </ItemGroup>
+
+</Project>

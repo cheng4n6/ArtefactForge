@@ -1,0 +1,27 @@
+Description: Linux audit log (auditd) - executions, logins, sudo, account and audit changes
+Category: Audit
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxAudit
+# /var/log/audit/audit.log and its rotations. auditd writes one event as several records (SYSCALL,
+# EXECVE, CWD, PATH, PROCTITLE...) sharing an event ID; they are merged into one row per event, with
+# the command line and file names decoded from hex where auditd encoded them, and user IDs named
+# from the collected /etc/passwd (or from the log itself in the ENRICHED format).
+#
+# LinuxAudit_KeyEvents.csv lists the events an investigation starts from: logins and failed
+# authentication, sudo commands, account and group changes, audit rules changed or the audit daemon
+# stopped, SELinux/AppArmor denials, crashes and kernel module loads. Times are UTC.
+#
+# What auditd recorded depends entirely on the rules the system had; an empty execution history
+# usually means no execve rule, not that nothing ran.
+Requires:
+  - '%root%/var/log/audit'
+Platform: linux
+Priority: 22
+IoWeight: heavy
+Processors:
+  -
+    Executable: builtin:LinuxAudit
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

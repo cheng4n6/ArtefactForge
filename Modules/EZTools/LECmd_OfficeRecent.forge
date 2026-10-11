@@ -1,0 +1,16 @@
+Description: LNK files in Office Recent, per user (LECmd)
+Category: LNKFiles
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LECmd_OfficeRecent
+Requires: ['%root%\Users\%user%\AppData\Roaming\Microsoft\Office\Recent\*.lnk']
+Iterate: userprofile
+Platform: windows
+Priority: 52
+Processors:
+  -
+    Executable: eztools\LECmd.exe
+    CommandLine: -d "%root%\Users\%user%\AppData\Roaming\Microsoft\Office\Recent" -q --csv "%destinationDirectory%" --csvf "%user%_LECmd_OfficeRecent.csv"
+    ExportFormat: csv
+    ExportFile: "%user%_LECmd_OfficeRecent.csv"

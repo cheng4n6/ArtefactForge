@@ -1,0 +1,30 @@
+<!-- The dark palette: the same keys as Light.xaml, kept warm-neutral to match it. Status colours
+     are lifted so they keep their contrast on a dark card. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="WindowBrush" Color="#1B1B1A"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#252523"/>
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#3A3936"/>
+    <SolidColorBrush x:Key="GridLineBrush" Color="#33322F"/>
+
+    <SolidColorBrush x:Key="TextBrush" Color="#E9E7E2"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#A8A6A0"/>
+    <SolidColorBrush x:Key="FaintBrush" Color="#82807A"/>
+    <SolidColorBrush x:Key="LogBrush" Color="#C9C7C1"/>
+
+    <SolidColorBrush x:Key="ErrorBrush" Color="#EE8A84"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="#5CC291"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="#E5A84E"/>
+
+    <SolidColorBrush x:Key="AccentBrush" Color="#3D7FE6"/>
+    <SolidColorBrush x:Key="AccentBorderBrush" Color="#5A93EC"/>
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF"/>
+
+    <SolidColorBrush x:Key="ControlBrush" Color="#2D2D2B"/>
+    <SolidColorBrush x:Key="ControlBorderBrush" Color="#4D4C48"/>
+    <SolidColorBrush x:Key="HoverOverlayBrush" Color="#14FFFFFF"/>
+    <SolidColorBrush x:Key="PressedOverlayBrush" Color="#26FFFFFF"/>
+    <SolidColorBrush x:Key="SelectionBrush" Color="#2C4A75"/>
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#55534F"/>
+    <SolidColorBrush x:Key="SwitchOffBrush" Color="#5E5D58"/>
+</ResourceDictionary>

@@ -1,0 +1,86 @@
+Description: Sigma and Chainsaw rule hunting over event logs (Chainsaw)
+Category: EventLogs
+Author: ArtefactForge
+Version: '1.1'
+ExportFormat: csv
+OutputName: Chainsaw
+# Verified against Chainsaw 2.16.3 (2026-08-19).
+# The hunt verb takes TWO positionals - [RULES] [PATH]... - so the evidence path must be
+# second. Passing only the evtx path binds it to RULES and hunts nothing.
+#   -s points at the sigma repo's rules subfolder, not the repo root.
+#   --skip-errors keeps a corrupt evtx from aborting the whole hunt.
+#   No -q: it silenced the only explanation for an empty hunt, leaving a NoOutput with blank
+#   logs. The progress lines it prints instead are declared under ExpectedStderr.
+#
+# On the filtering options, measured against the reference collection:
+#   no filter        5127 detections
+#   --status stable  1678  - Chainsaw's status is only stable|experimental, and Sigma's large
+#                            'test' tier does not count as stable, so this costs two thirds of
+#                            coverage. It is not "exclude experimental and deprecated".
+#   --level high      872  - Level is an EXACT match, not a floor: high and medium do not nest.
+# Both default to off for that reason. Filter the level column at review time instead, where the
+# decision is reversible; a rule that never loaded produces a detection you never see.
+Requires: ['%root%\Windows\System32\winevt\Logs\*.evtx']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 26
+IoWeight: heavy
+MemoryWeight: heavy
+Timeout: 7200
+
+Options:
+  -
+    Name: Status
+    Description: Restrict rules by status. stable alone drops the Sigma test tier - see notes.
+    Kind: choice
+    Choices: ['', stable, experimental]
+    Default: ''
+    Expand: --status %value%
+  -
+    Name: Level
+    Description: Load only this severity. Exact match, not a minimum.
+    Kind: choice
+    Choices: ['', info, low, medium, high, critical]
+    Default: ''
+    Expand: --level %value%
+  -
+    Name: From
+    Description: Drop events older than this timestamp (YYYY-MM-ddTHH:mm:SS).
+    Kind: text
+    Default: ''
+    Expand: --from %value%
+  -
+    Name: To
+    Description: Drop events newer than this timestamp (YYYY-MM-ddTHH:mm:SS).
+    Kind: text
+    Default: ''
+    Expand: --to %value%
+  -
+    Name: SkipErrors
+    Description: Keep hunting when a corrupt evtx is met, rather than aborting.
+    Kind: flag
+    Default: true
+    Expand: --skip-errors
+  -
+    Name: LoadUnknown
+    Description: Try to load files Chainsaw cannot identify.
+    Kind: flag
+    Default: false
+    Expand: --load-unknown
+  -
+    Name: Extra
+    Description: Any further Chainsaw flags, passed through verbatim.
+    Kind: text
+    Default: ''
+    Expand: '%value%'
+
+Processors:
+  -
+    Executable: chainsaw\chainsaw.exe
+    CommandLine: --no-banner hunt "%toolsDir%\chainsaw\rules" "%root%\Windows\System32\winevt\Logs" -s "%toolsDir%\chainsaw\sigma\rules" -m "%toolsDir%\chainsaw\mappings\sigma-event-logs-all.yml" --csv -o "%destinationDirectory%" %options%
+    ExportFormat: csv
+    # Its progress lines go to stderr. They are expected, and they are what explains a run that
+    # wrote nothing: how many rules and logs loaded, and how many detections were found.
+    ExpectedStderr:
+      - '^\[\+\] '
+      - '^\[!\] Loaded \d+ detection rules'

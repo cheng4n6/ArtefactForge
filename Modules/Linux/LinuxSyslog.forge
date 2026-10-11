@@ -1,0 +1,26 @@
+Description: Linux system logs - syslog, messages, kern.log, cloud-init
+Category: Syslog
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxSyslog
+# The general system logs and their rotations: syslog (Debian), messages (RHEL), kern.log,
+# daemon.log, user.log and cloud-init.log, one row per line. auth.log and secure are left to
+# LinuxAuth. cloud-init-output.log, the output of an instance's first-boot scripts, has its own CSV.
+#
+# LinuxSyslog_KeyEvents.csv picks out cron jobs run (Debian logs each CRON CMD here), USB devices
+# connected, unsigned and out-of-tree kernel modules loaded, segfaults, out-of-memory kills and
+# interfaces set promiscuous.
+#
+# Classic syslog lines carry no year; it is inferred from the file's last-write time, as in
+# LinuxAuth, and YearInferred says so. A line in no known format is kept with only its text.
+Requires:
+  - '%root%/var/log'
+Platform: linux
+Priority: 24
+IoWeight: heavy
+Processors:
+  -
+    Executable: builtin:LinuxSyslog
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

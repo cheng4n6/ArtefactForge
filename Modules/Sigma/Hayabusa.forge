@@ -1,0 +1,94 @@
+Description: Sigma detection timeline over event logs (Hayabusa)
+Category: EventLogs
+Author: ArtefactForge
+Version: '1.2'
+ExportFormat: csv
+OutputName: Hayabusa
+# Verified against Hayabusa v4.0.0 (2026-08-19).
+#
+# Fixed flags, not exposed as options because changing them breaks the run rather than tuning it:
+#   -w  no-wizard: MANDATORY. Without it Hayabusa asks questions and the process hangs.
+#   -C  clobber, so a re-run overwrites rather than failing.
+#   -q  suppress the banner.
+#   -r  rules passed explicitly rather than relying on the working directory.
+# WorkingDirectory is the run's _Logs\Console\ToolLogs\<invocation> folder: Hayabusa writes its
+# error log to .\logs, which otherwise lands inside the application's Tools folder.
+#
+# Everything under Options is safe to vary per run. Defaults reproduce the behaviour that was
+# hard-coded before they existed, so an unmodified run is unchanged.
+#
+# logon-summary is a different verb with a smaller flag set - it accepts neither -p nor -N, and
+# exits non-zero if given them. It deliberately does not take %options%.
+Requires: ['%root%\Windows\System32\winevt\Logs\*.evtx']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 25
+IoWeight: heavy
+MemoryWeight: heavy
+Timeout: 7200
+
+Options:
+  -
+    Name: Profile
+    Description: Output columns. verbose adds MITRE tactics, rule file and source evtx.
+    Kind: choice
+    Choices: [minimal, standard, verbose, all-field-info, all-field-info-verbose, super-verbose, timesketch-minimal, timesketch-verbose]
+    Default: verbose
+    Expand: -p %value%
+  -
+    Name: MinLevel
+    Description: Lowest rule severity to load.
+    Kind: choice
+    Choices: [informational, low, medium, high, critical]
+    Default: informational
+    Expand: -m %value%
+  -
+    Name: Timestamps
+    Description: UTC matches the EZ Tools CSVs; iso-8601 is always UTC and sorts as text.
+    Kind: choice
+    Choices: [utc, iso-8601]
+    Default: utc
+    Expand: --%value%
+  -
+    Name: CarveRecords
+    Description: Recover deleted event records from slack space. Slower.
+    Kind: flag
+    Default: false
+    Expand: -x
+  -
+    Name: Sort
+    Description: Sort the timeline before saving. Uses considerably more memory.
+    Kind: flag
+    Default: false
+    Expand: -s
+  -
+    Name: DedupeDetections
+    Description: Drop duplicate detections. Requires Sort.
+    Kind: flag
+    Default: false
+    Expand: -X
+  -
+    Name: NoSummary
+    Description: Skip the terminal summary, which an unattended run never shows.
+    Kind: flag
+    Default: true
+    Expand: -N
+  -
+    Name: Extra
+    Description: Any further Hayabusa flags, passed through verbatim.
+    Kind: text
+    Default: ''
+    Expand: '%value%'
+
+Processors:
+  -
+    Executable: hayabusa\hayabusa.exe
+    CommandLine: dfir-timeline -d "%root%\Windows\System32\winevt\Logs" -r "%toolsDir%\hayabusa\rules" -o "%destinationDirectory%\Hayabusa_Timeline.csv" %options% -w -C -q
+    ExportFormat: csv
+    ExportFile: Hayabusa_Timeline.csv
+    WorkingDirectory: '%toolLogDir%'
+  -
+    Executable: hayabusa\hayabusa.exe
+    CommandLine: logon-summary -d "%root%\Windows\System32\winevt\Logs" -o "%destinationDirectory%\Hayabusa_LogonSummary" -C -U -q
+    ExportFormat: csv
+    WorkingDirectory: '%toolLogDir%'

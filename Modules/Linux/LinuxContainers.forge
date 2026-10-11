@@ -1,0 +1,26 @@
+Description: Docker containers, container logs and images
+Category: Containers
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxContainers
+# Every container under var/lib/docker/containers: image, command, when it was created, started
+# and stopped, and the settings that matter for escape - privileged, host PID or network
+# namespace, added capabilities, and host paths mounted in. Container stdout and stderr from the
+# default json-file log driver, and the tagged images present.
+#
+# Environment variables are listed by name only. Container environments routinely hold passwords
+# and cloud keys; the values stay in config.v2.json in the evidence rather than being copied into
+# the case folder.
+#
+# Docker only. Podman, containerd and the 'local' log driver are not read.
+Requires:
+  - '%root%/var/lib/docker'
+Platform: linux
+Priority: 45
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:LinuxContainers
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

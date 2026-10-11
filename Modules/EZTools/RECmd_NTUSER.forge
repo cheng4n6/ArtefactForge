@@ -1,0 +1,30 @@
+# The case stock .mkape cannot express: once per user profile.
+Description: User registry hives, Kroll batch (RECmd)
+Category: Registry
+Author: ArtefactForge
+Version: '1.0'
+Id: 2b7d64a1-9f03-4e88-b1a6-7c40d9e5aa32
+ExportFormat: csv
+OutputName: RECmd_NTUSER
+
+Requires:
+  - '%root%\Users\%user%\NTUSER.DAT'
+Iterate: userprofile      # %user% is bound per iteration
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 30
+IoWeight: light
+Scope: any
+
+Processors:
+  -
+    Executable: eztools\RECmd\RECmd.exe
+    CommandLine: -f "%root%\Users\%user%\NTUSER.DAT" --bn "%toolsDir%\eztools\RECmd\BatchExamples\Kroll_Batch.reb" --csv "%destinationDirectory%" --csvf "%user%_RECmd_NTUSER.csv"
+    ExportFormat: csv
+    ExportFile: "%user%_RECmd_NTUSER.csv"
+  -
+    # Run keys Kroll_Batch misses (per-user Policies\Explorer\Run). Own --csvf so Kroll's file stands.
+    Executable: eztools\RECmd\RECmd.exe
+    CommandLine: -f "%root%\Users\%user%\NTUSER.DAT" --bn "%scriptsDir%\RECmd\ArtefactForge_Autoruns.reb" --csv "%destinationDirectory%" --csvf "%user%_RECmd_NTUSER_Autoruns.csv"
+    ExportFormat: csv
+    ExportFile: "%user%_RECmd_NTUSER_Autoruns.csv"

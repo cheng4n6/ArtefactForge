@@ -1,0 +1,23 @@
+Name: Collection folder (drive-letter root)
+Id: collection-folder
+Priority: 20
+Provisional: false
+Platform: windows             # modules for the other platform are left out of the plan for this target
+Description: >
+  A collection whose drive contents sit in a single drive-letter folder directly beneath
+  the selection. VERIFIED against a real CyLR collection (2026-08-18):
+  the drive folder is at the selection root, NOT nested under a hostname - CyLR names the
+  zip after the host, it does not create a host folder. KAPE --tout produces the same shape.
+Detect:
+  Markers:
+    - '?\Windows\System32\config\SYSTEM'
+    - '?\$MFT'
+  MatchMode: any
+  DriveLetterFolder: true
+Resolve:
+  RootOffset: '?'
+  Unescape: none
+Notes: >
+  Non-drive-letter siblings at the selection root are ignored, so a CyLR working directory
+  containing CyLR.exe, CylR.log and the collection zip alongside C\ detects cleanly.
+  Several drive-letter folders: GUI prompts; batch mode treats each as <Collection>_<Letter>.

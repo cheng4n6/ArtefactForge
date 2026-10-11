@@ -1,0 +1,23 @@
+Description: Linux systemd units and enablement state
+Category: Persistence
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxSystemd
+# Two different things live under /etc/systemd/system and the difference is the point: a real FILE
+# is a locally defined unit, which is a classic persistence location; a SYMLINK inside a *.wants
+# directory is an enablement record saying the unit runs at boot.
+#
+# Enablement is read from the link TARGET STRING, never by following the link - in a partial
+# collection the target lives under /usr/lib or /lib and will not have been captured, so following
+# it would silently drop every enabled unit.
+Requires:
+  - '%root%/etc/systemd/system'
+Platform: linux
+Priority: 30
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxSystemd.ps1" -Root "%root%" -Out "%destinationDirectory%"
+    ExportFormat: csv

@@ -1,0 +1,17 @@
+Description: Prefetch (PECmd)
+Category: Prefetch
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: PECmd
+Requires: ['%root%\Windows\Prefetch']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 45
+IoWeight: heavy
+SupportsVss: true
+Processors:
+  -
+    Executable: eztools\PECmd.exe
+    CommandLine: -d "%root%\Windows\Prefetch" -q --csv "%destinationDirectory%" %vss%
+    ExportFormat: csv

@@ -1,0 +1,26 @@
+Description: Linux persistence and tampering points beyond cron and systemd
+Category: Persistence
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxPersistence
+# The places something can be made to run, or be let in, that LinuxCron and LinuxSystemd do not
+# cover: ld.so.preload and LD_PRELOAD in /etc/environment, rc.local, system-wide and per-user shell
+# startup files, MOTD scripts (run at every SSH login), XDG autostart, user systemd units,
+# sshd_config and ~/.ssh/rc, PAM, kernel modules loaded at boot and modprobe install commands,
+# udev RUN rules, APT hooks and SysV init scripts.
+#
+# LinuxPersistence_Locations.csv lists every file found there with its modification time.
+# LinuxPersistence_Entries.csv lists the lines that do something, with a Review column saying why a
+# line deserves a look (a download, inline code, a preload, a non-standard PAM module...). Review is
+# a pointer, not a verdict.
+Requires:
+  - '%root%/etc'
+Platform: linux
+Priority: 31
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:LinuxPersistence
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

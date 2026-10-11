@@ -1,0 +1,28 @@
+Description: UAC live response - processes, network, open files and kernel modules at collection time
+Category: LiveResponse
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxLiveResponse
+# What UAC's live_response commands recorded about the running system: the process list with each
+# process's executable, working directory and hashes from /proc; sockets with their owning
+# processes (ss, else netstat); interface addresses, routes and the neighbour cache; lsof's open
+# files with deleted-but-open ones marked; and loaded kernel modules with their taint flags.
+# Processes get a Review column (deleted executable, running from /tmp or /dev/shm or memory, a
+# shell or download one-liner), and a process /proc listed but ps did not is added and marked.
+#
+# Every file under live_response is listed in LinuxLiveResponse_Index.csv with the CSV that read
+# it, so command output not parsed here (iptables, systemctl, env, sestatus and the rest) is still
+# in view. ps times are the collected system's local time, written as recorded.
+#
+# Reads %root%\_UAC\live_response, where a UAC collection's command output lands on extraction.
+Requires:
+  - '%root%/_UAC/live_response'
+Platform: linux
+Priority: 8
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:LinuxLiveResponse
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

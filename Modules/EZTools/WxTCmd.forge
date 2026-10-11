@@ -1,0 +1,17 @@
+Description: Windows 10 Timeline (ActivitiesCache.db)
+Category: Timeline
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: WxTCmd
+# WxTCmd has no --csvf, so output names cannot be made unique per user. Iterating by match
+# gives each hit its own destination folder, which prevents one user overwriting another.
+Requires: ['%root%\Users\*\AppData\Local\ConnectedDevicesPlatform\*\ActivitiesCache.db']
+Iterate: match
+Platform: windows
+Priority: 55
+Processors:
+  -
+    Executable: eztools\WxTCmd.exe
+    CommandLine: -f "%match%" --csv "%destinationDirectory%"
+    ExportFormat: csv

@@ -1,0 +1,26 @@
+# Simplest case: one processor, no iteration. Also valid as a stock .mkape.
+Description: Windows Event Logs (EvtxECmd)
+Category: EventLogs
+Author: ArtefactForge
+Version: '1.0'
+Id: 8f3c1b90-4a2e-4d15-9c77-1d5a0e6b2f41
+ExportFormat: csv
+OutputName: EvtxECmd
+
+# ArtefactForge extensions
+Requires:
+  - '%root%\Windows\System32\winevt\Logs\*.evtx'
+Iterate: none
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 20
+IoWeight: heavy
+Scope: any
+SupportsVss: true
+
+Processors:
+  -
+    Executable: eztools\EvtxeCmd\EvtxECmd.exe
+    CommandLine: -d "%root%\Windows\System32\winevt\Logs" --csv "%destinationDirectory%" --csvf EvtxECmd_EventLogs.csv %vss%
+    ExportFormat: csv
+    ExportFile: EvtxECmd_EventLogs.csv

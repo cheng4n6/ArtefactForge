@@ -1,0 +1,15 @@
+Description: User Access Logging (SumECmd) - Windows Server only
+Category: SUM
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: SumECmd
+Requires: ['%root%\Windows\System32\LogFiles\SUM']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 61
+Processors:
+  -
+    Executable: eztools\SumECmd.exe
+    CommandLine: -d "%root%\Windows\System32\LogFiles\SUM" --csv "%destinationDirectory%"
+    ExportFormat: csv

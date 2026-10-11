@@ -1,0 +1,16 @@
+Name: Mounted drive or live system
+Id: mounted-drive
+Priority: 10          # probed first; most specific wins on ties
+Provisional: false
+Platform: windows             # modules for the other platform are left out of the plan for this target
+Description: >
+  A real volume root - live C:, or an E01/VMDK/VHDX mounted manually to a drive letter.
+Detect:
+  RootIsSelection: true          # the selected path IS the drive root
+  Markers:
+    - 'Windows\System32\config\SYSTEM'
+    - '$MFT'
+  MatchMode: any
+Resolve:
+  RootOffset: '.'
+  Unescape: none

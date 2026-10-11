@@ -1,0 +1,49 @@
+Description: SRUM database (SrumECmd)
+Category: SRUM
+Author: ArtefactForge
+Version: '1.1'
+ExportFormat: csv
+OutputName: SrumECmd
+# -r SOFTWARE is optional but strongly recommended: it resolves app and user IDs.
+#
+# SrumECmd opens SRUDB.dat through Windows' own ESE engine, which replays the transaction logs into
+# the database and rewrites SRUDB.dat, SRUDB.jfm, SRU.chk and SRU.log in place. Measured on a
+# collected sru folder: all four changed hash after one run. So the whole sru folder is copied into
+# %workDir% first and SrumECmd only ever sees the copy. The log replay still happens, on the copy,
+# so the output is the same as before. %workDir% is scratch space, deleted when the module finishes.
+#
+# The copy is not ContinueOnError: if it fails, the module fails and is flagged for review rather
+# than falling back to opening the evidence. SOFTWARE is read through the registry library, which
+# does not write, so it is passed from the evidence as-is.
+#
+# SrumECmd's own replay is not enough for a database collected while Windows had it open, which
+# is how Velociraptor collects it: on such a copy it failed with "Access denied" / "not shut down
+# cleanly" and wrote nothing. So the copy is recovered first with esentutl /r, the way Windows
+# would. The log and system paths are given explicitly and /i is NOT used: with /i the recovery
+# reported success but left the database dirty. A clean database needs no recovery and esentutl
+# leaves it alone. If the logs were not collected, recovery fails (ContinueOnError) and SrumECmd
+# then reports the dirty database, so the module is flagged rather than repaired with /p, which
+# discards data.
+#
+# Live systems use SrumECmd_Live, which stages through a shadow copy instead.
+Requires: ['%root%\Windows\System32\sru\SRUDB.dat']
+Scope: offlineonly
+Platform: windows
+Priority: 60
+IoWeight: heavy
+
+Prepare:
+  -
+    Executable: C:\Windows\System32\cmd.exe
+    CommandLine: /c copy /y /b "%root%\Windows\System32\sru\*" "%workDir%\"
+  -
+    Executable: C:\Windows\System32\esentutl.exe
+    CommandLine: /r sru /l . /s . /d .
+    WorkingDirectory: '%workDir%'
+    ContinueOnError: true
+
+Processors:
+  -
+    Executable: eztools\SrumECmd.exe
+    CommandLine: -f "%workDir%\SRUDB.dat" -r "%root%\Windows\System32\config\SOFTWARE" --csv "%destinationDirectory%"
+    ExportFormat: csv

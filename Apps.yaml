@@ -1,0 +1,34 @@
+# Programs listed on the Tools tab, each with an Open button. Order here is display order.
+# Executable is either relative to a tool root (Tools\, or a sibling EZ-Tools\) or a full path,
+# for anything installed elsewhere. A program that is not found stays listed, greyed out, with the
+# path that was checked.
+
+Apps:
+  -
+    Name: Timeline Explorer
+    Description: Filter, sort and search CSV output
+    Executable: eztools\TimelineExplorer\TimelineExplorer.exe
+  -
+    Name: Registry Explorer
+    Description: Browse registry hives, with plugins and bookmarks
+    Executable: eztools\RegistryExplorer\RegistryExplorer.exe
+  -
+    Name: ShellBags Explorer
+    Description: Folder access from ShellBags, including folders since deleted
+    Executable: eztools\ShellBagsExplorer\ShellBagsExplorer.exe
+  -
+    Name: MFT Explorer
+    Description: Browse $MFT records as a folder tree
+    Executable: eztools\MFTExplorer\MFTExplorer.exe
+  -
+    Name: JumpList Explorer
+    Description: Browse automatic and custom jump lists
+    Executable: eztools\JumpListExplorer\JumpListExplorer.exe
+  -
+    Name: SDB Explorer
+    Description: Browse application compatibility shim databases
+    Executable: eztools\SDBExplorer\SDBExplorer.exe
+  -
+    Name: EZViewer
+    Description: View documents without the program that made them
+    Executable: eztools\EZViewer\EZViewer.exe

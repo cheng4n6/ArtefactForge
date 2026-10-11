@@ -1,0 +1,29 @@
+Description: Linux authentication log events (auth.log / secure)
+Category: Auth
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxAuth
+# Reads auth.log (Debian) and secure (RHEL) plus every rotated sibling, gzipped ones included -
+# the rotated files hold most of the history, and a parser that reads only the live file reports
+# the last few days while looking like it worked.
+#
+# Classifies logins accepted and failed, invalid users, sudo commands, sessions and account
+# creation, and writes a KeyEvents CSV alongside the full one so the interesting rows are not
+# buried.
+#
+# Syslog lines carry no year. The year is taken from the file's last-write time and every row is
+# marked YearInferred, because on an exported copy that time is when the file was copied rather
+# than written. The raw timestamp is always kept so the inference never loses anything.
+# rsyslog on Debian 12+ writes RFC 3339 instead; those lines carry year and offset, so nothing is
+# inferred and TimestampUtc is filled.
+Requires:
+  - '%root%/var/log'
+Platform: linux
+Priority: 20
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxAuth.ps1" -Root "%root%" -Out "%destinationDirectory%"
+    ExportFormat: csv

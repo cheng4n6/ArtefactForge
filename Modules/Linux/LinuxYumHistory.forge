@@ -1,0 +1,24 @@
+Description: yum transaction history (RHEL/CentOS 7) - who ran what
+Category: Packages
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxYum
+# yum's history databases on RHEL and CentOS 7, /var/lib/yum/history/history-*.sqlite: every yum
+# run with its command line, the user, the result, and each package it touched. The RHEL 7
+# counterpart of LinuxDnfHistory. All the files are read, not only the newest: 'yum history new'
+# starts a fresh one and IDs restart at 1, so each row names its SourceFile.
+#
+# RpmdbChangedBefore = True where the package database changed between two yum runs without yum,
+# for instance a package installed or removed with rpm directly. yum history flags the same thing.
+# A leftover -journal beside a database is reported, and marks the run CheckLog.
+Requires:
+  - '%root%/var/lib/yum/history/history-*.sqlite'
+Platform: linux
+Priority: 41
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:LinuxYumHistory
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

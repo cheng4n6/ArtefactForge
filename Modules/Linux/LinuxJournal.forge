@@ -1,0 +1,25 @@
+Description: systemd journal (built-in reader, no journalctl needed)
+Category: Journal
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxJournal
+# Every .journal and .journal~ file under var/log/journal and run/log/journal, merged into one UTC
+# timeline. On a minimal RHEL 8+ host with no auth.log or secure this is the authentication record.
+#
+# Read by ArtefactForge's own parser - journalctl does not run on Windows. Validated field for field
+# against journalctl -o json. Entries are found by walking the file rather than its index, so a
+# file that was never closed also gives up the entries written after its index was last updated.
+#
+# LinuxJournal_Auth.csv classifies authentication entries with the same rules as LinuxAuth, so the
+# two can be read side by side; note the journal's timestamps are UTC and auth.log's are local.
+Requires:
+  - '%root%/*/log/journal/*/*.journal*'
+Platform: linux
+Priority: 25
+IoWeight: heavy
+Processors:
+  -
+    Executable: builtin:LinuxJournal
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

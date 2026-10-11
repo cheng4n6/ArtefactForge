@@ -1,0 +1,15 @@
+Description: Jump Lists, per user (JLECmd)
+Category: JumpLists
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: JLECmd
+Requires: ['%root%\Users\%user%\AppData\Roaming\Microsoft\Windows\Recent\*Destinations\*']
+Iterate: userprofile
+Platform: windows
+Priority: 50
+Processors:
+  -
+    Executable: eztools\JLECmd.exe
+    CommandLine: -d "%root%\Users\%user%\AppData\Roaming\Microsoft\Windows\Recent" -q --csv "%destinationDirectory%"
+    ExportFormat: csv

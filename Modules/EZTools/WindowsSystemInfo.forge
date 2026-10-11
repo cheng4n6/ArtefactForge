@@ -1,0 +1,34 @@
+Description: Windows system summary - identity, OS, time, network, accounts
+Category: SystemInfo
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: SystemInfo
+# Two renderings of one parse, matching the Linux summary: a Category/Item/Value/Source CSV for
+# filtering and the case roll-up, and a text report laid out to be read. Item names match the Linux
+# ones where they mean the same thing, so both platforms land in one SystemInventory.csv.
+#
+# The Prepare step runs RECmd against its own targeted batch rather than reading what
+# RECmd_SystemHives produced. The summary then works whether or not that module was selected, and
+# cannot break when its output format changes. It costs a second pass over the hives.
+#
+# Timezone is the value most worth having: everything ArtefactForge writes is UTC, and this is what
+# reconciles it with anything a person reports in local time.
+Requires:
+  - '%root%\Windows\System32\config\SYSTEM'
+Platform: windows
+Scope: offlineonly
+Priority: 5
+IoWeight: light
+
+Prepare:
+  -
+    Executable: eztools\RECmd\RECmd.exe
+    CommandLine: -d "%root%\Windows\System32\config" --bn "%scriptsDir%\windows\SystemInfo.reb" --csv "%workDir%" --csvf WinSystemInfo_raw.csv --nl
+    ContinueOnError: true
+
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\windows\Build-WindowsSystemInfo.ps1" -RecmdOutput "%workDir%" -Out "%destinationDirectory%" -Collection "%collectionName%"
+    ExportFormat: csv

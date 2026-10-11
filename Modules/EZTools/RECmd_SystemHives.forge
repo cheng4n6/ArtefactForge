@@ -1,0 +1,23 @@
+Description: System registry hives, Kroll batch (RECmd)
+Category: Registry
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: RECmd_SYSTEM
+Requires: ['%root%\Windows\System32\config\SYSTEM']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 30
+SupportsVss: true
+Processors:
+  -
+    Executable: eztools\RECmd\RECmd.exe
+    CommandLine: -d "%root%\Windows\System32\config" --bn "%toolsDir%\eztools\RECmd\BatchExamples\Kroll_Batch.reb" --csv "%destinationDirectory%" --csvf RECmd_SYSTEM.csv %vss%
+    ExportFormat: csv
+    ExportFile: RECmd_SYSTEM.csv
+  -
+    # Run keys Kroll_Batch misses (32-bit SOFTWARE Run/RunOnce). Own --csvf so Kroll's file stands.
+    Executable: eztools\RECmd\RECmd.exe
+    CommandLine: -d "%root%\Windows\System32\config" --bn "%scriptsDir%\RECmd\ArtefactForge_Autoruns.reb" --csv "%destinationDirectory%" --csvf RECmd_SYSTEM_Autoruns.csv %vss%
+    ExportFormat: csv
+    ExportFile: RECmd_SYSTEM_Autoruns.csv

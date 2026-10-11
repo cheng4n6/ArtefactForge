@@ -1,0 +1,18 @@
+Description: Master File Table ($MFT)
+Category: FileSystem
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: MFTECmd
+Requires: ['%root%\$MFT']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 10
+IoWeight: heavy
+SupportsVss: true
+Processors:
+  -
+    Executable: eztools\MFTECmd.exe
+    CommandLine: -f "%root%\$MFT" --csv "%destinationDirectory%" --csvf MFTECmd_MFT.csv %vss%
+    ExportFormat: csv
+    ExportFile: MFTECmd_MFT.csv

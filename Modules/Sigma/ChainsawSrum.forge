@@ -1,0 +1,36 @@
+Description: SRUM database as JSON, resolved against SOFTWARE (Chainsaw analyse srum)
+Category: SRUM
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: json
+OutputName: ChainsawSrum
+# Verified against Chainsaw 2.16.3 (2026-09-24), including on the sample in Chainsaw's own test
+# suite: the same 3,592 records as its expected output. Key order within a record varies from run
+# to run, so compare parsed records, not bytes.
+#
+# Deliberately NOT run with -q. In 2.16.3, -q together with -o <file> loses the tail of the
+# output: the file writer is only flushed by the progress messages -q suppresses. Measured on the
+# test sample: three -q runs gave 3,527,219 to 3,527,829 bytes of unterminated JSON against
+# 3,533,274 complete. Without -q the progress goes to stderr instead, so the expected lines,
+# including the table of SRUM extensions and their retention, are listed below. That table stays
+# in the run's .err.log, which is worth reading for the timeframe each table covers.
+#
+# Opt-in (2026-10-10). One thread re-reading a ~100 MB SRUDB.dat for 2-5 minutes alone, slower
+# still beside other tools, and it was the last thing running in every collection of a batch.
+# SrumECmd parses the same database by default.
+Requires: ['%root%\Windows\System32\sru\SRUDB.dat', '%root%\Windows\System32\config\SOFTWARE']
+DefaultEnabled: false
+Scope: offlineonly
+Platform: windows
+Priority: 61
+IoWeight: heavy
+MemoryWeight: heavy
+Timeout: 3600
+Processors:
+  -
+    Executable: chainsaw\chainsaw.exe
+    CommandLine: --no-banner analyse srum --software "%root%\Windows\System32\config\SOFTWARE" "%root%\Windows\System32\sru\SRUDB.dat" -o "%destinationDirectory%\Srum.json"
+    ExportFormat: json
+    ExpectedStderr:
+      - '^\[\+\] '
+      - '^[+|]'

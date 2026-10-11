@@ -1,0 +1,25 @@
+Description: Linux package history (dpkg, apt, dnf, yum)
+Category: Packages
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxPackages
+# What was installed, upgraded or removed, and when. Reads dpkg.log and apt/history.log on Debian
+# and Ubuntu, dnf.rpm.log and yum.log on RHEL, each with rotated and gzipped history.
+#
+# Actions is one row per package per action. Transactions is one row per apt run and carries the
+# command line and the sudo user - an attacker installing tooling shows up there as a command and a
+# name rather than as forty libraries. Blocks with no Requested-By were run as root or by
+# unattended-upgrades, and are labelled so rather than left blank.
+#
+# Package logs are written in the host's local time and are reported as written.
+Requires:
+  - '%root%/var/log'
+Platform: linux
+Priority: 40
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxPackages.ps1" -Root "%root%" -Out "%destinationDirectory%"
+    ExportFormat: csv

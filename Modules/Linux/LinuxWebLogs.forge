@@ -1,0 +1,26 @@
+Description: Apache and nginx access and error logs
+Category: WebLogs
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxWebLogs
+# Access and error logs under var/log/apache2, var/log/httpd and var/log/nginx, with rotated and
+# gzipped history. Access logs in Common or Combined format, optionally vhost-prefixed - the
+# defaults for both servers. A custom LogFormat is counted in the .err.log, not half-parsed.
+#
+# LinuxWebLogs_Flagged.csv holds requests matching path traversal, sensitive files, SQL or
+# command injection, Log4Shell, web shell patterns or a scanner user agent. A triage aid for
+# where to start reading, not a detection verdict.
+#
+# Access timestamps carry their own offset and are converted to UTC. Error log timestamps have
+# none and are reported in the host's local time.
+Requires:
+  - '%root%/var/log/*/*access*'
+Platform: linux
+Priority: 45
+IoWeight: heavy
+Processors:
+  -
+    Executable: builtin:LinuxWebLogs
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

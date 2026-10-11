@@ -1,0 +1,26 @@
+Description: ShellBags from a live system, per user
+Category: ShellBags
+Author: ArtefactForge
+Version: '2.0'
+ExportFormat: csv
+OutputName: SBECmd
+# Run once per profile, reading each user's hives from disk, so the output lands in
+# ShellBags\<user>\ exactly as it does for a collection, and users who are not logged on are
+# covered too. SBECmd -l reads only the hives currently loaded in the registry, so it missed
+# everyone else, and wrote one combined file.
+#
+# NTUSER.DAT and UsrClass.dat are locked for anyone logged on. This relies on SBECmd, run
+# elevated, reading a locked hive the way RECmd_NTUSER does on a live system (the EZ tools share
+# one registry library). If it cannot, SBECmd reports the error and the module is flagged for
+# review rather than passing with that user missing.
+Requires: ['%root%\Users\%user%\NTUSER.DAT']
+Iterate: userprofile
+Scope: liveonly
+Elevation: required
+Platform: windows
+Priority: 35
+Processors:
+  -
+    Executable: eztools\SBECmd.exe
+    CommandLine: -d "%root%\Users\%user%" --csv "%destinationDirectory%" --dedupe
+    ExportFormat: csv

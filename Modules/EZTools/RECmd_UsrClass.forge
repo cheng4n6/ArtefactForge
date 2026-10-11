@@ -1,0 +1,17 @@
+Description: Per-user UsrClass.dat, Kroll batch (RECmd)
+Category: Registry
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: RECmd_UsrClass
+Requires: ['%root%\Users\%user%\AppData\Local\Microsoft\Windows\UsrClass.dat']
+Iterate: userprofile
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 31
+Processors:
+  -
+    Executable: eztools\RECmd\RECmd.exe
+    CommandLine: -f "%root%\Users\%user%\AppData\Local\Microsoft\Windows\UsrClass.dat" --bn "%toolsDir%\eztools\RECmd\BatchExamples\Kroll_Batch.reb" --csv "%destinationDirectory%" --csvf "%user%_RECmd_UsrClass.csv"
+    ExportFormat: csv
+    ExportFile: "%user%_RECmd_UsrClass.csv"

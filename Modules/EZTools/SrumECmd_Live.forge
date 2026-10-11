@@ -1,0 +1,57 @@
+Description: SRUM database from a live system (staged copy)
+Category: SRUM
+Author: ArtefactForge
+Version: '1.1'
+ExportFormat: csv
+OutputName: SrumECmd
+
+# SrumECmd cannot open SRUDB.dat or the SOFTWARE hive while Windows holds them open, so both are
+# staged into %workDir% first. %workDir% is scratch space - it is never delivered as output and is
+# deleted when the module finishes.
+#
+# esentutl /y ... /vss reads the locked file through a shadow copy. The log replay that follows is
+# what makes the staged database clean enough for SrumECmd to open; it commonly reports a non-zero
+# exit for conditions that still leave a usable copy, hence ContinueOnError.
+#
+# If staging genuinely fails, SrumECmd will fail or produce nothing and the run is flagged for
+# review, rather than quietly falling back to a parse that cannot work.
+Requires:
+  - '%root%\Windows\System32\sru\SRUDB.dat'
+Scope: liveonly
+Elevation: required
+Platform: windows
+Priority: 60
+IoWeight: heavy
+
+Prepare:
+  -
+    Executable: C:\Windows\System32\esentutl.exe
+    CommandLine: /y "%root%\Windows\System32\sru\SRUDB.dat" /vss /d "%workDir%\SRUDB.dat"
+  -
+    Executable: C:\Windows\System32\esentutl.exe
+    CommandLine: /y "%root%\Windows\System32\sru\SRU.chk" /vss /d "%workDir%\SRU.chk"
+    ContinueOnError: true
+  -
+    Executable: C:\Windows\System32\cmd.exe
+    CommandLine: /c copy /y "%root%\Windows\System32\sru\SRU*.log" "%workDir%\"
+    ContinueOnError: true
+  -
+    # Replays the ESE transaction logs so the staged copy is not dirty. Runs from %workDir%
+    # because esentutl resolves the log base name against the current directory. Paths are given
+    # explicitly and /i is not used: on a dirty collected copy, /i reported success and left the
+    # database dirty (see SrumECmd.forge).
+    Executable: C:\Windows\System32\esentutl.exe
+    CommandLine: /r sru /l . /s . /d .
+    WorkingDirectory: '%workDir%'
+    ContinueOnError: true
+  -
+    # SOFTWARE resolves application and user IDs; without it the output is far less readable.
+    Executable: C:\Windows\System32\reg.exe
+    CommandLine: save HKLM\SOFTWARE "%workDir%\SOFTWARE" /y
+    ContinueOnError: true
+
+Processors:
+  -
+    Executable: eztools\SrumECmd.exe
+    CommandLine: -f "%workDir%\SRUDB.dat" -r "%workDir%\SOFTWARE" --csv "%destinationDirectory%"
+    ExportFormat: csv

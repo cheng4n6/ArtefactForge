@@ -1,0 +1,30 @@
+<!-- The light palette. Dark.xaml defines the same keys; ThemeManager swaps one for the other, and
+     everything refers to these by DynamicResource so the switch is live. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="WindowBrush" Color="#FBFAF8"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#E2E0DA"/>
+    <SolidColorBrush x:Key="GridLineBrush" Color="#EFEDE8"/>
+
+    <SolidColorBrush x:Key="TextBrush" Color="#20201E"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#6B6A66"/>
+    <SolidColorBrush x:Key="FaintBrush" Color="#9A9892"/>
+    <SolidColorBrush x:Key="LogBrush" Color="#4A4945"/>
+
+    <SolidColorBrush x:Key="ErrorBrush" Color="#A32D2D"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="#1D7A55"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="#B26A0B"/>
+
+    <SolidColorBrush x:Key="AccentBrush" Color="#2E6FD8"/>
+    <SolidColorBrush x:Key="AccentBorderBrush" Color="#2A62BE"/>
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF"/>
+
+    <SolidColorBrush x:Key="ControlBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ControlBorderBrush" Color="#C9C7C0"/>
+    <SolidColorBrush x:Key="HoverOverlayBrush" Color="#0F000000"/>
+    <SolidColorBrush x:Key="PressedOverlayBrush" Color="#1F000000"/>
+    <SolidColorBrush x:Key="SelectionBrush" Color="#DCE7FA"/>
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C9C7C0"/>
+    <SolidColorBrush x:Key="SwitchOffBrush" Color="#B5B3AC"/>
+</ResourceDictionary>

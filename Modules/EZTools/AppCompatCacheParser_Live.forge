@@ -1,0 +1,16 @@
+Description: ShimCache from the live registry
+Category: ShimCache
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: AppCompatCacheParser
+# Omitting -f makes AppCompatCacheParser read the live registry.
+Scope: liveonly
+Elevation: required
+Platform: windows
+Priority: 41
+Processors:
+  -
+    Executable: eztools\AppCompatCacheParser.exe
+    CommandLine: --csv "%destinationDirectory%"
+    ExportFormat: csv

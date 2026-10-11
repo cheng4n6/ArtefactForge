@@ -1,0 +1,16 @@
+Description: Boot sector ($Boot)
+Category: FileSystem
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: MFTECmd
+Requires: ['%root%\$Boot']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 12
+Processors:
+  -
+    Executable: eztools\MFTECmd.exe
+    CommandLine: -f "%root%\$Boot" --csv "%destinationDirectory%" --csvf MFTECmd_Boot.csv
+    ExportFormat: csv
+    ExportFile: MFTECmd_Boot.csv

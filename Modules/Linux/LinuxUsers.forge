@@ -1,0 +1,25 @@
+Description: Linux accounts, groups and sudo configuration
+Category: Users
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxUsers
+# Answers four questions: who can log in, who is UID 0, who can escalate, and which accounts have
+# a usable password.
+#
+# Only /etc/passwd is required. The other files are parsed when present, so an export holding just
+# passwd still produces output rather than skipping the module entirely.
+#
+# Hash values from /etc/shadow are deliberately not written to the output - the algorithm, lock
+# state and last-change date are what triage needs, and copying hashes into a case folder only
+# creates a cracking target.
+Requires:
+  - '%root%/etc/passwd'
+Platform: linux
+Priority: 10
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxUsers.ps1" -Root "%root%" -Out "%destinationDirectory%"
+    ExportFormat: csv

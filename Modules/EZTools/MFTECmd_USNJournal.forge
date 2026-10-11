@@ -1,0 +1,19 @@
+Description: USN Journal ($J), parent paths resolved from $MFT
+Category: FileSystem
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: MFTECmd
+# -m is optional; without it the $J CSV has no parent paths. CyLR only collects $J when
+# run with -usnjrnl, so this module is skipped on most collections.
+Requires: ['%root%\$Extend\$J']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 11
+IoWeight: heavy
+Processors:
+  -
+    Executable: eztools\MFTECmd.exe
+    CommandLine: -f "%root%\$Extend\$J" -m "%root%\$MFT" --csv "%destinationDirectory%" --csvf MFTECmd_USNJournal.csv
+    ExportFormat: csv
+    ExportFile: MFTECmd_USNJournal.csv

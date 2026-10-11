@@ -1,0 +1,15 @@
+Description: Amcache (AmcacheParser)
+Category: Amcache
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: Amcache
+Requires: ['%root%\Windows\appcompat\Programs\Amcache.hve']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 40
+Processors:
+  -
+    Executable: eztools\AmcacheParser.exe
+    CommandLine: -f "%root%\Windows\appcompat\Programs\Amcache.hve" -i --csv "%destinationDirectory%"
+    ExportFormat: csv

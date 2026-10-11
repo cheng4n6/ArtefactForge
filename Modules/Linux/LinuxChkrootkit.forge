@@ -1,0 +1,22 @@
+Description: chkrootkit results from a UAC collection
+Category: Integrity
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxChkrootkit
+# chkrootkit's verdict for each of its checks, as UAC ran it on the live system, one row per check
+# with anything it listed beneath. Rows reporting INFECTED, Vulnerable, WARNING or suspicious files
+# are marked for review. chkrootkit runs on the system it inspects, so a rootkit that hides from it
+# can also hide from this; a clean result is a lack of evidence, not proof.
+#
+# Reads %root%\_UAC\chkrootkit, where a UAC collection's chkrootkit output lands on extraction.
+Requires:
+  - '%root%/_UAC/chkrootkit'
+Platform: linux
+Priority: 47
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:LinuxChkrootkit
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

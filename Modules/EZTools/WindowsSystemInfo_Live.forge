@@ -1,0 +1,41 @@
+Description: Windows system summary from a live system (staged hives) - identity, OS, time, network, accounts
+Category: SystemInfo
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: SystemInfo
+# The live counterpart of WindowsSystemInfo, with the same output. Windows holds SYSTEM and
+# SOFTWARE open, so both are staged into %workDir% with reg save first, which writes a consistent
+# copy of the loaded hive with nothing left in transaction logs. RECmd then reads the copies with
+# the same targeted batch, and the same script builds the summary.
+#
+# Both hives are required, not ContinueOnError: without SYSTEM there is no hostname, timezone or
+# network, and without SOFTWARE no OS version. A failed save stops the module with the step named,
+# rather than producing a summary with half its facts quietly missing.
+#
+# reg save needs the backup privilege, so the module needs an elevated run.
+Requires:
+  - '%root%\Windows\System32\config\SYSTEM'
+Platform: windows
+Scope: liveonly
+Elevation: required
+Priority: 5
+IoWeight: light
+
+Prepare:
+  -
+    Executable: C:\Windows\System32\reg.exe
+    CommandLine: save HKLM\SYSTEM "%workDir%\SYSTEM" /y
+  -
+    Executable: C:\Windows\System32\reg.exe
+    CommandLine: save HKLM\SOFTWARE "%workDir%\SOFTWARE" /y
+  -
+    Executable: eztools\RECmd\RECmd.exe
+    CommandLine: -d "%workDir%" --bn "%scriptsDir%\windows\SystemInfo.reb" --csv "%workDir%\recmd" --csvf WinSystemInfo_raw.csv --nl
+    ContinueOnError: true
+
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\windows\Build-WindowsSystemInfo.ps1" -RecmdOutput "%workDir%\recmd" -Out "%destinationDirectory%" -Collection "%collectionName%"
+    ExportFormat: csv

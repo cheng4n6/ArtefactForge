@@ -1,0 +1,16 @@
+Description: RecentFileCache.bcf (Windows 7 only)
+Category: RecentFileCache
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: RecentFileCache
+# Absent on Win8+, so this is normally skipped.
+Requires: ['%root%\Windows\AppCompat\Programs\RecentFileCache.bcf']
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 46
+Processors:
+  -
+    Executable: eztools\RecentFileCacheParser.exe
+    CommandLine: -f "%root%\Windows\AppCompat\Programs\RecentFileCache.bcf" --csv "%destinationDirectory%"
+    ExportFormat: csv

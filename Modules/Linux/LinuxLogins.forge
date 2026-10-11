@@ -1,0 +1,24 @@
+Description: Linux login history (wtmp, btmp, lastlog)
+Category: Logins
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxLogins
+# Fixed-size C structs, read directly rather than needing a Linux tool.
+#
+# The struct layout is architecture-dependent: this reads the 384-byte utmp and 292-byte lastlog
+# entry of Linux x86_64. The record count is checked against the file size before parsing, so a
+# different layout is reported rather than silently producing plausible-looking nonsense - which
+# in a login table is worse than producing nothing.
+#
+# btmp is usually root-only, so an unprivileged collection may not include it.
+Requires:
+  - '%root%/var/log'
+Platform: linux
+Priority: 15
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxLogins.ps1" -Root "%root%" -Out "%destinationDirectory%"
+    ExportFormat: csv

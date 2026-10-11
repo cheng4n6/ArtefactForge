@@ -1,0 +1,25 @@
+# Build artefacts
+bin/
+obj/
+*.user
+
+# Deployment package - rebuild with package.ps1
+Dist/
+
+# Case output - evidence derived, never committed
+Output/
+
+# Tool binaries - large, third-party, and versioned by their own vendors.
+# Tools\ is the portable deployment payload, not source. See README.
+Tools/
+
+# Updater leftovers in a working copy, and keys - never committed
+_update/
+_previous/
+*.af-old
+updates.log
+*.key
+*.pfx
+
+# Test results from dotnet test --results-directory (the CI workflow writes them here)
+TestResults/

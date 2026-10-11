@@ -1,0 +1,19 @@
+Description: SQLite databases across user profiles (SQLECmd)
+Category: SQLite
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: SQLECmd
+# Measured as very slow over a full Users tree, so it is excluded from "select all" and
+# must be ticked deliberately.
+Requires: ['%root%\Users']
+DefaultEnabled: false
+Platform: windows
+Priority: 90
+IoWeight: heavy
+Timeout: 14400
+Processors:
+  -
+    Executable: eztools\SQLECmd\SQLECmd.exe
+    CommandLine: -d "%root%\Users" --csv "%destinationDirectory%"
+    ExportFormat: csv

@@ -1,0 +1,24 @@
+Description: Linux system summary - identity, OS, time, network, accounts
+Category: SystemInfo
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: SystemInfo
+# One summary per collection, in two renderings of the same parse: a Category/Item/Value/Source CSV
+# for filtering and for the case roll-up, and a text report laid out to be read.
+#
+# Every row carries the file it came from. A summary that cannot be traced back to a source is an
+# assertion rather than evidence.
+#
+# Timezone is the value most worth having here: everything ArtefactForge writes is UTC, and this is
+# what reconciles it with anything a person reports in local time.
+Requires:
+  - '%root%/etc'
+Platform: linux
+Priority: 5
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxSystemInfo.ps1" -Root "%root%" -Out "%destinationDirectory%" -Collection "%collectionName%"
+    ExportFormat: csv

@@ -1,0 +1,27 @@
+Description: Linux shell history, SSH keys and other tools' history, per user profile
+Category: UserFiles
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxUserFiles
+# Runs once per user profile. The layout declares where profiles live, which on Linux is both
+# /home/* and /root - root's home sits outside /home, so a module assuming one shared parent
+# would miss the account that matters most.
+#
+# Shell history carries no timestamps unless HISTTIMEFORMAT was set, so the line number is kept
+# either way and ordering survives even when timing does not.
+#
+# OtherHistory adds what other tools remember: vim commands, searches and files edited (.viminfo),
+# less searches and shell escapes, mysql/psql/sqlite/node/redis/irb client history, wget's HSTS
+# host list, the desktop's recently used files, and Ubuntu's first-successful-sudo marker.
+Requires:
+  - '%userHome%'
+Iterate: userprofile
+Platform: linux
+Priority: 35
+IoWeight: light
+Processors:
+  -
+    Executable: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    CommandLine: -NoProfile -ExecutionPolicy Bypass -File "%scriptsDir%\linux\Parse-LinuxUserFiles.ps1" -HomeDir "%userHome%" -User "%user%" -Out "%destinationDirectory%"
+    ExportFormat: csv

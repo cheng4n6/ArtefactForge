@@ -1,0 +1,48 @@
+# Builds the solution and runs the test suite on every push and pull request.
+# Windows only: the GUI is WPF and the engine tests drive cmd.exe. The tests need no third-party
+# tools (Tools\ is never committed) and no evidence; they build their inputs in temp folders.
+# Signing is not done here: the release key never goes into Actions secrets.
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore ArtefactForge.sln
+
+      - name: Build
+        run: dotnet build ArtefactForge.sln -c Release --no-restore
+
+      - name: Test
+        run: >-
+          dotnet test ArtefactForge.sln -c Release --no-build
+          --logger "trx;LogFileName=results.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore

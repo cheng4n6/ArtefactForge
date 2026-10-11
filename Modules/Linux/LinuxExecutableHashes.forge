@@ -1,0 +1,22 @@
+Description: UAC hash_executables - a hash of every executable file, for checking against a hash set
+Category: Integrity
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxExecutableHashes
+# UAC's hash_executables lists a hash of every executable file on the system, one list per
+# algorithm (hash_executables.md5, .sha1, .sha256). They are merged into one row per file, ready to
+# check against a known-good or known-bad hash set. Executables in temporary or shared-memory
+# folders, or in hidden folders, are marked in the Review column.
+#
+# Reads %root%\_UAC\hash_executables, where a UAC collection's lists land on extraction.
+Requires:
+  - '%root%/_UAC/hash_executables'
+Platform: linux
+Priority: 46
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:LinuxExecutableHashes
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

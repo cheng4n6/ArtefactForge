@@ -1,0 +1,15 @@
+Description: Recycle Bin ($I files)
+Category: RecycleBin
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: RBCmd
+Requires: ['%root%\$Recycle.Bin']
+Platform: windows
+Priority: 65
+Processors:
+  -
+    Executable: eztools\RBCmd.exe
+    CommandLine: -d "%root%\$Recycle.Bin" -q --csv "%destinationDirectory%" --csvf RBCmd_RecycleBin.csv
+    ExportFormat: csv
+    ExportFile: RBCmd_RecycleBin.csv

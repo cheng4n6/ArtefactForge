@@ -1,0 +1,26 @@
+Description: dnf transaction history (history.sqlite) - who ran what
+Category: Packages
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxDnf
+# dnf's own history database on RHEL 8+ and Fedora: every dnf run with its command line, the user
+# who ran it, and each package installed, upgraded or removed. The RHEL counterpart of apt's
+# history.log, and what dnf.rpm.log (read by LinuxPackages) lacks.
+#
+# The user is dnf's recorded loginuid, which sudo does not change - so an install through sudo is
+# attributed to the person who logged in. Names come from etc/passwd when it was collected.
+#
+# Read by ArtefactForge's own SQLite reader, which applies a history.sqlite-wal beside it (where
+# the newest transactions sit until a checkpoint) without modifying either file. Collect the -wal
+# with the database.
+Requires:
+  - '%root%/var/lib/dnf/history.sqlite'
+Platform: linux
+Priority: 40
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:LinuxDnfHistory
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

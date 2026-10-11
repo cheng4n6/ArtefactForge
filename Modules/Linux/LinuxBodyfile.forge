@@ -1,0 +1,25 @@
+Description: Filesystem timeline from a UAC bodyfile (mactime style, MACB per file)
+Category: Timeline
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: LinuxBodyfile
+# UAC's bodyfile/bodyfile.txt: stat of every file on the live system, in TSK bodyfile format
+# (0|name|inode|mode|uid|gid|size|atime|mtime|ctime|crtime). Written as a timeline the way mactime
+# reads it: one row per file per distinct time, oldest first, MACB saying which times fall then.
+# Times are UTC. A time of 0 (birth time on older kernels) is left out. A symbolic link's target is
+# split into LinkTarget, and user and group IDs are named from the collected passwd and group files.
+#
+# The timeline is sorted in memory: a bodyfile of several million files needs a few GB, so the
+# module runs on its own.
+Requires:
+  - '%root%/_UAC/bodyfile'
+Platform: linux
+Priority: 60
+IoWeight: heavy
+MemoryWeight: heavy
+Processors:
+  -
+    Executable: builtin:LinuxBodyfile
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

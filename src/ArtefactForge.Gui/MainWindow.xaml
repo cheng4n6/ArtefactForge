@@ -1,0 +1,885 @@
+<Window x:Class="ArtefactForge.Gui.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ArtefactForge" Height="820" Width="1180" Icon="artefactforge.ico"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBrush}" Foreground="{DynamicResource TextBrush}"
+        FontFamily="Segoe UI" FontSize="13">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="Muted" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="Heading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        </Style>
+        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="MinWidth" Value="90"/>
+        </Style>
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+        <Style x:Key="RunButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+        </Style>
+        <!-- Same colours as the stat cards above the progress list. -->
+        <Style x:Key="StatusHeader" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Bucket}" Value="NeedsReview">
+                    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Bucket}" Value="Completed">
+                    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Bucket}" Value="Waiting">
+                    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- The rail's per-category count: filled when the whole category is on, outlined when
+             part of it is, plain when none of it is. -->
+        <Style x:Key="CountPill" TargetType="Border">
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="Padding" Value="7,0"/>
+            <Setter Property="MinWidth" Value="34"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding State}" Value="All">
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding State}" Value="Some">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="CountPillText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding State}" Value="All">
+                    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding State}" Value="Some">
+                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <TabControl x:Name="Tabs" Margin="10" Background="Transparent" BorderThickness="0">
+
+        <TabItem Header="Setup" Padding="14,7">
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="300"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Evidence"/>
+                        <TextBox   Grid.Row="0" Grid.Column="1" x:Name="EvidencePath" Margin="0,0,6,6"/>
+                        <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Margin="0,0,0,6">
+                            <CheckBox x:Name="BatchMode" Content="Batch" VerticalAlignment="Center"
+                                      ToolTip="Treat each subfolder, .zip and .tar.gz as a separate collection"
+                                      Checked="OnDetect" Unchecked="OnDetect"/>
+                            <Button Content="Browse" Click="OnBrowseEvidence"
+                                    ToolTip="Choose a collection folder, a mounted drive, or a folder of collections"/>
+                            <Button Content="Archive" Click="OnBrowseZip" Margin="6,0,0,0" MinWidth="0"
+                                    ToolTip="Choose a collection archive: a CyLR or Velociraptor zip, or a UAC .tar.gz"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Output"/>
+                        <TextBox   Grid.Row="1" Grid.Column="1" x:Name="OutputPath" Margin="0,0,6,6"/>
+                        <Button    Grid.Row="1" Grid.Column="2" Content="Browse" Click="OnBrowseOutput" Margin="0,0,0,6"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Case name"/>
+                        <TextBox   Grid.Row="2" Grid.Column="1" x:Name="CaseName" Margin="0,0,6,6"/>
+
+                        <!-- Where the output folder came from. Green is a remembered location; amber
+                             is a guess or the default, which has to be confirmed before a run. -->
+                        <DockPanel Grid.Row="3" Grid.Column="1" x:Name="RecallLine" Margin="0,0,6,6"
+                                   Visibility="Collapsed">
+                            <Ellipse DockPanel.Dock="Left" x:Name="RecallMarker" Width="8" Height="8"
+                                     Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <CheckBox DockPanel.Dock="Right" x:Name="RecallConfirm" Content="Use this location"
+                                      Margin="10,0,0,0" VerticalAlignment="Center"
+                                      Checked="OnRecallConfirmed"
+                                      ToolTip="Confirm that output for this evidence goes in this folder and case"/>
+                            <TextBlock x:Name="RecallText" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        </DockPanel>
+
+                        <TextBlock Grid.Row="4" Grid.Column="1" x:Name="DetectionSummary"
+                                   Style="{StaticResource Muted}" Text="Choose an evidence folder to detect its layout."/>
+                    </Grid>
+                </Border>
+
+                <!-- What will be processed: the modules to run and the collections to run them on,
+                     as two tabs so each gets the full width of the page. -->
+                <TabControl x:Name="SetupTabs" Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" Padding="0"
+                            Background="Transparent" BorderThickness="0">
+                    <TabItem Header="Modules" Padding="12,5">
+                        <!-- The modules card. Two layouts over the same selection, chosen on Settings:
+                             List (categories collapsing to one row, modules beneath) and Rail (categories
+                             on the left, the chosen one's modules described on the right). -->
+                        <Border Style="{StaticResource Card}" Margin="0,8,0,0" Padding="0">
+                            <DockPanel>
+                                <Grid DockPanel.Dock="Top" Margin="12,12,12,8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ModuleCount" Style="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="Default" Click="OnSelectDefault" MinWidth="64"
+                                                ToolTip="Every module not marked opt-in. Each collection then runs only what applies to it - Windows or Linux, live or collected"/>
+                                        <Button Content="All" Click="OnSelectAll" MinWidth="52"
+                                                ToolTip="Every module shown, except opt-in ones"/>
+                                        <Button Content="None" Click="OnSelectNone" MinWidth="52"
+                                                ToolTip="Clears every module shown"/>
+                                        <Button x:Name="OptionsButton" Content="Module options" Click="OnEditOptions" MinWidth="0"
+                                                ToolTip="Tune the modules that expose settings"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <DockPanel DockPanel.Dock="Top" Margin="12,0,12,10">
+                                    <Border DockPanel.Dock="Left" BorderBrush="{DynamicResource ControlBorderBrush}"
+                                            BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton x:Name="PlatformAll" Style="{StaticResource Segment}" GroupName="Platform"
+                                                         Content="All" IsChecked="True" Checked="OnPlatformChanged"/>
+                                            <RadioButton x:Name="PlatformWindows" Style="{StaticResource Segment}" GroupName="Platform"
+                                                         BorderThickness="1,0,0,0" Checked="OnPlatformChanged"/>
+                                            <RadioButton x:Name="PlatformLinux" Style="{StaticResource Segment}" GroupName="Platform"
+                                                         BorderThickness="1,0,0,0" Checked="OnPlatformChanged"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <StackPanel x:Name="ExpandButtons" DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Content="Expand all" Click="OnExpandCategories" MinWidth="0" Padding="10,4"/>
+                                        <Button Content="Collapse all" Click="OnCollapseCategories" MinWidth="0" Padding="10,4"/>
+                                    </StackPanel>
+                                    <TextBlock DockPanel.Dock="Left" Text="Filter" Style="{StaticResource Muted}" Margin="14,0,6,0"/>
+                                    <TextBox x:Name="ModuleFilter" TextChanged="OnFilterModules"
+                                             ToolTip="Filter by module name, category or description"/>
+                                </DockPanel>
+
+                                <Grid>
+                                    <!-- List: one row per category, collapsed until opened. -->
+                                    <DockPanel x:Name="ModuleListView">
+                                        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource CardBorderBrush}"
+                                                BorderThickness="0,1" Padding="12,5">
+                                            <Grid TextElement.FontSize="11">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="67"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="170"/>
+                                                    <ColumnDefinition Width="84"/>
+                                                    <ColumnDefinition Width="76"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="1" Text="ARTEFACT" Style="{StaticResource Muted}"/>
+                                                <TextBlock Grid.Column="2" Text="MODULE" Style="{StaticResource Muted}"/>
+                                                <TextBlock Grid.Column="3" Text="RUNS ON" Style="{StaticResource Muted}"/>
+                                            </Grid>
+                                        </Border>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsControl x:Name="CategoryList" Margin="0,4,0,8">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel>
+                                                            <StackPanel Orientation="Horizontal" Margin="12,10,12,2" Opacity="{Binding HeaderOpacity}"
+                                                                        Visibility="{Binding ShowHeading, Converter={StaticResource BoolToVisibility}}">
+                                                                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource MutedBrush}"/>
+                                                                <TextBlock Text="{Binding Summary}" FontSize="12" Margin="8,0,0,0" Foreground="{DynamicResource FaintBrush}"/>
+                                                                <TextBlock Text="{Binding AppliesText}" FontSize="12" Margin="8,0,0,0" Foreground="{DynamicResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <ItemsControl ItemsSource="{Binding Categories}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <StackPanel Margin="12,3,12,0">
+                                                                            <!-- The whole row opens and closes the category; the tick inside it
+                                                                                 is its own control and does not. -->
+                                                                            <ToggleButton Style="{StaticResource ExpanderHeader}" Foreground="{DynamicResource TextBrush}"
+                                                                                          IsChecked="{Binding IsExpanded, Mode=TwoWay}" Focusable="False">
+                                                                                <StackPanel Orientation="Horizontal" Margin="0,3">
+                                                                                    <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,0,9,0"
+                                                                                              ToolTip="Select or clear every module in this category"/>
+                                                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"/>
+                                                                                    <TextBlock Text="{Binding Summary}" FontSize="12" Margin="8,0,0,0"
+                                                                                               Foreground="{DynamicResource FaintBrush}"/>
+                                                                                    <TextBlock Text="{Binding Note}" FontSize="12" Margin="12,0,0,0"
+                                                                                               Foreground="{DynamicResource MutedBrush}"
+                                                                                               Visibility="{Binding ShowNote, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                </StackPanel>
+                                                                            </ToggleButton>
+                                                                            <!-- The guide line runs down from the category tick, so module ticks
+                                                                                 read as one step in from it. -->
+                                                                            <Border Margin="26,0,0,6" BorderThickness="1,0,0,0"
+                                                                                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                                                                                    Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                                                                                <ItemsControl ItemsSource="{Binding Modules}">
+                                                                                    <ItemsControl.ItemTemplate>
+                                                                                        <DataTemplate>
+                                                                                            <Grid Margin="0,3" Background="Transparent"
+                                                                                                  Opacity="{Binding RowOpacity}" ToolTip="{Binding RowTooltip}">
+                                                                                                <Grid.ColumnDefinitions>
+                                                                                                    <ColumnDefinition Width="40"/>
+                                                                                                    <ColumnDefinition Width="*"/>
+                                                                                                    <ColumnDefinition Width="170"/>
+                                                                                                    <ColumnDefinition Width="84"/>
+                                                                                                    <ColumnDefinition Width="76"/>
+                                                                                                </Grid.ColumnDefinitions>
+                                                                                                <StackPanel Orientation="Horizontal">
+                                                                                                    <Rectangle Width="10" Height="1" Fill="{DynamicResource ControlBorderBrush}"/>
+                                                                                                    <CheckBox IsChecked="{Binding IsSelected}" Margin="5,0,0,0"/>
+                                                                                                </StackPanel>
+                                                                                                <DockPanel Grid.Column="1" Margin="0,0,10,0">
+                                                                                                    <Border DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,0" CornerRadius="3"
+                                                                                                            BorderThickness="1" BorderBrush="{DynamicResource ControlBorderBrush}"
+                                                                                                            VerticalAlignment="Center" ToolTip="Opt-in: not included by Default or All"
+                                                                                                            Visibility="{Binding IsOptIn, Converter={StaticResource BoolToVisibility}}">
+                                                                                                        <TextBlock Text="opt-in" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                                                                                    </Border>
+                                                                                                    <TextBlock Text="{Binding Description}" TextTrimming="CharacterEllipsis"/>
+                                                                                                </DockPanel>
+                                                                                                <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="12"
+                                                                                                           Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis"/>
+                                                                                                <TextBlock Grid.Column="3" Text="{Binding RunsOn}" FontSize="12"
+                                                                                                           Foreground="{DynamicResource MutedBrush}" ToolTip="{Binding RunsOnTooltip}"/>
+                                                                                                <Button Grid.Column="4" Content="Options" Click="OnModuleOptions" Tag="{Binding}"
+                                                                                                        MinWidth="0" Padding="8,1" FontSize="12" HorizontalAlignment="Right"
+                                                                                                        ToolTip="{Binding OptionsTooltip}"
+                                                                                                        Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                            </Grid>
+                                                                                        </DataTemplate>
+                                                                                    </ItemsControl.ItemTemplate>
+                                                                                </ItemsControl>
+                                                                            </Border>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </DockPanel>
+
+                                    <!-- Rail: categories on the left with a count, the chosen one's modules
+                                         on the right, each with its description and a switch. -->
+                                    <Grid x:Name="ModuleRailView" Visibility="Collapsed">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,1,0">
+                                            <ListBox x:Name="RailList" BorderThickness="0" Background="Transparent" Padding="6,4"
+                                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                                <ListBox.GroupStyle>
+                                                    <GroupStyle>
+                                                        <GroupStyle.HeaderTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Margin="6,8,6,4"
+                                                                           Foreground="{DynamicResource MutedBrush}"/>
+                                                            </DataTemplate>
+                                                        </GroupStyle.HeaderTemplate>
+                                                    </GroupStyle>
+                                                </ListBox.GroupStyle>
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="6,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                            <Border Grid.Column="1" Style="{StaticResource CountPill}">
+                                                                <TextBlock Text="{Binding ShortSummary}" Style="{StaticResource CountPillText}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </Border>
+
+                                        <Border Grid.Column="1" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0">
+                                            <DockPanel Margin="18,12,14,8" DataContext="{Binding SelectedItem, ElementName=RailList}">
+                                                <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name}" FontSize="18"/>
+                                                        <TextBlock FontSize="12" Foreground="{DynamicResource MutedBrush}">
+                                                            <Run Text="{Binding Summary, Mode=OneWay}"/><Run Text=" modules on"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <CheckBox Style="{StaticResource Switch}" HorizontalAlignment="Right"
+                                                              IsChecked="{Binding IsAllSelected, Mode=TwoWay}"
+                                                              ToolTip="Turn every module in this category on or off">
+                                                        <TextBlock Text="Whole category" FontSize="12" Foreground="{DynamicResource MutedBrush}"/>
+                                                    </CheckBox>
+                                                </Grid>
+                                                <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource CardBorderBrush}"/>
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl ItemsSource="{Binding Modules}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource GridLineBrush}" Padding="0,10"
+                                                                        Background="Transparent" Opacity="{Binding RowOpacity}" ToolTip="{Binding RowTooltip}">
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <StackPanel>
+                                                                            <StackPanel Orientation="Horizontal">
+                                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                                                <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="3" BorderThickness="1"
+                                                                                        BorderBrush="{DynamicResource ControlBorderBrush}" VerticalAlignment="Center"
+                                                                                        ToolTip="Opt-in: not included by Default or All"
+                                                                                        Visibility="{Binding IsOptIn, Converter={StaticResource BoolToVisibility}}">
+                                                                                    <TextBlock Text="opt-in" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                                                                </Border>
+                                                                                <TextBlock Text="{Binding RunsOn}" FontSize="12" Margin="10,0,0,0"
+                                                                                           Foreground="{DynamicResource FaintBrush}" ToolTip="{Binding RunsOnTooltip}"/>
+                                                                            </StackPanel>
+                                                                            <TextBlock Text="{Binding Description}" FontSize="12" Margin="0,2,0,0"
+                                                                                       Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/>
+                                                                        </StackPanel>
+                                                                        <Button Grid.Column="1" Content="Options" Click="OnModuleOptions" Tag="{Binding}"
+                                                                                MinWidth="0" Padding="8,1" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                                                ToolTip="{Binding OptionsTooltip}"
+                                                                                Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}"/>
+                                                                        <CheckBox Grid.Column="2" Style="{StaticResource Switch}" Margin="14,0,0,0"
+                                                                                  VerticalAlignment="Center" IsChecked="{Binding IsSelected}"/>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </DockPanel>
+                                        </Border>
+                                    </Grid>
+                                </Grid>
+                            </DockPanel>
+                        </Border>
+                    </TabItem>
+
+                    <TabItem x:Name="CollectionsTab" Header="Collections" Padding="12,5">
+                        <!-- One row per detected collection: its name (editable), what it was detected
+                             as, how many of the ticked modules apply to it, and where it comes from and
+                             goes to. Everything here follows the module ticks, Output and Case name. -->
+                        <Border Style="{StaticResource Card}" Margin="0,8,0,0" Padding="0">
+                            <DockPanel>
+                                <Grid DockPanel.Dock="Top" Margin="12,12,12,8">
+                                    <TextBlock x:Name="CollectionCount" Style="{StaticResource Muted}"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="All" Click="OnSelectAllCollections" MinWidth="52"
+                                                ToolTip="Tick every collection"/>
+                                        <Button Content="None" Click="OnSelectNoCollections" MinWidth="52"
+                                                ToolTip="Clear every collection"/>
+                                    </StackPanel>
+                                </Grid>
+                                <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource CardBorderBrush}"
+                                        BorderThickness="0,1" Padding="12,5">
+                                    <Grid TextElement.FontSize="11">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="30"/>
+                                            <ColumnDefinition Width="210"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="80"/>
+                                            <ColumnDefinition Width="1.4*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="1" Text="COLLECTION" Style="{StaticResource Muted}"/>
+                                        <TextBlock Grid.Column="2" Text="DETECTED AS" Style="{StaticResource Muted}"/>
+                                        <TextBlock Grid.Column="3" Text="MODULES" Style="{StaticResource Muted}"/>
+                                        <TextBlock Grid.Column="4" Text="FROM / TO" Style="{StaticResource Muted}"/>
+                                    </Grid>
+                                </Border>
+                                <Grid>
+                                    <TextBlock x:Name="NoCollections" Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                               HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24,30,24,0"
+                                               Text="No collections yet. Choose evidence above; the line under Case name says what was found."/>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsControl x:Name="CollectionList" Margin="0,0,0,8">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource GridLineBrush}"
+                                                            Padding="12,8">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="30"/>
+                                                                <ColumnDefinition Width="210"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                                <ColumnDefinition Width="1.4*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,4,0,0"
+                                                                      ToolTip="Include this collection in the run"/>
+                                                            <StackPanel Grid.Column="1" Margin="0,0,12,0" Opacity="{Binding RowOpacity}">
+                                                                <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Padding="4,2"
+                                                                         ToolTip="Rename this collection - use the host name for a mounted image"/>
+                                                                <TextBlock Text="{Binding NameError}" Foreground="{DynamicResource ErrorBrush}" FontSize="12"
+                                                                           TextWrapping="Wrap" Margin="0,2,0,0"
+                                                                           Visibility="{Binding HasNameError, Converter={StaticResource BoolToVisibility}}"/>
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="2" Margin="0,0,12,0" Opacity="{Binding RowOpacity}">
+                                                                <TextBlock Text="{Binding Kind}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
+                                                                <TextBlock Text="{Binding LayoutName}" FontSize="12" Foreground="{DynamicResource MutedBrush}"
+                                                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding LayoutTooltip}"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="3" Text="{Binding ModulesText}" VerticalAlignment="Top" Margin="0,3,0,0"
+                                                                       ToolTip="{Binding ModulesTooltip}" Opacity="{Binding RowOpacity}">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                        <Style.Triggers>
+                                                                            <!-- Nothing would run on it: shown, not left to look complete. -->
+                                                                            <DataTrigger Binding="{Binding ModuleCount}" Value="0">
+                                                                                <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <StackPanel Grid.Column="4" Opacity="{Binding RowOpacity}">
+                                                                <TextBlock FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"
+                                                                           ToolTip="{Binding SourceTooltip}">
+                                                                    <Run Text="From " Foreground="{DynamicResource FaintBrush}"/><Run Text="{Binding SourceText, Mode=OneWay}"/>
+                                                                </TextBlock>
+                                                                <TextBlock FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"
+                                                                           ToolTip="{Binding OutputFolder}">
+                                                                    <Run Text="To " Foreground="{DynamicResource FaintBrush}"/><Run Text="{Binding OutputText, Mode=OneWay}"/>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </DockPanel>
+                        </Border>
+                    </TabItem>
+                </TabControl>
+
+                <!-- Profile and Run options. The scroll bar is slim and easy to miss, so while
+                     anything is below the fold a button says so and takes you there. -->
+                <Grid Grid.Row="1" Grid.Column="1">
+                    <ScrollViewer x:Name="SideScroller" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled" ScrollChanged="OnSideScrolled">
+                        <StackPanel>
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="Profile" Style="{StaticResource Heading}"/>
+                                    <ComboBox x:Name="ProfileBox" Margin="0,0,0,6" SelectionChanged="OnProfileSelected"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="Save as" Click="OnSaveProfile"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Run options" Style="{StaticResource Heading}"/>
+                                    <Grid Margin="0,0,0,6">
+                                        <TextBlock Text="Workers"/>
+                                        <TextBox x:Name="Workers" Width="60" HorizontalAlignment="Right" Text="8"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock Text="Heavy IO" ToolTip="Concurrent disk-bound modules"/>
+                                        <TextBox x:Name="HeavyWorkers" Width="60" HorizontalAlignment="Right" Text="2"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <TextBlock Text="Zips at once" ToolTip="Zipped collections extracted and parsed at the same time. Each needs disk space for its extracted copy."/>
+                                        <TextBox x:Name="ZipsAtOnce" Width="60" HorizontalAlignment="Right" Text="2"/>
+                                    </Grid>
+                                    <CheckBox x:Name="UseVss" Content="Process volume shadow copies" Margin="0,0,0,6"
+                                              ToolTip="Only applies to mounted drives, and only for tools that support it"/>
+                                    <CheckBox x:Name="SkipCompleted" Content="Skip work already completed" IsChecked="True"/>
+                                    <CheckBox x:Name="CleanupExtracted" Content="Delete extracted zips after parsing" Margin="0,6,0,0"
+                                              ToolTip="Zipped collections are extracted into the case's _Extracted folder and kept. Tick to delete each one once its modules have finished, so a batch of zips only needs space for the few being worked on."/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Button x:Name="MoreBelow" Content="More options below &#x25BE;" Click="OnShowMoreBelow"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,8"
+                            MinWidth="0" Padding="12,4" FontSize="12" Visibility="Collapsed"
+                            ToolTip="Scroll down to the rest of the run options"/>
+                </Grid>
+
+                <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <TextBlock x:Name="SetupStatus" Style="{StaticResource Muted}" Margin="0,0,12,0"/>
+                    <Button Content="Preview plan" Click="OnPreviewPlan" MinWidth="110"/>
+                    <Button x:Name="RunButton" Content="Run" Click="OnRun" MinWidth="110"
+                            Style="{StaticResource RunButton}"/>
+                </StackPanel>
+            </Grid>
+        </TabItem>
+
+        <TabItem Header="Run" Padding="14,7">
+            <DockPanel Margin="0,10,0,0">
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,8,0">
+                        <StackPanel>
+                            <TextBlock Text="Collections" Style="{StaticResource Muted}" FontSize="12"/>
+                            <TextBlock x:Name="StatCollections" Text="0 / 0" FontSize="21"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource Card}" Margin="0,0,8,0">
+                        <StackPanel>
+                            <TextBlock Text="Completed" Style="{StaticResource Muted}" FontSize="12"/>
+                            <TextBlock x:Name="StatCompleted" Text="0" FontSize="21" Foreground="{DynamicResource SuccessBrush}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Margin="0,0,8,0">
+                        <StackPanel>
+                            <TextBlock Text="Need review" Style="{StaticResource Muted}" FontSize="12"/>
+                            <TextBlock x:Name="StatReview" Text="0" FontSize="21" Foreground="{DynamicResource WarningBrush}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="3" Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Elapsed" Style="{StaticResource Muted}" FontSize="12"/>
+                            <TextBlock x:Name="StatElapsed" Text="00:00" FontSize="21"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Height="130" Margin="0,10,0,0">
+                    <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="LogText" FontFamily="Consolas" FontSize="12"
+                                   Foreground="{DynamicResource LogBrush}" TextWrapping="NoWrap"/>
+                    </ScrollViewer>
+                </Border>
+
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button Content="Open output" Click="OnOpenOutput" MinWidth="110"/>
+                    <Button x:Name="StopButton" Content="Stop" Click="OnStop" MinWidth="110"
+                            Foreground="{DynamicResource ErrorBrush}" IsEnabled="False"/>
+                </StackPanel>
+
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <!-- Three levels: collection, status group, module run. By default only what is
+                             running is open; a click on anything sticks until
+                             Active only. -->
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right"
+                                    Margin="0,0,0,8">
+                            <Button Content="Active only" Click="OnProgressActiveOnly" MinWidth="0" Padding="10,3"
+                                    ToolTip="Back to the default: only what is running is open"/>
+                            <Button Content="Expand all" Click="OnProgressExpandAll" MinWidth="0" Padding="10,3"/>
+                            <Button Content="Collapse all" Click="OnProgressCollapseAll" MinWidth="0" Padding="10,3"/>
+                        </StackPanel>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="ProgressList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Expander Margin="0,0,0,4" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
+                                            <Expander.Header>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14"/>
+                                                    <TextBlock Text="{Binding Summary}" Margin="12,0,0,0" Foreground="{DynamicResource MutedBrush}"/>
+                                                    <TextBlock Text="{Binding GroupSummary}" Margin="12,0,0,0" Foreground="{DynamicResource FaintBrush}"/>
+                                                    <TextBlock Text="{Binding State}" Margin="12,0,0,0" Foreground="{DynamicResource FaintBrush}"/>
+                                                </StackPanel>
+                                            </Expander.Header>
+                                            <ItemsControl ItemsSource="{Binding Groups}" Margin="18,2,0,6">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Expander Margin="0,1,0,1" IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                                                  Visibility="{Binding HasItems, Converter={StaticResource BoolToVisibility}}">
+                                                            <Expander.Header>
+                                                                <TextBlock Text="{Binding Header}" Style="{StaticResource StatusHeader}"/>
+                                                            </Expander.Header>
+                                                            <ItemsControl ItemsSource="{Binding Items}" Margin="18,2,0,6">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Grid Margin="0,2">
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="300"/>
+                                                                                <ColumnDefinition Width="110"/>
+                                                                                <ColumnDefinition Width="*"/>
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <TextBlock Grid.Column="0" Text="{Binding Label}"/>
+                                                                            <TextBlock Grid.Column="1" Text="{Binding StatusText}"/>
+                                                                            <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="{DynamicResource FaintBrush}"
+                                                                                       TextTrimming="CharacterEllipsis"/>
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </Expander>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Expander>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Results" Padding="14,7">
+            <DockPanel Margin="0,10,0,0">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                    <CheckBox x:Name="OnlyProblems" Content="Only items needing review"
+                              VerticalAlignment="Center" Checked="OnFilterResults" Unchecked="OnFilterResults"/>
+                    <TextBlock x:Name="ResultsSummary" Style="{StaticResource Muted}" Margin="16,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button Content="Open manifest" Click="OnOpenManifest" MinWidth="120"/>
+                    <Button Content="Open logs" Click="OnOpenLogs" MinWidth="100"/>
+                    <Button Content="Re-run failed" Click="OnRerunFailed" MinWidth="120"/>
+                </StackPanel>
+
+                <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          CanUserSortColumns="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Collection" Binding="{Binding Collection}" Width="150"/>
+                        <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="110"/>
+                        <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="190"/>
+                        <DataGridTextColumn Header="User" Binding="{Binding Iteration}" Width="90"/>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="95"/>
+                        <DataGridTextColumn Header="Seconds" Binding="{Binding DurationSeconds, StringFormat=F1}" Width="70"/>
+                        <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Tools" Padding="14,7">
+            <!-- Two views: the app launcher, which is what is wanted day to day and so opens first,
+                 and the module tool inventory with its update check. -->
+            <TabControl x:Name="ToolsTabs" Margin="0,10,0,0" SelectedIndex="0"
+                        Background="Transparent" BorderThickness="0">
+                <TabItem Header="Apps" Padding="12,5">
+                    <DockPanel Margin="0,10,0,0">
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <TextBlock Style="{StaticResource Muted}" Margin="0,0,210,0" TextTrimming="CharacterEllipsis"
+                                       Text="Programs listed in Apps.yaml. Open starts one on its own; it keeps running after ArtefactForge closes."/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Edit list" Click="OnEditApps" MinWidth="90"/>
+                                <Button Content="Refresh" Click="OnRefreshTools" MinWidth="90"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock x:Name="AppsMessage" DockPanel.Dock="Top" Style="{StaticResource Muted}"
+                                   TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
+                        <Border Style="{StaticResource Card}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="AppList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2" Opacity="{Binding RowOpacity}" ToolTip="{Binding ToolTip}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="30"/>
+                                                    <ColumnDefinition Width="190"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Image Grid.Column="0" Source="{Binding Icon}" Width="20" Height="20"
+                                                       HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="{DynamicResource MutedBrush}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <Button Grid.Column="3" Content="Open" MinWidth="80" Padding="10,3"
+                                                        IsEnabled="{Binding Found}" Click="OnOpenApp" Tag="{Binding}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="Modules" Padding="12,5">
+                    <DockPanel Margin="0,10,0,0">
+                        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Tool roots" Style="{StaticResource Heading}"/>
+                                <TextBlock x:Name="ToolRootsText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ToolSummary" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Margin="0,10,0,0">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="Tool updates" Style="{StaticResource Heading}"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button x:Name="CheckUpdatesButton" Content="Check for updates"
+                                                Click="OnCheckUpdates" MinWidth="140"/>
+                                        <Button Content="Refresh" Click="OnRefreshTools" MinWidth="90"/>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock x:Name="UpdateStatus" Style="{StaticResource Muted}"
+                                           Text="Checks GitHub for newer Hayabusa and Chainsaw releases. Nothing is downloaded until you press Update."
+                                           TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                <ItemsControl x:Name="UpdateList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120"/>
+                                                    <ColumnDefinition Width="140"/>
+                                                    <ColumnDefinition Width="140"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Package}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding InstalledText}" Foreground="{DynamicResource MutedBrush}"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding LatestText}" Foreground="{DynamicResource MutedBrush}"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding StatusText}"/>
+                                                <Button Grid.Column="4" Content="{Binding InstallText}" MinWidth="130"
+                                                        Click="OnInstallTool" IsEnabled="{Binding CanInstall}"
+                                                        ToolTip="{Binding InstallBlockedReason}"
+                                                        ToolTipService.ShowOnDisabled="True"/>
+                                                <Button Grid.Column="5" Content="Open release page" MinWidth="130"
+                                                        Click="OnOpenRelease"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <DataGrid x:Name="ToolsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                  CanUserSortColumns="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Package" Binding="{Binding Package}" Width="100"/>
+                                <DataGridTextColumn Header="Executable" Binding="{Binding Executable}" Width="240"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="90"/>
+                                <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="100"/>
+                                <DataGridTextColumn Header="Modules" Binding="{Binding ModuleCount}" Width="70"/>
+                                <DataGridTextColumn Header="Used by" Binding="{Binding ModuleList}" Width="230"/>
+                                <DataGridTextColumn Header="SHA256" Binding="{Binding ShortHash}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
+        </TabItem>
+
+        <TabItem Header="Settings" Padding="14,7">
+            <!-- Preferences for ArtefactForge itself, as opposed to the per-run choices on Setup
+                 (Run options, Module options). Updating the application lives here too: it is
+                 about ArtefactForge, not the tools it runs, whose update check is on Tools. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
+                <StackPanel>
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Appearance" Style="{StaticResource Heading}"/>
+                            <CheckBox x:Name="DarkModeSwitch" Style="{StaticResource Switch}" Content="Dark mode"
+                                      Checked="OnDarkModeToggled" Unchecked="OnDarkModeToggled"/>
+
+                            <TextBlock Text="Module layout on Setup" Margin="0,16,0,6"/>
+                            <Border HorizontalAlignment="Left" BorderBrush="{DynamicResource ControlBorderBrush}"
+                                    BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="ModuleViewList" Style="{StaticResource Segment}" GroupName="ModuleView"
+                                                 Content="List" Checked="OnModuleViewChanged"
+                                                 ToolTip="Categories in one list, each opening to show its modules"/>
+                                    <RadioButton x:Name="ModuleViewRail" Style="{StaticResource Segment}" GroupName="ModuleView"
+                                                 Content="Rail" BorderThickness="1,0,0,0" Checked="OnModuleViewChanged"
+                                                 ToolTip="Categories down the left, the chosen category's modules on the right"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Style="{StaticResource Muted}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                       Text="List shows every category at once, collapsed to one row each. Rail shows one category at a time, with each module described. Both change the same selection."/>
+
+                            <TextBlock Style="{StaticResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap"
+                                       Text="These take effect at once and are remembered for your Windows account."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,8">
+                                <TextBlock Text="ArtefactForge updates" Style="{StaticResource Heading}"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="UpdateFromFolderButton" Content="Update from folder..."
+                                            Click="OnUpdateFromFolder" MinWidth="150"/>
+                                    <Button x:Name="CheckAppUpdateButton" Content="Check for updates"
+                                            Click="OnCheckAppUpdate" MinWidth="140"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="AppUpdateStatus" Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                       Text="Checks GitHub for a newer ArtefactForge release. Nothing is downloaded until you agree, and Tools\ is never changed."/>
+                            <TextBlock x:Name="AppUpdateNotes" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed"/>
+                            <Button x:Name="InstallUpdateButton" Content="Download and install" Click="OnInstallAppUpdate"
+                                    MinWidth="180" HorizontalAlignment="Right" Margin="0,10,0,0" Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="About" Style="{StaticResource Heading}"/>
+                            <TextBlock x:Name="AboutVersion"/>
+                            <TextBlock x:Name="AboutFolder" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
+    </TabControl>
+</Window>

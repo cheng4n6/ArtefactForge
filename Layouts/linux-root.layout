@@ -1,0 +1,32 @@
+Name: Linux filesystem root
+Id: linux-root
+Priority: 30          # probed after the Windows layouts; its markers cannot collide with theirs
+Provisional: false
+Platform: linux             # modules for the other platform are left out of the plan for this target
+Description: >
+  A Linux filesystem root, or the part of one that was collected. Covers a tar of /etc and
+  /var/log and files exported from X-Ways or FTK, which land as an ordinary folder on Windows,
+  and a UAC collection, whose [root] becomes this root when the archive is extracted.
+Notes: >
+  MatchMode is 'any' deliberately. A partial export is the normal case rather than the exception:
+  an analyst who pulls only /var/log should still get the log modules, with everything needing
+  /etc skipping with a reason. Requiring all markers would reject exactly the collections this
+  layout exists to handle.
+
+  The markers are chosen to be impossible on a Windows collection, so priority ordering against
+  the Windows layouts never matters.
+Detect:
+  RootIsSelection: true
+  Markers:
+    - 'etc/passwd'
+    - 'etc/os-release'
+    - 'var/log'
+  MatchMode: any
+Resolve:
+  RootOffset: '.'
+  Unescape: none
+  # root is a profile in its own right, not a directory containing profiles, which is why this
+  # is a list rather than a single parent.
+  UserProfiles:
+    - 'home/*'
+    - 'root'

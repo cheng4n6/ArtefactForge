@@ -1,0 +1,19 @@
+Description: ShellBags from collected hives (SBECmd), per user
+Category: ShellBags
+Author: ArtefactForge
+Version: '1.1'
+ExportFormat: csv
+OutputName: SBECmd
+# Run once per profile so each user's ShellBags land in their own folder. SBECmd -d recurses the
+# profile for NTUSER.DAT and UsrClass.dat itself, so no staging is needed offline.
+# --dedupe collapses duplicates across that user's hives.
+Requires: ['%root%\Users\%user%\NTUSER.DAT']
+Iterate: userprofile
+Scope: offlineonly
+Platform: windows
+Priority: 35
+Processors:
+  -
+    Executable: eztools\SBECmd.exe
+    CommandLine: -d "%root%\Users\%user%" --csv "%destinationDirectory%" --dedupe
+    ExportFormat: csv

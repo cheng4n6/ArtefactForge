@@ -1,0 +1,4 @@
+{
+  "Name": "EventLogs-triage",
+  "Modules": ["EvtxECmd", "Hayabusa", "Chainsaw", "RECmd_SystemHives"]
+}

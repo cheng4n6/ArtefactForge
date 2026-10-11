@@ -1,0 +1,47 @@
+Description: Event log RecordID and time gaps, a sign of selective deletion (Chainsaw analyse gaps)
+Category: EventLogs
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: txt
+OutputName: ChainsawGaps
+# Verified against Chainsaw 2.16.3 (2026-09-24).
+# Slow over a full Logs folder, so it is excluded from "select all" and must be ticked
+# deliberately.
+#
+# Writes the text report rather than --json. The report lists every channel with its record
+# count, RecordID range and first and last time even when nothing is flagged, and a log that
+# starts at a high RecordID is itself worth seeing. The JSON lists only the gaps, so a clean
+# result is an empty array.
+#
+# Deliberately NOT run with -q: in 2.16.3, -q with -o <file> loses the unflushed tail of the
+# output, and measured on Chainsaw's own sample it wrote 0 bytes. See ChainsawSrum.forge.
+Requires: ['%root%\Windows\System32\winevt\Logs\*.evtx']
+DefaultEnabled: false
+Platform: windows
+Elevation: live              # locked or admin-only on a live system; collections read fine
+Priority: 27
+IoWeight: heavy
+MemoryWeight: heavy
+Timeout: 7200
+
+Options:
+  -
+    Name: MinGapMinutes
+    Description: Smallest time gap between consecutive records to report, in minutes.
+    Kind: text
+    Default: '30'
+    Expand: --min-time-gap-minutes %value%
+  -
+    Name: SkipErrors
+    Description: Keep going when a corrupt evtx is met, rather than aborting.
+    Kind: flag
+    Default: true
+    Expand: --skip-errors
+
+Processors:
+  -
+    Executable: chainsaw\chainsaw.exe
+    CommandLine: --no-banner analyse gaps "%root%\Windows\System32\winevt\Logs" %options% -o "%destinationDirectory%\Gaps.txt"
+    ExportFormat: txt
+    ExpectedStderr:
+      - '^\[\+\] '
