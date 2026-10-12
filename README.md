@@ -100,6 +100,15 @@ columns to sort and filter on, what to look for, and what not to trust.
 
 ## Building
 
+To use ArtefactForge, download a [release](https://github.com/cheng4n6/ArtefactForge/releases);
+there is no need to build it. To build it yourself you need:
+
+- Windows (the interface is WPF).
+- The .NET 9 SDK, 9.0.317 or a later 9.0 SDK (`global.json` pins it). `dotnet --list-sdks` shows
+  what is installed.
+- Internet access to nuget.org the first time you build, to download the packages it uses. The
+  repository's `nuget.config` names nuget.org, so the machine's own NuGet settings do not need to.
+
 ```
 winget install Microsoft.DotNet.SDK.9
 dotnet build
@@ -107,7 +116,9 @@ dotnet test
 .\package.ps1 -NoTools -Archive
 ```
 
-Windows only: the interface is WPF.
+If restore fails with `NU1100: Unable to resolve ...`, the packages could not be downloaded:
+check that the machine can reach `https://api.nuget.org` (a proxy or firewall may block it) and
+that `dotnet nuget list source` shows nuget.org as Enabled.
 
 ## Licence
 

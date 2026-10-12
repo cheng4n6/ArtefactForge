@@ -102,10 +102,33 @@ $publishArgs = @(
     '-p:GenerateDocumentationFile=false'
 )
 
+# Checked up front so a missing SDK or an unreachable package source is reported as that, rather
+# than as "publish failed" with dotnet's own output hidden.
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    throw "dotnet not found. Install the .NET 9 SDK: winget install Microsoft.DotNet.SDK.9"
+}
+Write-Host "  restoring packages"
+$restore = & dotnet restore (Join-Path $root 'ArtefactForge.sln') -r win-x64 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $restore | Write-Host
+    if ($restore -match 'NU1100|NU1301') {
+        throw ("restore could not download packages from NuGet. Check this machine can reach " +
+               "https://api.nuget.org (a proxy or firewall may block it) and that " +
+               "'dotnet nuget list source' shows nuget.org as Enabled.")
+    }
+    if ($restore -match 'global\.json|compatible \.NET SDK|NETSDK1045') {
+        throw "a .NET 9 SDK matching global.json is needed: winget install Microsoft.DotNet.SDK.9"
+    }
+    throw "restore failed - see the output above"
+}
+
 foreach ($project in @('src\ArtefactForge.Gui', 'src\ArtefactForge.Cli')) {
     Write-Host "  building $project"
-    & dotnet publish (Join-Path $root $project) @publishArgs | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "publish failed for $project" }
+    $output = & dotnet publish (Join-Path $root $project) @publishArgs 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $output | Write-Host
+        throw "publish failed for $project - see the output above"
+    }
 }
 
 # Single-file publish still emits these next to the exe; they are not needed to run.
