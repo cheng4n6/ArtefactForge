@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Checking for Hayabusa and Chainsaw updates shows the installed version. It said "installed
+  version unknown" for tools copied into `Tools\`, because the version came only from a
+  `VERSIONS.txt` that the package does not include. The version is now read from the program
+  itself. The tools list and the run manifest show Chainsaw's version too, which was blank.
+
 ## 0.1.1 - 2026-10-12
 
 - Cleanup of extracted zips no longer reports "could not delete" for a zip it did delete. When
