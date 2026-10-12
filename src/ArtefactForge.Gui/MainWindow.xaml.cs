@@ -144,13 +144,7 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------------ tools
 
-    private List<string> ToolRoots()
-    {
-        var roots = new List<string> { Path.Combine(_repoRoot, "Tools") };
-        var sibling = Path.GetFullPath(Path.Combine(_repoRoot, "..", "EZ-Tools"));
-        if (Directory.Exists(sibling)) roots.Add(sibling);
-        return roots;
-    }
+    private List<string> ToolRoots() => ToolInventory.Roots(_repoRoot);
 
     private void LoadTools()
     {
@@ -1153,9 +1147,7 @@ public partial class MainWindow : Window
             return null;
         }
 
-        var toolRoots = new List<string> { Path.Combine(_repoRoot, "Tools") };
-        var sibling = Path.GetFullPath(Path.Combine(_repoRoot, "..", "EZ-Tools"));
-        if (Directory.Exists(sibling)) toolRoots.Add(sibling);
+        var toolRoots = ToolRoots();
 
         return new RunConfiguration
         {
