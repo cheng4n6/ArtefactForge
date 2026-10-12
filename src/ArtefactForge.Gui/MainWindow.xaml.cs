@@ -85,6 +85,7 @@ public partial class MainWindow : Window
         (Preferences.Current.ModuleView == ModuleView.Rail ? ModuleViewRail : ModuleViewList).IsChecked = true;
         ShowModuleView(Preferences.Current.ModuleView);
         LoadRunOptions();
+        InitIocTab();
 
         OutputPath.Text = DefaultOutput;
         EvidencePath.LostFocus += (_, _) => Detect();
@@ -1330,6 +1331,7 @@ public partial class MainWindow : Window
             RunButton.IsEnabled = true;
             StopButton.IsEnabled = false;
             UpdateRunStats();
+            RefreshIocs();
         }
     }
 

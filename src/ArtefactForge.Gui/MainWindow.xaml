@@ -705,6 +705,99 @@
             </DockPanel>
         </TabItem>
 
+        <!-- The case's IOC list and how often each was found. Kept light: the detail of every hit
+             is in IocHits.csv and the case report. -->
+        <TabItem x:Name="IocTab" Header="IOCs" Padding="14,7">
+            <DockPanel Margin="0,10,0,0">
+                <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock x:Name="IocCaseText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Type" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Value" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Note" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="3" Text="Found on" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <ComboBox Grid.Row="1" Grid.Column="0" x:Name="IocTypeBox" Margin="0,0,6,0"
+                                      ToolTip="Auto works the type out from the value"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="IocValueBox" Margin="0,0,6,0" KeyDown="OnIocValueKey"
+                                     ToolTip="A file name, path, hash, IP, domain or account. Enter adds it."/>
+                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="IocNoteBox" Margin="0,0,6,0"/>
+                            <TextBox Grid.Row="1" Grid.Column="3" x:Name="IocFoundOnBox" Margin="0,0,6,0"
+                                     ToolTip="The host it was first found on"/>
+                            <Button Grid.Row="1" Grid.Column="4" x:Name="IocAddButton" Content="Add" Click="OnIocAdd"
+                                    Style="{StaticResource RunButton}" Margin="0"
+                                    ToolTip="Add to the list and search every host's output for it"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock DockPanel.Dock="Top" x:Name="IocResult" TextWrapping="Wrap" Margin="2,0,0,10"/>
+
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button x:Name="IocImportButton" Content="Import..." Click="OnIocImport" MinWidth="100"
+                            ToolTip="Add IOCs from another case's IOCs.csv, or a list with one value per line"/>
+                    <Button x:Name="IocRemoveButton" Content="Remove" Click="OnIocRemove" MinWidth="100"
+                            ToolTip="Take the selected IOCs off the list, with their hits"/>
+                    <Button x:Name="IocSweepButton" Content="Sweep all" Click="OnIocSweepAll" MinWidth="100"
+                            ToolTip="Search every host's output again for the whole list, for example after editing IOCs.csv by hand"/>
+                    <Button Content="Open list" Click="OnIocOpenList" MinWidth="100"
+                            ToolTip="Open IOCs.csv"/>
+                    <Button Content="Open hits" Click="OnIocOpenHits" MinWidth="100"
+                            ToolTip="Open IocHits.csv: every hit with its host, file and matching line"/>
+                    <Button Content="Open report" MinWidth="110" IsEnabled="False"
+                            ToolTip="The case report is not available in this version"
+                            ToolTipService.ShowOnDisabled="True"/>
+                </StackPanel>
+
+                <DataGrid x:Name="IocGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          CanUserSortColumns="True" SelectionMode="Extended">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
+                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                        <DataGridTextColumn Header="Note" Binding="{Binding Note}" Width="220"/>
+                        <DataGridTextColumn Header="Found on" Binding="{Binding FoundOn}" Width="110"/>
+                        <DataGridTextColumn Header="Hits" Binding="{Binding Hits}" Width="70" SortMemberPath="HitCount">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasHits}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Hosts" Binding="{Binding Hosts}" Width="70" SortMemberPath="HostCount">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasHits}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </TabItem>
+
         <TabItem Header="Tools" Padding="14,7">
             <!-- Two views: the app launcher, which is what is wanted day to day and so opens first,
                  and the module tool inventory with its update check. -->

@@ -109,6 +109,7 @@ public sealed class RunEngine
 
         SaveState(statePath, completed, results);
         WriteManifests(report, logDir, config, collections, started);
+        await Ioc.IocSweep.AfterRunAsync(report);   // the case's IOC hits for the hosts just processed
 
         // Rolls the per-collection system summaries into one inventory for the case. Runs after
         // everything else because it reads what the modules produced, and does nothing when no
