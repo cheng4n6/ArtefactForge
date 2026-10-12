@@ -502,7 +502,10 @@ public static class EvidenceList
         for (var i = 0; i < notes.Length; i++) about.Cell(i + 1, 1).Value = notes[i];
         about.Column(1).Width = 100;
 
-        workbook.SaveAs(path);
+        // Saved through a stream: given a path, ClosedXML insists on an .xlsx extension, and the
+        // workbook is first written under a temporary name.
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        workbook.SaveAs(stream);
     }
 
     private static void TryDelete(string path)

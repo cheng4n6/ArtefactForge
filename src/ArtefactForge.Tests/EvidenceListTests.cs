@@ -59,7 +59,7 @@ public class EvidenceListTests
 
         var result = EvidenceList.Rebuild(dir.Path);
 
-        Assert.Equal(EvidenceListOutcome.Written, result.Outcome);
+        Assert.True(result.Outcome == EvidenceListOutcome.Written, result.Describe());
         Assert.Equal(2, result.Added);
         var rows = ReadRows(result.Path);
         Assert.Equal(2, rows.Count);
