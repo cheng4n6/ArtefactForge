@@ -1,4 +1,5 @@
 using ArtefactForge.Core;
+using ArtefactForge.Core.Ioc;
 using ArtefactForge.Core.Update;
 using ArtefactForge.Core.Windows;
 
@@ -20,6 +21,7 @@ switch (verb)
     case "version": case "--version": Console.WriteLine(BuildInfo.Describe()); return 0;
     case "plan": return Plan(options);
     case "run": return await Run(options);
+    case "ioc": return await IocCommand(options);
     case "evidence-list": return RebuildEvidenceList(options.Positional.ElementAtOrDefault(0));
     case "update": return await Update(options);
     case "release": return Release(options);
@@ -35,6 +37,13 @@ switch (verb)
         Console.WriteLine("  version                           print the build version");
         Console.WriteLine("  plan <evidence> [options]         show what would run, and why anything is skipped");
         Console.WriteLine("  run <evidence> <output> [options] process evidence: a folder, a drive, or a collection .zip or .tar.gz");
+        Console.WriteLine("  ioc list <case>                   show the case's IOCs with their hit and host counts");
+        Console.WriteLine("  ioc add <case> <value>            add an IOC and search every host's output for it");
+        Console.WriteLine("      [--type t] [--note n]         ...type: file, path, hash, ip, domain or account (default: from the value)");
+        Console.WriteLine("      [--found-on host]             ...the host it was first found on");
+        Console.WriteLine("  ioc import <case> <file>          add IOCs from another case's IOCs.csv or a list, one per line");
+        Console.WriteLine("  ioc remove <case> <value>         take an IOC off the list, with its hits");
+        Console.WriteLine("  ioc sweep <case> [--host h,...]   search hosts' output again for the whole list (default: every host)");
         Console.WriteLine("  evidence-list <case folder>       rebuild the case's EvidenceList.xlsx without running modules");
         Console.WriteLine("  ip <case> <address> [--at <utc>]  who had an address at a time, from the case IpHistory.csv");
         Console.WriteLine("  update [--check] [--yes]          check for, download and install a newer ArtefactForge");
@@ -299,6 +308,114 @@ async Task<int> Run(CommandLine options)
         Console.WriteLine($"\n{report.NeedsReview} item(s) need review - check the manifest before relying on this output.");
 
     return report.NeedsReview > 0 ? 1 : 0;
+}
+
+async Task<int> IocCommand(CommandLine options)
+{
+    var action = options.Positional.ElementAtOrDefault(0)?.ToLowerInvariant();
+    var caseDir = options.Positional.ElementAtOrDefault(1);
+    if (action is null || string.IsNullOrWhiteSpace(caseDir))
+    {
+        Console.Error.WriteLine("ioc list|add|import|remove|sweep <case folder> ... - see 'help'.");
+        return 2;
+    }
+    caseDir = Path.GetFullPath(caseDir);
+    if (!Directory.Exists(caseDir)) { Console.Error.WriteLine($"Not a case folder: {caseDir}"); return 2; }
+
+    var progress = new Progress<string>(_ => { });
+    try
+    {
+        switch (action)
+        {
+            case "list":
+            {
+                var list = IocList.Load(caseDir);
+                if (list.Count == 0) { Console.WriteLine($"No IOCs listed in {IocList.PathFor(caseDir)}."); return 0; }
+                var counts = IocSweep.Summarise(caseDir);
+                foreach (var ioc in list)
+                {
+                    var count = counts.GetValueOrDefault(ioc.Key);
+                    var hits = !ioc.IsSweepable ? "type not recognised, not searched"
+                               : count is null ? "no hits" : $"{count.Hits} hit(s) on {count.Hosts} host(s)";
+                    Console.WriteLine($"  {ioc.TypeLabel,-10} {ioc.Value,-44} {hits}");
+                }
+                if (IocSweep.LastResult(caseDir) is { } last) Console.WriteLine($"\nLast sweep: {last}");
+                return 0;
+            }
+
+            case "add":
+            {
+                var value = options.Positional.ElementAtOrDefault(2);
+                if (string.IsNullOrWhiteSpace(value)) { Console.Error.WriteLine("ioc add <case> <value> [--type t]"); return 2; }
+                IocType type;
+                if (options.Value("type") is { } typeText)
+                {
+                    if (IocList.ParseType(typeText) is not { } parsed)
+                    {
+                        Console.Error.WriteLine($"--type '{typeText}' is not one of: file, path, hash, ip, domain, account.");
+                        return 2;
+                    }
+                    type = parsed;
+                }
+                else type = IocList.Infer(value);
+
+                var entry = IocEntry.Create(type, value, options.Value("note") ?? "", options.Value("found-on") ?? "");
+                var added = IocList.Add(caseDir, [entry]);
+                if (added.Count == 0) { Console.WriteLine($"{entry.TypeLabel} {entry.Value} is already listed."); return 0; }
+                Console.WriteLine($"Added {entry.TypeLabel} {entry.Value}.");
+                return Report(await IocSweep.SweepAsync(caseDir, added, progress));
+            }
+
+            case "import":
+            {
+                var file = options.Positional.ElementAtOrDefault(2);
+                if (file is null || !File.Exists(file)) { Console.Error.WriteLine("ioc import <case> <file> - the file was not found."); return 2; }
+                var result = IocList.Import(caseDir, file);
+                Console.WriteLine($"Added {result.Added.Count} IOC(s); {result.AlreadyListed} already listed.");
+                foreach (var line in result.Rejected) Console.WriteLine($"  not added: {line}");
+                return result.Added.Count == 0 ? 0 : Report(await IocSweep.SweepAsync(caseDir, result.Added, progress));
+            }
+
+            case "remove":
+            {
+                var value = options.Positional.ElementAtOrDefault(2);
+                if (string.IsNullOrWhiteSpace(value)) { Console.Error.WriteLine("ioc remove <case> <value>"); return 2; }
+                var matching = IocList.Load(caseDir).Where(e => e.Value.Trim().Equals(value.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+                if (options.Value("type") is { } typeText)
+                    matching = matching.Where(e => e.Key == IocList.KeyFor(typeText, e.Value)).ToList();
+                var removed = IocList.Remove(caseDir, matching);
+                await IocSweep.RemoveHitsAsync(caseDir, removed);
+                Console.WriteLine(removed.Count == 0 ? $"{value} is not on the list." : $"Removed {removed.Count} IOC(s) and their hits.");
+                return 0;
+            }
+
+            case "sweep":
+            {
+                var hosts = options.List("host");
+                var result = hosts.Count == 0
+                    ? await IocSweep.RebuildAllAsync(caseDir, progress)
+                    : await IocSweep.RebuildHostsAsync(caseDir, hosts, progress);
+                return Report(result);
+            }
+
+            default:
+                Console.Error.WriteLine("ioc list|add|import|remove|sweep <case folder> ... - see 'help'.");
+                return 2;
+        }
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+    {
+        Console.Error.WriteLine(ex.Message);
+        return 1;
+    }
+
+    int Report(IocSweepResult result)
+    {
+        Console.WriteLine(result.Describe());
+        foreach (var problem in result.Problems) Console.WriteLine($"  could not read {problem}");
+        if (result.Hits > 0) Console.WriteLine($"Hits: {IocSweep.HitsPathFor(caseDir)}");
+        return result.Problems.Count > 0 ? 1 : 0;
+    }
 }
 
 int RebuildEvidenceList(string? caseDirectory)
