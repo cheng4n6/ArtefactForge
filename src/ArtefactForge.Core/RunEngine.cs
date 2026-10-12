@@ -14,6 +14,8 @@ public sealed class RunReport
     public bool Cancelled { get; set; }
     /// <summary>Case-level system inventory, when any collection produced a summary.</summary>
     public string? InventoryPath { get; set; }
+    /// <summary>What happened to the case's evidence list at the end of the run.</summary>
+    public EvidenceListResult? EvidenceList { get; set; }
     /// <summary>One per zip unpacked during the run.</summary>
     public List<ExtractionRecord> Extractions { get; } = [];
 
@@ -112,8 +114,9 @@ public sealed class RunEngine
 
         // Rolls the per-collection system summaries into one inventory for the case. Runs after
         // everything else because it reads what the modules produced, and does nothing when no
-        // collection produced a summary.
+        // collection produced a summary. The evidence list reads the same summaries.
         report.InventoryPath = SystemInventory.Build(caseDir);
+        report.EvidenceList = EvidenceList.Rebuild(caseDir);
         return report;
 
         void AddResult(WorkResult result)
