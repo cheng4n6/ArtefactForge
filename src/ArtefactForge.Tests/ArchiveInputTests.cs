@@ -166,6 +166,34 @@ public class ArchiveInputTests
     }
 
     [Fact]
+    public async Task A_zip_extracts_to_a_network_share()
+    {
+        // Free space was read with DriveInfo, which takes only a drive letter, so a share as the
+        // output folder failed with "Object must be a root directory ("C:\") or a drive letter".
+        // The admin share for the temp folder's drive stands in for a share on another machine.
+        using var dir = new TempDirectory();
+        var zip = CylrZip(Path.Combine(dir.Path, "HOST01.zip"), ("C/Users/alice/NTUSER.DAT", "user hive"));
+        var local = Path.Combine(dir.Path, "out", "HOST01");
+        var shareRoot = $@"\\localhost\{local[0]}$";
+        if (!Directory.Exists(shareRoot + dir.Path[2..])) return; // no admin share on this machine
+        var share = shareRoot + local[2..];
+
+        var record = await CollectionExtractor.ExtractAsync(zip, share, null, null, CancellationToken.None);
+
+        Assert.Null(record.Error);
+        Assert.DoesNotContain(record.Notes, n => n.Contains("free space"));
+        Assert.Equal("user hive", File.ReadAllText(Path.Combine(local, "C", "Users", "alice", "NTUSER.DAT")));
+    }
+
+    [Fact]
+    public void Free_space_is_read_for_a_folder_that_does_not_exist_yet()
+    {
+        using var dir = new TempDirectory();
+
+        Assert.True(DiskSpace.Available(Path.Combine(dir.Path, "not", "made", "yet")) > 0);
+    }
+
+    [Fact]
     public async Task A_complete_extraction_of_the_same_zip_is_reused()
     {
         using var dir = new TempDirectory();

@@ -6,6 +6,9 @@
   version unknown" for tools copied into `Tools\`, because the version came only from a
   `VERSIONS.txt` that the package does not include. The version is now read from the program
   itself. The tools list and the run manifest show Chainsaw's version too, which was blank.
+- Collection zips extract when the output folder is on a network share (`\\server\share\...`).
+  The free-space check before extracting accepted only a drive letter, so every zip failed with
+  an error that the path was not a root directory such as `C:\`.
 
 ## 0.1.1 - 2026-10-12
 
