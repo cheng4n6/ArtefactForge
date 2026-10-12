@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Collection zips extract when the output folder is on a network share (`\\server\share\...`).
+  The free-space check before extracting accepted only a drive letter, so every zip failed with
+  an error that the path was not a root directory such as `C:\`.
+
 ## 0.1.1 - 2026-10-12
 
 - Cleanup of extracted zips no longer reports "could not delete" for a zip it did delete. When

@@ -140,11 +140,16 @@ public static class CollectionExtractor
             var needed = plan.Sum(p => p.Index is not null ? 0 : p.Sparse is not null && !p.Compact
                 ? VelociraptorCollection.OriginalLength(p.Sparse) : p.Entry.Length);
 
-            var free = new DriveInfo(Path.GetPathRoot(root)!).AvailableFreeSpace;
-            if (free < needed + SpaceMargin)
+            var free = DiskSpace.Available(root);
+            if (free is null)
+            {
+                record.Notes.Add($"free space on {Path.GetPathRoot(root)} could not be read, so it was not checked "
+                                 + $"before extracting {Size(needed)}");
+            }
+            else if (free < needed + SpaceMargin)
             {
                 record.Error = $"not enough free space to extract: needs {Size(needed)}, "
-                               + $"{Size(free)} free on {Path.GetPathRoot(root)}";
+                               + $"{Size(free.Value)} free on {Path.GetPathRoot(root)}";
                 return record;
             }
 
