@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Security.Cryptography;
 
 namespace ArtefactForge.Core;
@@ -38,22 +37,12 @@ public static class ToolResolver
                     ? Path.GetDirectoryName(candidate) ?? ""
                     : toolRoots.First(r => candidate.StartsWith(r, StringComparison.OrdinalIgnoreCase));
 
-                var resolved = new ResolvedTool(candidate, root, ReadVersion(candidate), Hash(candidate));
+                var resolved = new ResolvedTool(candidate, root, ToolVersion.Read(candidate), Hash(candidate));
                 Cache[candidate] = resolved;
                 return resolved;
             }
         }
         return null;
-    }
-
-    private static string? ReadVersion(string path)
-    {
-        try
-        {
-            var info = FileVersionInfo.GetVersionInfo(path);
-            return string.IsNullOrWhiteSpace(info.FileVersion) ? null : info.FileVersion;
-        }
-        catch { return null; }
     }
 
     private static string Hash(string path)

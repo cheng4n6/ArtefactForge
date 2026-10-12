@@ -19,6 +19,12 @@ public sealed record ToolPackage(
 {
     /// <summary>A note shown before the update, when part of the folder is deliberately left alone.</summary>
     public string? KeptNote { get; init; }
+
+    /// <summary>
+    /// Arguments that make the executable print its version, for one with no version resource.
+    /// Null when the version resource is enough.
+    /// </summary>
+    public string? VersionArguments { get; init; }
 }
 
 public sealed record ToolUpdateOutcome(string Package, string? FromVersion, string ToVersion, string ExecutableSha256);
@@ -54,7 +60,9 @@ public sealed class ToolUpdater(string toolsDirectory)
             new Regex(@"^chainsaw\.exe$", RegexOptions.IgnoreCase),
             "chainsaw.exe", [])
         {
-            KeptNote = @"Chainsaw's rules, sigma and mappings folders are not in this download and stay as they are."
+            KeptNote = @"Chainsaw's rules, sigma and mappings folders are not in this download and stay as they are.",
+            // chainsaw.exe has no version resource; --version prints "chainsaw 2.16.5".
+            VersionArguments = "--version"
         }
     ];
 
