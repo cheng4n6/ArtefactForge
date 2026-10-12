@@ -20,6 +20,7 @@ switch (verb)
     case "version": case "--version": Console.WriteLine(BuildInfo.Describe()); return 0;
     case "plan": return Plan(options);
     case "run": return await Run(options);
+    case "evidence-list": return RebuildEvidenceList(options.Positional.ElementAtOrDefault(0));
     case "update": return await Update(options);
     case "release": return Release(options);
     case "ip": return IpLookup(options);
@@ -34,6 +35,7 @@ switch (verb)
         Console.WriteLine("  version                           print the build version");
         Console.WriteLine("  plan <evidence> [options]         show what would run, and why anything is skipped");
         Console.WriteLine("  run <evidence> <output> [options] process evidence: a folder, a drive, or a collection .zip or .tar.gz");
+        Console.WriteLine("  evidence-list <case folder>       rebuild the case's EvidenceList.xlsx without running modules");
         Console.WriteLine("  ip <case> <address> [--at <utc>]  who had an address at a time, from the case IpHistory.csv");
         Console.WriteLine("  update [--check] [--yes]          check for, download and install a newer ArtefactForge");
         Console.WriteLine("         [--source <folder>]        ...from a folder (share, USB) instead of GitHub");
@@ -290,12 +292,28 @@ async Task<int> Run(CommandLine options)
     foreach (var extraction in report.Extractions.Where(x => !x.CleanedUp && x.Error is null))
         Console.WriteLine($"Extracted: {extraction.ExtractedTo}");
     if (report.InventoryPath is not null) Console.WriteLine($"Inventory: {report.InventoryPath}");
+    if (report.EvidenceList is { } list) Console.WriteLine(list.Describe());
     var ipHistory = Path.Combine(report.CaseDirectory, IpHistory.FileName);
     if (File.Exists(ipHistory)) Console.WriteLine($"IP history: {ipHistory}");
     if (report.NeedsReview > 0)
         Console.WriteLine($"\n{report.NeedsReview} item(s) need review - check the manifest before relying on this output.");
 
     return report.NeedsReview > 0 ? 1 : 0;
+}
+
+int RebuildEvidenceList(string? caseDirectory)
+{
+    if (string.IsNullOrWhiteSpace(caseDirectory) || !Directory.Exists(caseDirectory))
+    {
+        Console.Error.WriteLine("Usage: evidence-list <case folder>  (the folder holding the collections and _Logs)");
+        return 2;
+    }
+
+    var result = EvidenceList.Rebuild(Path.GetFullPath(caseDirectory));
+    Console.WriteLine(result.Describe());
+    if (result.Outcome is EvidenceListOutcome.Written or EvidenceListOutcome.Unchanged)
+        Console.WriteLine($"Evidence list: {result.Path}");
+    return result.Outcome is EvidenceListOutcome.Locked or EvidenceListOutcome.Failed ? 1 : 0;
 }
 
 // "Who had this IP at this time", over the IpHistory.csv a run builds when it processes a domain

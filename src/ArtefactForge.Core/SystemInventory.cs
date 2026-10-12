@@ -25,28 +25,19 @@ public static class SystemInventory
         "UID0Accounts", "MachineID", "Domain"
     ];
 
+    /// <summary>Holds the number of CollectionGaps rows among the facts; not a summary item.</summary>
+    public const string GapCountKey = "__gapCount";
+
     /// <summary>
     /// Writes SystemInventory.csv at the case root. Does nothing when no collection produced a
     /// summary, rather than leaving an empty file that looks like a failed run.
     /// </summary>
     public static string? Build(string caseDirectory)
     {
-        if (!Directory.Exists(caseDirectory)) return null;
-
         var rows = new List<Dictionary<string, string>>();
 
-        foreach (var collectionDir in Directory.EnumerateDirectories(caseDirectory)
-                                               .OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+        foreach (var (name, facts) in Collect(caseDirectory))
         {
-            var name = Path.GetFileName(collectionDir);
-            if (name.StartsWith('_')) continue;   // _Logs, _Staging
-
-            var summary = Path.Combine(collectionDir, SummaryRelativePath);
-            if (!File.Exists(summary)) continue;
-
-            var facts = ReadFacts(summary);
-            if (facts.Count == 0) continue;
-
             var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Collection"] = name
@@ -58,7 +49,7 @@ public static class SystemInventory
 
             // Gaps are counted rather than listed: the detail lives in the per-collection summary,
             // and what matters here is which hosts have an incomplete picture.
-            row["CollectionGaps"] = facts.TryGetValue("__gapCount", out var gaps) ? gaps : "0";
+            row["CollectionGaps"] = facts.TryGetValue(GapCountKey, out var gaps) ? gaps : "0";
             rows.Add(row);
         }
 
@@ -76,6 +67,34 @@ public static class SystemInventory
         var path = Path.Combine(caseDirectory, "SystemInventory.csv");
         File.WriteAllText(path, csv.ToString());
         return path;
+    }
+
+    /// <summary>
+    /// The summary facts of every collection in the case that produced one, by collection folder
+    /// name, in name order. The evidence list reads the same facts as the inventory, so the two
+    /// never disagree about a host.
+    /// </summary>
+    public static IReadOnlyList<(string Collection, IReadOnlyDictionary<string, string> Facts)> Collect(
+        string caseDirectory)
+    {
+        var collected = new List<(string, IReadOnlyDictionary<string, string>)>();
+        if (!Directory.Exists(caseDirectory)) return collected;
+
+        foreach (var collectionDir in Directory.EnumerateDirectories(caseDirectory)
+                                               .OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+        {
+            var name = Path.GetFileName(collectionDir);
+            if (name.StartsWith('_')) continue;   // _Logs, _Staging
+
+            var summary = Path.Combine(collectionDir, SummaryRelativePath);
+            if (!File.Exists(summary)) continue;
+
+            var facts = ReadFacts(summary);
+            if (facts.Count == 0) continue;
+            collected.Add((name, facts));
+        }
+
+        return collected;
     }
 
     /// <summary>
@@ -117,7 +136,7 @@ public static class SystemInventory
         catch (IOException) { return facts; }
         catch (UnauthorizedAccessException) { return facts; }
 
-        facts["__gapCount"] = gaps.ToString();
+        facts[GapCountKey] = gaps.ToString();
         return facts;
     }
 
