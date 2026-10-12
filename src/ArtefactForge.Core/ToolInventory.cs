@@ -24,6 +24,20 @@ public sealed record ToolUsage(
 public static class ToolInventory
 {
     /// <summary>
+    /// The tool roots a run searches: the package's own Tools\, a sibling EZ-Tools\ when there is
+    /// one, then any roots the analyst added. One list, so the tool check and a run agree.
+    /// </summary>
+    public static List<string> Roots(string appRoot, IEnumerable<string>? extra = null)
+    {
+        var roots = new List<string> { Path.Combine(appRoot, "Tools") };
+        // Convenience: EZ Tools usually live beside the package rather than inside it.
+        var sibling = Path.GetFullPath(Path.Combine(appRoot, "..", "EZ-Tools"));
+        if (Directory.Exists(sibling)) roots.Add(sibling);
+        if (extra is not null) roots.AddRange(extra);
+        return roots;
+    }
+
+    /// <summary>
     /// Every executable the selected modules need, resolved against the tool roots. Answers the
     /// question a module list cannot: will these modules actually run on this machine.
     /// </summary>

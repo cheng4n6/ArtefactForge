@@ -14,7 +14,7 @@ switch (verb)
     case "detect": return Detect(options.Positional.ElementAtOrDefault(0));
     case "modules": return ListModules();
     case "profiles": return ListProfiles();
-    case "tools": return ListTools();
+    case "tools": return ListTools(options);
     case "options": return ListOptions(options.Positional.ElementAtOrDefault(0));
     case "version": case "--version": Console.WriteLine(BuildInfo.Describe()); return 0;
     case "plan": return Plan(options);
@@ -124,12 +124,18 @@ int ListProfiles()
     return 0;
 }
 
-int ListTools()
+int ListTools(CommandLine options)
 {
     var loaded = ModuleLoader.LoadDirectory(Path.Combine(repoRoot, "Modules"));
-    var roots = new List<string> { Path.Combine(repoRoot, "Tools") };
-    var sibling = Path.GetFullPath(Path.Combine(repoRoot, "..", "EZ-Tools"));
-    if (Directory.Exists(sibling)) roots.Add(sibling);
+    // The same roots a run would search: those in --config, then every --tools.
+    var extra = new List<string>();
+    if (options.Value("config") is { } configPath)
+    {
+        try { extra.AddRange(RunRequest.Load(configPath).ToolRoots); }
+        catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
+    }
+    extra.AddRange(options.List("tools"));
+    var roots = ToolInventory.Roots(repoRoot, extra);
 
     Console.WriteLine("Tool roots:");
     foreach (var root in roots) Console.WriteLine($"  {(Directory.Exists(root) ? " " : "!")} {root}");
@@ -644,11 +650,7 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
         ((Dictionary<string, string>)forModule)[optionName] = value;
     }
 
-    var toolRoots = new List<string> { Path.Combine(repoRoot, "Tools") };
-    // Convenience: EZ Tools usually live beside the repo rather than inside it.
-    var sibling = Path.GetFullPath(Path.Combine(repoRoot, "..", "EZ-Tools"));
-    if (Directory.Exists(sibling)) toolRoots.Add(sibling);
-    toolRoots.AddRange(request.ToolRoots);
+    var toolRoots = ToolInventory.Roots(repoRoot, request.ToolRoots);
 
     return new RunConfiguration
     {
