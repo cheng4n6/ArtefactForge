@@ -86,6 +86,7 @@ public partial class MainWindow : Window
         ShowModuleView(Preferences.Current.ModuleView);
         LoadRunOptions();
         InitIocTab();
+        InitRdpTab();
 
         OutputPath.Text = DefaultOutput;
         EvidencePath.LostFocus += (_, _) => Detect();
@@ -1335,6 +1336,7 @@ public partial class MainWindow : Window
             StopButton.IsEnabled = false;
             UpdateRunStats();
             RefreshIocs();
+            RefreshRdp();
         }
     }
 

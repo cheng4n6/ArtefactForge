@@ -369,7 +369,7 @@ public static class IpHistory
         return data;
     }
 
-    private static DateTime? ParseEventTime(string text) =>
+    internal static DateTime? ParseEventTime(string text) =>
         text.Length >= 19 ? IpHistoryRecord.ParseTime(text[..19]) : null;
 
     // --- DHCP -------------------------------------------------------------------------------------
@@ -490,7 +490,7 @@ public static class IpHistory
     private static string Relative(string collectionDir, string path) => Path.GetRelativePath(collectionDir, path);
 
     /// <summary>Item -> Value from a SystemInfo summary (Category, Item, Value, Source).</summary>
-    private static Dictionary<string, string> ReadFacts(string path)
+    internal static Dictionary<string, string> ReadFacts(string path)
     {
         var facts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try

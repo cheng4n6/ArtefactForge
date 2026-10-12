@@ -110,6 +110,7 @@ public sealed class RunEngine
         // Reads the modules' output, so it runs once they are done; before the manifest, which
         // lists which IP history sources each domain controller had.
         report.Results.AddRange(Windows.IpHistory.Build(caseDir, cancellationToken));
+        report.Results.AddRange(Windows.RemoteAccess.Build(caseDir, cancellationToken));   // for the RDP trace
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
         SaveState(statePath, completed, results);

@@ -26,6 +26,7 @@ switch (verb)
     case "update": return await Update(options);
     case "release": return Release(options);
     case "ip": return IpLookup(options);
+    case "rdp": return RdpCommand(options);
     default:
         Console.WriteLine(BuildInfo.Describe() + " - forensic artefact processing");
         Console.WriteLine();
@@ -46,6 +47,9 @@ switch (verb)
         Console.WriteLine("  ioc sweep <case> [--host h,...]   search hosts' output again for the whole list (default: every host)");
         Console.WriteLine("  evidence-list <case folder>       rebuild the case's EvidenceList.xlsx without running modules");
         Console.WriteLine("  ip <case> <address> [--at <utc>]  who had an address at a time, from the case IpHistory.csv");
+        Console.WriteLine("  rdp <case> [--host <name>] [--at <utc>] [--window <hours>] [--ip <address>] [--account <name>]");
+        Console.WriteLine("      [--trace <n>] [--lookback <hours>]");
+        Console.WriteLine("                                    list RDP sessions, or trace session n back across the case's hosts");
         Console.WriteLine("  update [--check] [--yes]          check for, download and install a newer ArtefactForge");
         Console.WriteLine("         [--source <folder>]        ...from a folder (share, USB) instead of GitHub");
         Console.WriteLine();
@@ -431,6 +435,85 @@ int RebuildEvidenceList(string? caseDirectory)
     if (result.Outcome is EvidenceListOutcome.Written or EvidenceListOutcome.Unchanged)
         Console.WriteLine($"Evidence list: {result.Path}");
     return result.Outcome is EvidenceListOutcome.Locked or EvidenceListOutcome.Failed ? 1 : 0;
+}
+
+// Lists the RDP sessions in a case, then with --trace follows one back host by host and saves the
+// trace beside the case's other files. --at and the times shown are UTC.
+int RdpCommand(CommandLine options)
+{
+    var caseDir = options.Positional.ElementAtOrDefault(0);
+    if (caseDir is null || !Directory.Exists(caseDir))
+    {
+        Console.Error.WriteLine("usage: rdp <case folder> [--host <name>] [--at \"yyyy-MM-dd HH:mm:ss\"] [--window <hours>] "
+                                + "[--ip <address>] [--account <name>] [--trace <n>] [--lookback <hours>]");
+        return 2;
+    }
+
+    DateTime? at = null;
+    if (options.Value("at") is { } text)
+    {
+        if (!DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var parsed))
+        {
+            Console.Error.WriteLine($"--at: '{text}' is not a date and time (yyyy-MM-dd HH:mm:ss, UTC)");
+            return 2;
+        }
+        at = parsed;
+    }
+    double Hours(string key, double fallback) =>
+        double.TryParse(options.Value(key), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var h) && h > 0 ? h : fallback;
+    var window = TimeSpan.FromHours(Hours("window", 24));
+
+    var hosts = RdpTrace.LoadHosts(caseDir);
+    if (hosts.Count == 0)
+    {
+        Console.Error.WriteLine("No Windows hosts with RDP data in this case - the trace reads EvtxECmd output, so run EvtxECmd first.");
+        return 1;
+    }
+    var sessions = RdpTrace.FindSessions(hosts, options.Value("host"), at - window, at + window,
+                                         options.Value("ip"), options.Value("account"));
+    if (sessions.Count == 0)
+    {
+        Console.WriteLine("No RDP sessions match.");
+        return 1;
+    }
+
+    if (options.Value("trace") is not { } pick)
+    {
+        Console.WriteLine($"{"#",3}  {"Start (UTC)",-19}  {"Host",-16} {"Account",-24} {"Source IP",-16} {"Client",-16} Evidence");
+        for (var i = 0; i < sessions.Count; i++)
+        {
+            var s = sessions[i];
+            Console.WriteLine($"{i + 1,3}  {s.Start,-19}  {s.Host,-16} {s.Account,-24} {s.SourceIp,-16} {s.ClientName,-16} {s.EvidenceText}");
+        }
+        Console.WriteLine();
+        Console.WriteLine("Trace one with --trace <n>.");
+        return 0;
+    }
+    if (!int.TryParse(pick, out var n) || n < 1 || n > sessions.Count)
+    {
+        Console.Error.WriteLine($"--trace: pick a session from 1 to {sessions.Count}");
+        return 2;
+    }
+
+    var trace = RdpTrace.Trace(hosts, RdpTrace.LoadIpHistory(caseDir), sessions[n - 1],
+                               new RdpTraceOptions { Lookback = TimeSpan.FromHours(Hours("lookback", 12)) });
+    foreach (var hop in trace.Hops)
+    {
+        Console.WriteLine($"Hop {hop.Number}: {hop.Result,-12} {(hop.FromHost.Length > 0 ? hop.FromHost : hop.SourceIp)} -> {hop.ToHost} "
+                          + $"at {IpHistoryRecord.Format(hop.TimeUtc)} as {hop.Account}");
+        if (hop.SourceIp.Length > 0) Console.WriteLine($"         from {hop.SourceIp}" + (hop.MappedBy.Length > 0 ? $" ({hop.MappedBy})" : ""));
+        if (hop.ReceivingEvidence.Length > 0) Console.WriteLine($"         received: {hop.ReceivingEvidence}");
+        if (hop.SendingEvidence.Length > 0) Console.WriteLine($"         sent:     {hop.SendingEvidence}");
+        foreach (var flag in hop.Flags) Console.WriteLine($"         flag:     {flag}");
+        if (hop.NextStep.Length > 0) Console.WriteLine($"         next:     {hop.NextStep}");
+    }
+    Console.WriteLine();
+    Console.WriteLine(trace.Summary);
+    Console.WriteLine($"Saved: {RdpTrace.Save(caseDir, trace, hosts)}");
+    return 0;
 }
 
 // "Who had this IP at this time", over the IpHistory.csv a run builds when it processes a domain

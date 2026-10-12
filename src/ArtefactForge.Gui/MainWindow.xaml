@@ -772,6 +772,12 @@
                 <DataGrid x:Name="IocGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                           CanUserSortColumns="True" SelectionMode="Extended">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Trace RDP from this" Click="OnIocTraceRdp"
+                                      ToolTip="List the RDP sessions from this IP address or account on the RDP trace tab"/>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
                         <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
@@ -801,6 +807,88 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </TabItem>
+
+        <!-- Follows an RDP logon back host by host. Kept light like the IOCs tab: the hops are in the
+             saved RdpTrace CSV and the case report; this shows the picker and a one-line result. -->
+        <TabItem x:Name="RdpTab" Header="RDP trace" Padding="14,7">
+            <DockPanel Margin="0,10,0,0">
+                <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock x:Name="RdpCaseText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Receiving host" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Around (UTC)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Window (h)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="3" Text="Source IP" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="4" Text="Account" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="5" Text="Look back (h)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                            <ComboBox Grid.Row="1" Grid.Column="0" x:Name="RdpHostBox" Margin="0,0,6,0"
+                                      ToolTip="The host the RDP logon arrived at"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="RdpTimeBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                     ToolTip="yyyy-MM-dd HH:mm:ss in UTC. Leave blank for any time."/>
+                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="RdpWindowBox" Text="24" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                     ToolTip="Hours either side of the time to list sessions from"/>
+                            <TextBox Grid.Row="1" Grid.Column="3" x:Name="RdpIpBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                     ToolTip="Optional: only sessions from this address"/>
+                            <TextBox Grid.Row="1" Grid.Column="4" x:Name="RdpAccountBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                     ToolTip="Optional: only sessions for this account (the domain is ignored)"/>
+                            <TextBox Grid.Row="1" Grid.Column="5" x:Name="RdpLookbackBox" Text="12" Margin="0,0,6,0"
+                                     ToolTip="At each hop, how many hours back to look for the session the connection came from"/>
+                            <Button Grid.Row="1" Grid.Column="6" x:Name="RdpFindButton" Content="Find sessions" Click="OnRdpFind"
+                                    Style="{StaticResource RunButton}" Margin="0"
+                                    ToolTip="List the RDP sessions that match. The first time, this reads each host's event log output."/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock DockPanel.Dock="Top" x:Name="RdpResult" TextWrapping="Wrap" Margin="2,0,0,4"/>
+                <TextBlock DockPanel.Dock="Top" x:Name="RdpSavedText" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"/>
+
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button x:Name="RdpTraceButton" Content="Trace" Click="OnRdpTrace" MinWidth="100"
+                            ToolTip="Follow the selected session back host by host, and save the trace in the case folder"/>
+                    <Button x:Name="RdpOpenButton" Content="Open trace" Click="OnRdpOpen" MinWidth="100"
+                            ToolTip="Open the most recent saved trace (RdpTrace_*.csv)"/>
+                    <Button x:Name="RdpIocIpButton" Content="Add end IP as IOC" Click="OnRdpAddIp" MinWidth="130"
+                            ToolTip="Add the address the trace ended at to the case's IOC list and sweep for it"/>
+                    <Button x:Name="RdpIocAccountButton" Content="Add accounts as IOCs" Click="OnRdpAddAccounts" MinWidth="140"
+                            ToolTip="Add the accounts the trace used to the case's IOC list and sweep for them"/>
+                    <Button Content="Open report" MinWidth="110" IsEnabled="False"
+                            ToolTip="The case report is not available in this version"
+                            ToolTipService.ShowOnDisabled="True"/>
+                </StackPanel>
+
+                <DataGrid x:Name="RdpSessionGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          CanUserSortColumns="True" SelectionMode="Single"
+                          SelectionChanged="OnRdpSessionSelected" MouseDoubleClick="OnRdpSessionDoubleClick">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Start (UTC)" Binding="{Binding Start}" Width="140"/>
+                        <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="110"/>
+                        <DataGridTextColumn Header="Account" Binding="{Binding Account}" Width="160"/>
+                        <DataGridTextColumn Header="Source IP" Binding="{Binding SourceIp}" Width="120"/>
+                        <DataGridTextColumn Header="Client" Binding="{Binding ClientName}" Width="110"/>
+                        <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="110"/>
+                        <DataGridTextColumn Header="Ended (UTC)" Binding="{Binding End}" Width="140"/>
+                        <DataGridTextColumn Header="Evidence" Binding="{Binding EvidenceText}" Width="*"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </DockPanel>
