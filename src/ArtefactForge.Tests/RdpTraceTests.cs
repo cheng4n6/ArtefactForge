@@ -278,7 +278,7 @@ public class RdpTraceTests
             @"x,NtUser,RDP,Remote,ROOT\Software\Microsoft\Terminal Server Client\Servers\dc01,UsernameHint,RegSz,CORP\admin,,,,False,False,2026-07-01 11:59:59,",
             @"x,NtUser,RDP,Remote,ROOT\Software\Microsoft\Terminal Server Client\Default,MRU0,RegSz,dc01,,,,False,False,2026-07-01 11:59:59,"
         ]);
-        File.WriteAllLines(Path.Combine(dir.Dir(Path.Combine("SRV01", "Prefetch")), "20260701_PECmd_Output.csv"),
+        File.WriteAllLines(Path.Combine(dir.Dir(Path.Combine("SRV01", "Prefetch")), "PECmd_Output.csv"),
         [
             "SourceFilename,ExecutableName,RunCount,LastRun,PreviousRun0,PreviousRun1",
             @"C:\Windows\Prefetch\MSTSC.EXE-1234.pf,MSTSC.EXE,2,2026-07-01 11:59:50,2026-06-01 09:00:00,"

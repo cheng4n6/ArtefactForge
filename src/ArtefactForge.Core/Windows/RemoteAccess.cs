@@ -430,7 +430,7 @@ public static class RemoteAccess
         return new Inputs(
             evtx,
             Files("Registry", "*_RECmd_NTUSER.csv"),
-            Files("Prefetch", "*_PECmd_Output.csv"),
+            Files("Prefetch", "*PECmd_Output.csv"),
             Files("Amcache", "*FileEntries.csv"),
             Files("JumpLists", "*_AutomaticDestinations.csv"));
     }
