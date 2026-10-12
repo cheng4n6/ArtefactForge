@@ -320,6 +320,21 @@ public class ArchiveInputTests
     }
 
     [Fact]
+    public void Deleting_one_extraction_leaves_the_folder_other_zips_extract_into()
+    {
+        // Two zips finishing at once both saw it empty and both removed it; the second was
+        // reported as a failed cleanup. The engine removes it once every zip is done.
+        using var dir = new TempDirectory();
+        var extracted = Path.Combine(dir.Path, "_Extracted");
+        Directory.CreateDirectory(Path.Combine(extracted, "HOST01"));
+
+        Assert.Null(CollectionExtractor.Delete(Path.Combine(extracted, "HOST01")));
+
+        Assert.False(Directory.Exists(Path.Combine(extracted, "HOST01")));
+        Assert.True(Directory.Exists(extracted));
+    }
+
+    [Fact]
     public async Task Cleanup_keeps_the_data_when_extraction_reported_problems()
     {
         using var dir = new TempDirectory();

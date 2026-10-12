@@ -583,20 +583,34 @@ public static class CollectionExtractor
     /// <summary>The name an archive's extraction folder takes: its file name without the extension, both parts of ".tar.gz".</summary>
     public static string ArchiveStem(string path) => CollectionSource.Stem(path);
 
-    /// <summary>Deletes an extracted collection. Returns null on success, else why it stayed.</summary>
+    /// <summary>
+    /// Deletes an extracted collection. Returns null on success, else why it stayed. The folder
+    /// the extractions share is left alone: other zips may be extracting into it.
+    /// </summary>
     public static string? Delete(string extractedTo)
     {
         try
         {
             if (Directory.Exists(extractedTo)) Directory.Delete(extractedTo, recursive: true);
-            var parent = Path.GetDirectoryName(extractedTo);
-            if (parent is not null && Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
-                Directory.Delete(parent);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return ex.Message;
+        }
+    }
+
+    /// <summary>Removes the folder the extractions share once it is empty, and only then.</summary>
+    public static void RemoveIfEmpty(string extractionRoot)
+    {
+        try
+        {
+            if (Directory.Exists(extractionRoot) && !Directory.EnumerateFileSystemEntries(extractionRoot).Any())
+                Directory.Delete(extractionRoot);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An empty folder left behind is untidy, not harmful; each zip's cleanup is reported.
         }
     }
 

@@ -44,6 +44,7 @@ public sealed class RunEngine
         var logDir = Path.Combine(caseDir, "_Logs");
         var consoleDir = Path.Combine(logDir, "Console");
         var stagingRoot = Path.Combine(caseDir, "_Staging");
+        var extractionRoot = config.ExtractionRoot ?? Path.Combine(caseDir, "_Extracted");
         Directory.CreateDirectory(consoleDir);
 
         var report = new RunReport { CaseDirectory = caseDir, LogDirectory = logDir };
@@ -90,6 +91,10 @@ public sealed class RunEngine
                 .ToList();
 
             await Task.WhenAll(zipped.Append(onDisk));
+
+            // Only once every zip is done: removed while two zips ran at once, it raced with the
+            // other zip's cleanup (reported as a failed delete) or with its extraction starting.
+            if (config.CleanupExtracted) CollectionExtractor.RemoveIfEmpty(extractionRoot);
         }
         catch (OperationCanceledException)
         {
@@ -201,7 +206,7 @@ public sealed class RunEngine
         {
             // A collector's folder keeps its whole name; an archive loses its extension, both parts of ".tar.gz".
             var name = Sanitise(CollectionSource.Stem(zipPath));
-            var destination = Path.Combine(config.ExtractionRoot ?? Path.Combine(caseDir, "_Extracted"), name);
+            var destination = Path.Combine(extractionRoot, name);
             var extractLog = Path.Combine(logDir, "Extraction", name + ".csv");
 
             var doneKeys = pending.Select(t => ArchiveDoneKey(t, zipPath, config)).ToList();

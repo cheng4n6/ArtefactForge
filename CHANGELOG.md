@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Cleanup of extracted zips no longer reports "could not delete" for a zip it did delete. When
+  two zips finished at the same moment, both tried to remove the shared `_Extracted` folder and
+  the second was reported as a failed cleanup. The folder is now removed once every zip is done.
+
 ## 0.1.0 - 2026-10-11
 
 First public release, 0.1.0, a beta published as a GitHub pre-release. ArtefactForge was developed
