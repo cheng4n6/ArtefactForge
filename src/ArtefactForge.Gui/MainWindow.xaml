@@ -682,12 +682,20 @@
                     <TextBlock x:Name="ResultsSummary" Style="{StaticResource Muted}" Margin="16,0,0,0"/>
                 </StackPanel>
 
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
-                            HorizontalAlignment="Right" Margin="0,10,0,0">
-                    <Button Content="Open manifest" Click="OnOpenManifest" MinWidth="120"/>
-                    <Button Content="Open logs" Click="OnOpenLogs" MinWidth="100"/>
-                    <Button Content="Re-run failed" Click="OnRerunFailed" MinWidth="120"/>
-                </StackPanel>
+                <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Open evidence list" Click="OnOpenEvidenceList" MinWidth="140"/>
+                        <Button x:Name="RebuildEvidenceListButton" Content="Rebuild evidence list"
+                                Click="OnRebuildEvidenceList" MinWidth="150"/>
+                        <Button Content="Open manifest" Click="OnOpenManifest" MinWidth="120"/>
+                        <Button Content="Open logs" Click="OnOpenLogs" MinWidth="100"/>
+                        <Button Content="Re-run failed" Click="OnRerunFailed" MinWidth="120"/>
+                    </StackPanel>
+                    <!-- Out of date (the list was open in Excel) is shown in the warning colour:
+                         the analyst has to act on it. -->
+                    <TextBlock x:Name="EvidenceListStatus" Style="{StaticResource Muted}"
+                               VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"/>
+                </DockPanel>
 
                 <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"

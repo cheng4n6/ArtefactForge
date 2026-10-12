@@ -1191,6 +1191,7 @@ public partial class MainWindow : Window
         var config = BuildConfiguration();
         if (config is null) return;
         if (!ConfirmOutput(config)) return;
+        if (!ConfirmEvidenceListClosed(Path.Combine(config.OutputRoot, config.CaseName))) return;
         RememberOutput(config);
 
         var plan = RunPlanner.Build(config);
@@ -1318,7 +1319,9 @@ public partial class MainWindow : Window
             _results.AddRange(report.Results);
             _lastCaseDirectory = report.CaseDirectory;
             ShowResults();
+            ShowEvidenceList(report.EvidenceList);
             Append($"Finished in {report.DurationSeconds:F1}s. {report.NeedsReview} item(s) need review.");
+            if (report.EvidenceList is { } list) Append(list.Describe());
         }
         catch (Exception ex)
         {
@@ -1413,6 +1416,84 @@ public partial class MainWindow : Window
     {
         if (_lastCaseDirectory is null) return;
         Open(Path.Combine(_lastCaseDirectory, "_Logs"));
+    }
+
+    // ---------------------------------------------------------------- evidence list
+
+    /// <summary>
+    /// Warns when the case's evidence list is open, as Excel locks it and the run cannot add the
+    /// new collections to it. Carrying on is allowed: the list is marked out of date and can be
+    /// rebuilt from the results page once it is closed.
+    /// </summary>
+    private bool ConfirmEvidenceListClosed(string caseDirectory)
+    {
+        if (!EvidenceList.IsOpen(caseDirectory)) return true;
+
+        var message = $"{EvidenceList.FileName} is open in another program, probably Excel."
+                      + Environment.NewLine + Environment.NewLine
+                      + "Save and close it so this run can add new collections to it. Only saved "
+                      + "changes are kept; edits not yet saved in Excel are not seen."
+                      + Environment.NewLine + Environment.NewLine
+                      + "Run anyway? The evidence list will be left out of date until you rebuild it.";
+        var answer = MessageBox.Show(this, message, "Evidence list is open",
+                                     MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        return answer == MessageBoxResult.Yes;
+    }
+
+    /// <summary>The case the results page acts on: the last run's, else the one set up to run.</summary>
+    private string? ResultsCaseDirectory()
+    {
+        if (_lastCaseDirectory is not null) return _lastCaseDirectory;
+        if (string.IsNullOrWhiteSpace(OutputPath.Text) || string.IsNullOrWhiteSpace(CaseName.Text)) return null;
+        return Path.Combine(OutputPath.Text.Trim(), CaseName.Text.Trim());
+    }
+
+    private void ShowEvidenceList(EvidenceListResult? result)
+    {
+        EvidenceListStatus.Text = result?.Describe() ?? "";
+        var brush = result?.Outcome switch
+        {
+            EvidenceListOutcome.Locked => "WarningBrush",
+            EvidenceListOutcome.Failed => "ErrorBrush",
+            _ => null
+        };
+        if (brush is null) EvidenceListStatus.ClearValue(TextBlock.ForegroundProperty);
+        else EvidenceListStatus.SetResourceReference(TextBlock.ForegroundProperty, brush);
+    }
+
+    private void OnOpenEvidenceList(object sender, RoutedEventArgs e)
+    {
+        if (ResultsCaseDirectory() is not { } caseDirectory) return;
+        var path = EvidenceList.PathFor(caseDirectory);
+        if (!File.Exists(path))
+        {
+            MessageBox.Show(this, $"There is no evidence list in {caseDirectory} yet. Run the case, or "
+                                  + "press Rebuild evidence list to make one from what is already processed.",
+                            "No evidence list");
+            return;
+        }
+        Open(path);
+    }
+
+    private async void OnRebuildEvidenceList(object sender, RoutedEventArgs e)
+    {
+        if (ResultsCaseDirectory() is not { } caseDirectory || !Directory.Exists(caseDirectory))
+        {
+            MessageBox.Show(this, "Choose the output folder and case name on the Setup page, or run the "
+                                  + "case first, so there is a case folder to list.", "No case folder");
+            return;
+        }
+
+        RebuildEvidenceListButton.IsEnabled = false;
+        try
+        {
+            var result = await Task.Run(() => EvidenceList.Rebuild(caseDirectory));
+            ShowEvidenceList(result);
+        }
+        finally
+        {
+            RebuildEvidenceListButton.IsEnabled = true;
+        }
     }
 
     private void OnRerunFailed(object sender, RoutedEventArgs e)

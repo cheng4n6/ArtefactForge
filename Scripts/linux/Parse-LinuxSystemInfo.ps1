@@ -295,6 +295,41 @@ if (Test-Path -LiteralPath $wtmp) {
     } catch { }
 }
 
+# --- live response (UAC) ----------------------------------------------------------------------------
+# What the running system reported when UAC collected it. The addresses are the ones in use, which a
+# DHCP host's configuration files never record; the serial number exists only in dmidecode's output.
+$live = Join-Path $Root '_UAC\live_response'
+
+$ipAddr = Join-Path $live 'network\ip_addr_show.txt'
+if (Test-Path -LiteralPath $ipAddr) {
+    $liveAddresses = @()
+    foreach ($line in (Get-Content -LiteralPath $ipAddr -ErrorAction SilentlyContinue)) {
+        # Global scope only: loopback and link-local addresses say nothing about the host's network.
+        if ($line -match '^\s*inet6?\s+([^\s/]+)\S*\s.*\bscope\s+global\b') { $liveAddresses += $Matches[1] }
+    }
+    Add-Fact 'Network' 'LiveIPAddresses' (($liveAddresses | Select-Object -Unique) -join ', ') '_UAC/live_response/network/ip_addr_show.txt'
+}
+
+$dmidecode = @(Get-ChildItem -LiteralPath (Join-Path $live 'hardware') -Filter 'dmidecode*.txt' -File -ErrorAction SilentlyContinue)
+foreach ($file in $dmidecode) {
+    # Only the "System Information" block: the board, chassis and memory blocks have serials too.
+    $section = ''
+    $system = @{}
+    foreach ($line in (Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue)) {
+        if ($line -match '^\S') { $section = $line.Trim(); continue }
+        if ($section -eq 'System Information' -and $line -match '^\s+(Manufacturer|Product Name|Serial Number):\s*(.*)$') {
+            $system[$Matches[1]] = $Matches[2].Trim()
+        }
+    }
+    if ($system.Count -eq 0) { continue }
+
+    $source = "_UAC/live_response/hardware/$($file.Name)"
+    Add-Fact 'Hardware' 'Manufacturer' $system['Manufacturer'] $source
+    Add-Fact 'Hardware' 'Model' $system['Product Name'] $source
+    Add-Fact 'Hardware' 'SerialNumber' $system['Serial Number'] $source
+    break
+}
+
 # --- collection completeness -------------------------------------------------------------------------
 # Anything here is a file that WAS collected as a link but whose target was not, which usually means
 # the export covered /etc but not /usr. It is a gap in the collection, not in the system.
