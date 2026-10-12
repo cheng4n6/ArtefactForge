@@ -1,5 +1,6 @@
 using ArtefactForge.Core;
 using ArtefactForge.Core.Update;
+using ArtefactForge.Core.Windows;
 
 // ArtefactForge command line. The GUI drives the same engine; this is the headless face of it.
 var repoRoot = FindRepoRoot(AppContext.BaseDirectory) ?? Directory.GetCurrentDirectory();
@@ -22,6 +23,7 @@ switch (verb)
     case "evidence-list": return RebuildEvidenceList(options.Positional.ElementAtOrDefault(0));
     case "update": return await Update(options);
     case "release": return Release(options);
+    case "ip": return IpLookup(options);
     default:
         Console.WriteLine(BuildInfo.Describe() + " - forensic artefact processing");
         Console.WriteLine();
@@ -34,6 +36,7 @@ switch (verb)
         Console.WriteLine("  plan <evidence> [options]         show what would run, and why anything is skipped");
         Console.WriteLine("  run <evidence> <output> [options] process evidence: a folder, a drive, or a collection .zip or .tar.gz");
         Console.WriteLine("  evidence-list <case folder>       rebuild the case's EvidenceList.xlsx without running modules");
+        Console.WriteLine("  ip <case> <address> [--at <utc>]  who had an address at a time, from the case IpHistory.csv");
         Console.WriteLine("  update [--check] [--yes]          check for, download and install a newer ArtefactForge");
         Console.WriteLine("         [--source <folder>]        ...from a folder (share, USB) instead of GitHub");
         Console.WriteLine();
@@ -290,6 +293,8 @@ async Task<int> Run(CommandLine options)
         Console.WriteLine($"Extracted: {extraction.ExtractedTo}");
     if (report.InventoryPath is not null) Console.WriteLine($"Inventory: {report.InventoryPath}");
     if (report.EvidenceList is { } list) Console.WriteLine(list.Describe());
+    var ipHistory = Path.Combine(report.CaseDirectory, IpHistory.FileName);
+    if (File.Exists(ipHistory)) Console.WriteLine($"IP history: {ipHistory}");
     if (report.NeedsReview > 0)
         Console.WriteLine($"\n{report.NeedsReview} item(s) need review - check the manifest before relying on this output.");
 
@@ -309,6 +314,54 @@ int RebuildEvidenceList(string? caseDirectory)
     if (result.Outcome is EvidenceListOutcome.Written or EvidenceListOutcome.Unchanged)
         Console.WriteLine($"Evidence list: {result.Path}");
     return result.Outcome is EvidenceListOutcome.Locked or EvidenceListOutcome.Failed ? 1 : 0;
+}
+
+// "Who had this IP at this time", over the IpHistory.csv a run builds when it processes a domain
+// controller. <case> is the case folder or the CSV itself; --at is UTC, as everything AF writes is.
+int IpLookup(CommandLine options)
+{
+    var path = options.Positional.ElementAtOrDefault(0);
+    var address = options.Positional.ElementAtOrDefault(1);
+    if (path is null || address is null)
+    {
+        Console.Error.WriteLine("usage: ip <case folder or IpHistory.csv> <address> [--at \"yyyy-MM-dd HH:mm:ss\"]");
+        return 2;
+    }
+    if (Directory.Exists(path)) path = Path.Combine(path, IpHistory.FileName);
+    if (!File.Exists(path))
+    {
+        Console.Error.WriteLine($"No IP history at {path} - it is built when a run processes a domain controller.");
+        return 1;
+    }
+
+    DateTime? at = null;
+    if (options.Value("at") is { } text)
+    {
+        if (!DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var parsed))
+        {
+            Console.Error.WriteLine($"--at: '{text}' is not a date and time (yyyy-MM-dd HH:mm:ss, UTC)");
+            return 2;
+        }
+        at = parsed;
+    }
+
+    var result = IpHistoryLookup.Find(IpHistoryRecord.Read(path), address, at);
+    if (result.Best is null)
+    {
+        Console.WriteLine($"{address}: not in {path}");
+        return 1;
+    }
+
+    static string Describe(IpHistoryRecord r) =>
+        $"{(r.HostName.Length > 0 ? r.HostName : "-"),-28} {r.Account,-20} {r.Source,-10} "
+        + $"{IpHistoryRecord.Format(r.FirstSeenUtc),-19} to {IpHistoryRecord.Format(r.LastSeenUtc),-19} ({r.Collection})";
+
+    Console.WriteLine($"{address}" + (at is null ? " (most recent)" : $" at {IpHistoryRecord.Format(at)} UTC"));
+    Console.WriteLine("  best      " + Describe(result.Best));
+    foreach (var conflict in result.Conflicts) Console.WriteLine("  conflict  " + Describe(conflict));
+    return 0;
 }
 
 async Task<int> Update(CommandLine options)

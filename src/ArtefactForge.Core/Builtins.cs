@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using ArtefactForge.Core.Linux;
+using ArtefactForge.Core.Windows;
 
 namespace ArtefactForge.Core;
 
@@ -43,7 +44,9 @@ public static class Builtins
         ["LinuxChkrootkit"] = (args, log, errors, token) =>
             UacChecksExport.Chkrootkit(Required(args, "root"), Required(args, "out"), log, errors, token),
         ["LinuxBodyfile"] = (args, log, errors, token) =>
-            BodyfileExport.Run(Required(args, "root"), Required(args, "out"), log, errors, token)
+            BodyfileExport.Run(Required(args, "root"), Required(args, "out"), log, errors, token),
+        ["WindowsDhcpServerLog"] = (args, log, errors, token) =>
+            DhcpServerLogExport.Run(Required(args, "root"), Required(args, "out"), log, errors, token)
     };
 
     public static IEnumerable<string> Names => Registry.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase);
