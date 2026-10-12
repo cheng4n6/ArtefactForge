@@ -74,6 +74,19 @@ public static class ToolInventory
             .ToList();
     }
 
+    /// <summary>
+    /// The version of a package under Tools\ that the update check compares: what the executable
+    /// reports, else what VERSIONS.txt records. Tools the analyst copied in have no VERSIONS.txt,
+    /// so the executable is asked first.
+    /// </summary>
+    public static string? InstalledVersion(string toolRoot, string package)
+    {
+        var spec = ToolUpdater.Find(package);
+        var executable = spec is null ? null : Path.Combine(toolRoot, spec.Name, spec.Executable);
+        var reported = executable is not null && File.Exists(executable) ? ToolVersion.Read(executable) : null;
+        return reported ?? DeclaredVersion(toolRoot, package);
+    }
+
     /// <summary>Reads Tools\VERSIONS.txt, written when the tools were staged.</summary>
     public static string? DeclaredVersion(string toolRoot, string package)
     {

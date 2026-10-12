@@ -172,7 +172,7 @@ public partial class MainWindow : Window
             {
                 Package = package,
                 Repository = repository,
-                Installed = ToolInventory.DeclaredVersion(toolsDir, package)
+                Installed = ToolInventory.InstalledVersion(toolsDir, package)
             });
         }
     }
