@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - 2026-10-12
 
 - Cleanup of extracted zips no longer reports "could not delete" for a zip it did delete. When
   two zips finished at the same moment, both tried to remove the shared `_Extracted` folder and
