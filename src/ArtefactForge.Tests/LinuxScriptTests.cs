@@ -249,4 +249,36 @@ public class LinuxScriptTests
         Assert.Contains(facts, f => f["Item"] == "Timezone" && f["Value"] == "Europe/London");
         Assert.Contains(facts, f => f["Item"] == "UnreadableSymlink" && f["Value"].StartsWith("etc/resolv.conf -> "));
     }
+
+    [Fact]
+    public void System_info_takes_live_addresses_and_the_system_serial_from_uac_live_response()
+    {
+        using var dir = new TempDirectory();
+        File.WriteAllText(dir.File(Path.Combine("root", "etc", "hostname")), "web01\n");
+        File.WriteAllText(dir.File(Path.Combine("root", "_UAC", "live_response", "network", "ip_addr_show.txt")),
+            "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN\n" +
+            "    inet 127.0.0.1/8 scope host lo\n" +
+            "2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP\n" +
+            "    inet 10.1.2.3/24 brd 10.1.2.255 scope global dynamic eth0\n" +
+            "    inet6 fe80::1/64 scope link\n");
+        File.WriteAllText(dir.File(Path.Combine("root", "_UAC", "live_response", "hardware", "dmidecode.txt")),
+            "Handle 0x0001, DMI type 1, 27 bytes\n" +
+            "System Information\n" +
+            "\tManufacturer: Example Corp\n" +
+            "\tProduct Name: Model 7\n" +
+            "\tSerial Number: SN-12345\n" +
+            "\n" +
+            "Handle 0x0002, DMI type 2, 15 bytes\n" +
+            "Base Board Information\n" +
+            "\tSerial Number: BOARD-999\n");
+
+        var (exit, _, stderr, output) = RunScript(dir, "Parse-LinuxSystemInfo.ps1");
+
+        Assert.Equal(0, exit);
+        Assert.Equal("", stderr);
+        var facts = Csv(Path.Combine(output, "SystemInfo.csv"));
+        Assert.Contains(facts, f => f["Item"] == "LiveIPAddresses" && f["Value"] == "10.1.2.3");
+        Assert.Contains(facts, f => f["Item"] == "SerialNumber" && f["Value"] == "SN-12345");
+        Assert.Contains(facts, f => f["Item"] == "Model" && f["Value"] == "Model 7");
+    }
 }
