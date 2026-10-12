@@ -1,0 +1,29 @@
+Description: DHCP server audit logs - which client was leased which address, and when
+Category: IpHistory
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: DhcpServerLog
+# The Windows DHCP server's audit logs, Windows\System32\dhcp\DhcpSrvLog-<Day>.log and
+# DhcpV6SrvLog-<Day>.log: one file per weekday, overwritten each week, so about seven days of
+# leases with the address, host name and MAC. Only lease events are kept (new, renew, release,
+# BOOTP; every IPv6 row with an address).
+#
+# The logs are in the server's local time. Times are converted to UTC with the time zone named
+# in the SYSTEM hive; when that cannot be read, TimeUtc is left empty, the local time is kept, and
+# the module is marked for review.
+#
+# Output lands in IpHistory\, where the IP history built after the run reads it alongside the
+# domain controller's Kerberos events. The DHCP database (dhcp.mdb) is not read: it holds only
+# current leases and needs an ESE parser.
+Requires:
+  - '%root%\Windows\System32\dhcp\Dhcp*SrvLog-*.log'
+Platform: windows
+Scope: offlineonly
+Priority: 30
+IoWeight: light
+Processors:
+  -
+    Executable: builtin:WindowsDhcpServerLog
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

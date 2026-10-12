@@ -105,6 +105,9 @@ public sealed class RunEngine
         if (!_keepStaging) TryDeleteDirectory(stagingRoot);
 
         report.Results.AddRange(results);
+        // Reads the modules' output, so it runs once they are done; before the manifest, which
+        // lists which IP history sources each domain controller had.
+        report.Results.AddRange(Windows.IpHistory.Build(caseDir, cancellationToken));
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
         SaveState(statePath, completed, results);
