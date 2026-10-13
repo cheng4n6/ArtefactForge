@@ -8,7 +8,7 @@ using ArtefactForge.Core.Windows;
 
 namespace ArtefactForge.Gui;
 
-/// <summary>The RDP trace tab. Sessions, the trace and saving live in Core; this only shows them.</summary>
+/// <summary>The RDP trace sub-tab of Analysis. Sessions, the trace and saving live in Core; this only shows them.</summary>
 public partial class MainWindow
 {
     private const string AllHosts = "All hosts";
@@ -16,23 +16,12 @@ public partial class MainWindow
     private RdpTraceResult? _lastTrace;
     private string? _lastTracePath;
 
-    private void InitRdpTab()
-    {
-        Tabs.SelectionChanged += (_, e) =>
-        {
-            if (ReferenceEquals(e.OriginalSource, Tabs) && Tabs.SelectedItem == RdpTab) RefreshRdp();
-        };
-    }
-
     private void RefreshRdp(string? result = null)
     {
-        var caseDir = IocCaseDirectory();
+        var caseDir = AnalysisCaseDirectory();
         var selected = RdpHostBox.SelectedItem as string;
         if (caseDir is null || !Directory.Exists(caseDir))
         {
-            RdpCaseText.Text = caseDir is null
-                ? "Choose an output folder and a case name on Setup to trace RDP logons in the case."
-                : "Case: " + caseDir + " (not created yet)";
             RdpHostBox.ItemsSource = null;
             RdpSessionGrid.ItemsSource = null;
             RdpSavedText.Text = "";
@@ -41,7 +30,6 @@ public partial class MainWindow
             return;
         }
 
-        RdpCaseText.Text = "Case: " + caseDir;
         var hosts = new[] { AllHosts }.Concat(IocSweep.Hosts(caseDir)).ToList();
         RdpHostBox.ItemsSource = hosts;
         RdpHostBox.SelectedItem = selected is not null && hosts.Contains(selected) ? selected : AllHosts;
@@ -67,7 +55,7 @@ public partial class MainWindow
 
     private void SetRdpEnabled()
     {
-        var free = !_rdpBusy && RunButton.IsEnabled && IocCaseDirectory() is { } caseDir && Directory.Exists(caseDir);
+        var free = !_rdpBusy && RunButton.IsEnabled && AnalysisCaseDirectory() is { } caseDir && Directory.Exists(caseDir);
         RdpFindButton.IsEnabled = free;
         RdpTraceButton.IsEnabled = free && RdpSessionGrid.SelectedItem is RdpSession;
         RdpOpenButton.IsEnabled = _lastTracePath is not null && File.Exists(_lastTracePath);
@@ -91,7 +79,7 @@ public partial class MainWindow
 
     private async void OnRdpFind(object sender, RoutedEventArgs e)
     {
-        if (IocCaseDirectory() is not { } caseDir) return;
+        if (AnalysisCaseDirectory() is not { } caseDir) return;
 
         DateTime? at = null;
         if (RdpTimeBox.Text.Trim() is { Length: > 0 } text)
@@ -126,7 +114,7 @@ public partial class MainWindow
 
     private async void OnRdpTrace(object sender, RoutedEventArgs e)
     {
-        if (IocCaseDirectory() is not { } caseDir || RdpSessionGrid.SelectedItem is not RdpSession session) return;
+        if (AnalysisCaseDirectory() is not { } caseDir || RdpSessionGrid.SelectedItem is not RdpSession session) return;
         var lookback = TimeSpan.FromHours(Hours(RdpLookbackBox.Text, 12));
 
         await RunRdpAsync(() =>
@@ -158,7 +146,7 @@ public partial class MainWindow
 
     private async Task AddRdpIocs(IReadOnlyList<IocEntry> entries)
     {
-        if (IocCaseDirectory() is not { } caseDir) return;
+        if (AnalysisCaseDirectory() is not { } caseDir) return;
         var progress = new Progress<string>(m => RdpResult.Text = m);
         await RunRdpAsync(() =>
         {
@@ -169,7 +157,7 @@ public partial class MainWindow
         });
     }
 
-    /// <summary>From the IOCs tab: list the sessions from an IP address or account.</summary>
+    /// <summary>From the IOCs sub-tab: list the sessions from an IP address or account.</summary>
     private void OnIocTraceRdp(object sender, RoutedEventArgs e)
     {
         if (IocGrid.SelectedItem is not IocRow row) return;
@@ -181,7 +169,7 @@ public partial class MainWindow
         RdpTimeBox.Clear();
         RdpIpBox.Text = row.Entry.Type == IocType.IP ? row.Entry.Value : "";
         RdpAccountBox.Text = row.Entry.Type == IocType.Account ? row.Entry.Value : "";
-        Tabs.SelectedItem = RdpTab;
+        AnalysisTabs.SelectedItem = RdpTab;
         RdpHostBox.SelectedItem = AllHosts;
         if (RdpFindButton.IsEnabled) OnRdpFind(sender, e);
     }
@@ -210,5 +198,6 @@ public partial class MainWindow
             _rdpBusy = false;
         }
         RefreshRdp(result);
+        RefreshCaseBar();
     }
 }

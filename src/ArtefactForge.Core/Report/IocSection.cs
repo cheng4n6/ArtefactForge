@@ -22,13 +22,13 @@ internal sealed class IocSection : ICaseReportSection
 
     public ReportSection Build(CaseReportContext context)
     {
-        const string source = "From IOCs.csv and IocHits.csv. Add or remove IOCs on the app's IOCs tab.";
+        const string source = "From IOCs.csv and IocHits.csv. Add or remove IOCs in the app, on Analysis > IOCs.";
         var caseDirectory = context.CaseDirectory;
         if (!IocList.Exists(caseDirectory))
             return new ReportSection
             {
                 Id = "iocs", Title = "IOC hits", Source = source,
-                Body = Empty("No IOC list for this case yet. IOCs added on the app's IOCs tab are searched for across every host's output.")
+                Body = Empty("No IOC list for this case yet. IOCs added in the app, on Analysis > IOCs, are searched for across every host's output.")
             };
 
         var iocs = IocList.Load(caseDirectory);

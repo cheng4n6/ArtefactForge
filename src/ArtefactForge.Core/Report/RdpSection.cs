@@ -21,7 +21,7 @@ internal sealed class RdpSection : ICaseReportSection
 
     public ReportSection Build(CaseReportContext context)
     {
-        const string source = "From the RdpTrace files in the case folder. Start a trace on the app's RDP trace tab.";
+        const string source = "From the RdpTrace files in the case folder. Start a trace in the app, on Analysis > RDP trace.";
         var saved = RdpTrace.Saved(context.CaseDirectory);
         if (saved.Count == 0)
             return new ReportSection

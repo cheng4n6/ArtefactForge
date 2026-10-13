@@ -7,7 +7,7 @@
   marked, saved RDP traces drawn as a chain with their hops and flags, and the IP history with
   a "who had this address at this time" lookup. It follows the system's light or dark theme.
 - The report is rebuilt after every run, IOC sweep and RDP trace. Nothing in it is typed by
-  hand, so rebuilding never loses anything. "Open case report" on the results page (and "Open
-  report" on the IOCs and RDP trace tabs) opens it; "Export snapshot" saves a dated copy,
+  hand, so rebuilding never loses anything. "Open report" at the top of the Analysis tab opens
+  it; "Export snapshot" beside it saves a dated copy,
   `CaseReport_<date>_<time>.html`, that is never updated, for sending.
 - `ArtefactForgeCli report <case folder>` rebuilds the report, and `--snapshot` saves a dated copy.

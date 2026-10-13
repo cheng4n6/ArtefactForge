@@ -1,4 +1,4 @@
-- New **RDP trace** tab: pick a receiving host and a time (with an optional source IP, account
+- New **RDP trace** page on the Analysis tab: pick a receiving host and a time (with an optional source IP, account
   and search window), choose one of the RDP sessions it lists, and ArtefactForge follows it back
   host by host until the address is outside the case. Each hop is Confirmed (the source host has
   a client event for the connection), Inferred (the address maps to the host but nothing there

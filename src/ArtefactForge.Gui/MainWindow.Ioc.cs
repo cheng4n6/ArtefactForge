@@ -7,7 +7,7 @@ using Microsoft.Win32;
 
 namespace ArtefactForge.Gui;
 
-/// <summary>A row of the IOCs tab: one IOC and how often the sweeps found it.</summary>
+/// <summary>A row of the IOCs sub-tab: one IOC and how often the sweeps found it.</summary>
 public sealed class IocRow
 {
     public required IocEntry Entry { get; init; }
@@ -22,7 +22,7 @@ public sealed class IocRow
     public string Hosts => Entry.IsSweepable ? HostCount.ToString("N0") : "";
 }
 
-/// <summary>The IOCs tab. The list and the sweeps live in Core; this only shows them.</summary>
+/// <summary>The IOCs sub-tab of Analysis. The list and the sweeps live in Core; this only shows them.</summary>
 public partial class MainWindow
 {
     private const string AutoType = "Auto";
@@ -32,37 +32,19 @@ public partial class MainWindow
     {
         IocTypeBox.ItemsSource = new[] { AutoType }.Concat(Enum.GetValues<IocType>().Select(IocList.Label)).ToList();
         IocTypeBox.SelectedIndex = 0;
-        Tabs.SelectionChanged += (_, e) =>
-        {
-            // SelectionChanged bubbles up from the grids and combo boxes inside the tabs too.
-            if (ReferenceEquals(e.OriginalSource, Tabs) && Tabs.SelectedItem == IocTab) RefreshIocs();
-        };
-    }
-
-    /// <summary>The case the tab works on: Output and Case name on Setup, else the last run's case.</summary>
-    private string? IocCaseDirectory()
-    {
-        var output = OutputPath.Text.Trim();
-        var caseName = CaseName.Text.Trim();
-        if (output.Length > 0 && caseName.Length > 0) return Path.Combine(output, caseName);
-        return _lastCaseDirectory;
     }
 
     private void RefreshIocs(string? result = null)
     {
-        var caseDir = IocCaseDirectory();
+        var caseDir = AnalysisCaseDirectory();
         if (caseDir is null)
         {
-            IocCaseText.Text = "Choose an output folder and a case name on Setup to see the case's IOCs.";
             IocGrid.ItemsSource = null;
             IocResult.Text = "";
             SetIocEnabled();
             return;
         }
 
-        IocCaseText.Text = Directory.Exists(caseDir)
-            ? "Case: " + caseDir
-            : "Case: " + caseDir + " (not created yet; IOCs added now are searched for when its hosts are processed)";
         try
         {
             var counts = IocSweep.Summarise(caseDir);
@@ -84,7 +66,7 @@ public partial class MainWindow
     private void SetIocEnabled()
     {
         // A run rebuilds the hits of the hosts it processes, so the list waits for it to finish.
-        var free = !_iocBusy && RunButton.IsEnabled && IocCaseDirectory() is not null;
+        var free = !_iocBusy && RunButton.IsEnabled && AnalysisCaseDirectory() is not null;
         IocAddButton.IsEnabled = free;
         IocImportButton.IsEnabled = free;
         IocRemoveButton.IsEnabled = free;
@@ -100,7 +82,7 @@ public partial class MainWindow
 
     private async void OnIocAdd(object sender, RoutedEventArgs e)
     {
-        var caseDir = IocCaseDirectory();
+        var caseDir = AnalysisCaseDirectory();
         var value = IocValueBox.Text.Trim();
         if (caseDir is null || value.Length == 0) return;
 
@@ -121,7 +103,7 @@ public partial class MainWindow
 
     private async void OnIocImport(object sender, RoutedEventArgs e)
     {
-        var caseDir = IocCaseDirectory();
+        var caseDir = AnalysisCaseDirectory();
         if (caseDir is null) return;
         var dialog = new OpenFileDialog
         {
@@ -142,7 +124,7 @@ public partial class MainWindow
 
     private async void OnIocRemove(object sender, RoutedEventArgs e)
     {
-        var caseDir = IocCaseDirectory();
+        var caseDir = AnalysisCaseDirectory();
         var selected = IocGrid.SelectedItems.OfType<IocRow>().Select(r => r.Entry).ToList();
         if (caseDir is null || selected.Count == 0) return;
 
@@ -161,19 +143,19 @@ public partial class MainWindow
 
     private async void OnIocSweepAll(object sender, RoutedEventArgs e)
     {
-        var caseDir = IocCaseDirectory();
+        var caseDir = AnalysisCaseDirectory();
         if (caseDir is null) return;
         await RunIocAsync(caseDir, async progress => (await IocSweep.RebuildAllAsync(caseDir, progress)).Describe());
     }
 
     private void OnIocOpenList(object sender, RoutedEventArgs e)
     {
-        if (IocCaseDirectory() is { } caseDir) Open(IocList.PathFor(caseDir));
+        if (AnalysisCaseDirectory() is { } caseDir) Open(IocList.PathFor(caseDir));
     }
 
     private void OnIocOpenHits(object sender, RoutedEventArgs e)
     {
-        if (IocCaseDirectory() is not { } caseDir) return;
+        if (AnalysisCaseDirectory() is not { } caseDir) return;
         var hits = IocSweep.HitsPathFor(caseDir);
         if (File.Exists(hits)) Open(hits);
         else IocResult.Text = "There are no hits for this case yet.";
@@ -209,5 +191,6 @@ public partial class MainWindow
             _iocBusy = false;
         }
         RefreshIocs(result);
+        RefreshCaseBar();
     }
 }
