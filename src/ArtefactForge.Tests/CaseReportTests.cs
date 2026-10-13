@@ -220,6 +220,16 @@ public class CaseReportTests
     }
 
     [Fact]
+    public void Host_addresses_are_sorted_one_per_line_and_fold_away_past_three()
+    {
+        Assert.Equal("10.0.0.2<br>10.0.0.10<br>192.168.1.5",
+                     HostsSectionAddresses("192.168.1.5, 10.0.0.10, 10.0.0.2"));
+
+        var many = HostsSectionAddresses("fe80::1, 192.168.56.1 10.0.0.9, 192.168.10.194, 10.0.0.9");
+        Assert.StartsWith("10.0.0.9<br>192.168.10.194<br>192.168.56.1<details class=\"more\"><summary>1 more</summary>fe80::1</details>", many);
+    }
+
+    [Fact]
     public void A_case_folder_that_does_not_exist_is_reported_not_thrown()
     {
         using var dir = new TempDirectory();
@@ -239,4 +249,9 @@ public class CaseReportTests
                      DetectionSummary.ParseTime("2026-03-01T10:00:00.123456+00:00"));
         Assert.Null(DetectionSummary.ParseTime("not a time"));
     }
+
+    private static string HostsSectionAddresses(string addresses) =>
+        (string)typeof(CaseReport).Assembly.GetType("ArtefactForge.Core.Report.HostsSection")!
+            .GetMethod("AddressList", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(null, [addresses])!;
 }

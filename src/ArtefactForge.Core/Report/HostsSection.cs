@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using ArtefactForge.Core.Windows;
 using static ArtefactForge.Core.Report.Html;
@@ -52,7 +54,7 @@ internal sealed class HostsSection : ICaseReportSection
                 .Append($"<td><b>{E(host.Name)}</b>")
                 .Append(host.Name.Equals(host.Collection, StringComparison.OrdinalIgnoreCase) ? "" : $"<br><small class=\"muted\">{E(host.Collection)}</small>")
                 .Append("</td>")
-                .Append($"<td>{role}</td><td>{os}</td><td class=\"mono\">{E(host.Addresses)}</td>")
+                .Append($"<td>{role}</td><td>{os}</td><td class=\"mono\">{AddressList(host.Addresses)}</td>")
                 .Append(processed)
                 .Append($"<td>{modules}</td>")
                 .Append($"<td class=\"mono\">{SecurityLog(host, gaps)}</td>")
@@ -81,6 +83,30 @@ internal sealed class HostsSection : ICaseReportSection
             Body = body.ToString(),
             Findings = findings
         };
+    }
+
+    private const int AddressesShown = 3;
+
+    /// <summary>
+    /// The host's addresses one per line in numeric order, IPv4 before IPv6. Past three, the rest
+    /// fold away behind "N more" so a host with many adapters does not stretch its row.
+    /// </summary>
+    internal static string AddressList(string addresses)
+    {
+        var sorted = addresses.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(a => (Text: a, Ip: IPAddress.TryParse(a, out var ip) ? ip : null))
+            .OrderBy(a => a.Ip is null ? 2 : a.Ip.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+            .ThenBy(a => a.Ip is null ? a.Text : Convert.ToHexString(a.Ip.GetAddressBytes()), StringComparer.Ordinal)
+            .Select(a => a.Text)
+            .ToList();
+        if (sorted.Count == 0) return "";
+
+        string Lines(IEnumerable<string> list) => string.Join("<br>", list.Select(E));
+        if (sorted.Count <= AddressesShown) return Lines(sorted);
+        var rest = sorted.Count - AddressesShown;
+        return Lines(sorted.Take(AddressesShown))
+               + $"<details class=\"more\"><summary>{rest} more</summary>{Lines(sorted.Skip(AddressesShown))}</details>";
     }
 
     /// <summary>How far back the host's Security log reaches, from the remote access sources file.</summary>

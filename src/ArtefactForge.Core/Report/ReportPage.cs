@@ -86,6 +86,8 @@ internal static class ReportPage
         .ioc .inner{padding:0 14px 12px 38px}
         .ioc .inner p{padding:6px 12px}
         mark{background:var(--mark);color:var(--mark-fg);border-radius:2px;padding:0 1px}
+        .more summary{color:var(--accent);font-family:var(--ui);font-size:12px;padding-top:2px}
+        .more summary:hover{text-decoration:underline}
         .copy{font:inherit;font-size:11px;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:4px;padding:0 6px;cursor:pointer}
         .copy:hover{color:var(--fg);border-color:var(--muted)}
         button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
