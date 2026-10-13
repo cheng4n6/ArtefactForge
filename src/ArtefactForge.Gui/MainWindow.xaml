@@ -684,6 +684,10 @@
 
                 <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Open case report" Click="OnOpenCaseReport" MinWidth="130"
+                                ToolTip="Open CaseReport.html: hosts, detections, IOC hits, RDP traces and IP history in one page"/>
+                        <Button x:Name="ExportSnapshotButton" Content="Export snapshot" Click="OnExportSnapshot" MinWidth="130"
+                                ToolTip="Save a dated copy of the case report that is never updated, for sending"/>
                         <Button Content="Open evidence list" Click="OnOpenEvidenceList" MinWidth="140"/>
                         <Button x:Name="RebuildEvidenceListButton" Content="Rebuild evidence list"
                                 Click="OnRebuildEvidenceList" MinWidth="150"/>
@@ -764,9 +768,8 @@
                             ToolTip="Open IOCs.csv"/>
                     <Button Content="Open hits" Click="OnIocOpenHits" MinWidth="100"
                             ToolTip="Open IocHits.csv: every hit with its host, file and matching line"/>
-                    <Button Content="Open report" MinWidth="110" IsEnabled="False"
-                            ToolTip="The case report is not available in this version"
-                            ToolTipService.ShowOnDisabled="True"/>
+                    <Button Content="Open report" Click="OnOpenTabReport" MinWidth="110"
+                            ToolTip="Open the case report, CaseReport.html"/>
                 </StackPanel>
 
                 <DataGrid x:Name="IocGrid" AutoGenerateColumns="False" IsReadOnly="True"
@@ -871,9 +874,8 @@
                             ToolTip="Add the address the trace ended at to the case's IOC list and sweep for it"/>
                     <Button x:Name="RdpIocAccountButton" Content="Add accounts as IOCs" Click="OnRdpAddAccounts" MinWidth="140"
                             ToolTip="Add the accounts the trace used to the case's IOC list and sweep for them"/>
-                    <Button Content="Open report" MinWidth="110" IsEnabled="False"
-                            ToolTip="The case report is not available in this version"
-                            ToolTipService.ShowOnDisabled="True"/>
+                    <Button Content="Open report" Click="OnOpenTabReport" MinWidth="110"
+                            ToolTip="Open the case report, CaseReport.html"/>
                 </StackPanel>
 
                 <DataGrid x:Name="RdpSessionGrid" AutoGenerateColumns="False" IsReadOnly="True"

@@ -122,6 +122,7 @@ public sealed class RunEngine
         // collection produced a summary. The evidence list reads the same summaries.
         report.InventoryPath = SystemInventory.Build(caseDir);
         report.EvidenceList = EvidenceList.Rebuild(caseDir);
+        Report.CaseReport.AfterRun(report);   // last: the case report reads everything above
         return report;
 
         void AddResult(WorkResult result)

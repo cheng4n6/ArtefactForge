@@ -1,5 +1,6 @@
 using ArtefactForge.Core;
 using ArtefactForge.Core.Ioc;
+using ArtefactForge.Core.Report;
 using ArtefactForge.Core.Update;
 using ArtefactForge.Core.Windows;
 
@@ -23,6 +24,7 @@ switch (verb)
     case "run": return await Run(options);
     case "ioc": return await IocCommand(options);
     case "evidence-list": return RebuildEvidenceList(options.Positional.ElementAtOrDefault(0));
+    case "report": return BuildCaseReport(options);
     case "update": return await Update(options);
     case "release": return Release(options);
     case "ip": return IpLookup(options);
@@ -46,6 +48,7 @@ switch (verb)
         Console.WriteLine("  ioc remove <case> <value>         take an IOC off the list, with its hits");
         Console.WriteLine("  ioc sweep <case> [--host h,...]   search hosts' output again for the whole list (default: every host)");
         Console.WriteLine("  evidence-list <case folder>       rebuild the case's EvidenceList.xlsx without running modules");
+        Console.WriteLine("  report <case> [--snapshot]        rebuild the case's CaseReport.html, or save a dated snapshot of it");
         Console.WriteLine("  ip <case> <address> [--at <utc>]  who had an address at a time, from the case IpHistory.csv");
         Console.WriteLine("  rdp <case> [--host <name>] [--at <utc>] [--window <hours>] [--ip <address>] [--account <name>]");
         Console.WriteLine("      [--trace <n>] [--lookback <hours>]");
@@ -306,6 +309,7 @@ async Task<int> Run(CommandLine options)
         Console.WriteLine($"Extracted: {extraction.ExtractedTo}");
     if (report.InventoryPath is not null) Console.WriteLine($"Inventory: {report.InventoryPath}");
     if (report.EvidenceList is { } list) Console.WriteLine(list.Describe());
+    if (File.Exists(CaseReport.PathFor(report.CaseDirectory))) Console.WriteLine($"Case report: {CaseReport.PathFor(report.CaseDirectory)}");
     var ipHistory = Path.Combine(report.CaseDirectory, IpHistory.FileName);
     if (File.Exists(ipHistory)) Console.WriteLine($"IP history: {ipHistory}");
     if (report.NeedsReview > 0)
@@ -435,6 +439,24 @@ int RebuildEvidenceList(string? caseDirectory)
     if (result.Outcome is EvidenceListOutcome.Written or EvidenceListOutcome.Unchanged)
         Console.WriteLine($"Evidence list: {result.Path}");
     return result.Outcome is EvidenceListOutcome.Locked or EvidenceListOutcome.Failed ? 1 : 0;
+}
+
+// Rebuilds the case report from what is already in the case folder, or with --snapshot saves a dated
+// copy that is never rebuilt.
+int BuildCaseReport(CommandLine options)
+{
+    var caseDirectory = options.Positional.ElementAtOrDefault(0);
+    if (string.IsNullOrWhiteSpace(caseDirectory) || !Directory.Exists(caseDirectory))
+    {
+        Console.Error.WriteLine("Usage: report <case folder> [--snapshot]  (the folder holding the collections and _Logs)");
+        return 2;
+    }
+
+    caseDirectory = Path.GetFullPath(caseDirectory);
+    var result = options.Has("snapshot") ? CaseReport.ExportSnapshot(caseDirectory) : CaseReport.Rebuild(caseDirectory);
+    Console.WriteLine(result.Describe());
+    if (result.Written && result.Path is not null) Console.WriteLine($"Report: {result.Path}");
+    return result.Written ? 0 : 1;
 }
 
 // Lists the RDP sessions in a case, then with --trace follows one back host by host and saves the
