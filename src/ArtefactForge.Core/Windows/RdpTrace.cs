@@ -527,6 +527,7 @@ public static class RdpTrace
             trace.HostsUsed.ToDictionary(c => c, c => hosts.FirstOrDefault(h => h.Collection == c)?.BuiltUtc),
             hosts.Select(h => h.Collection).ToList());
         File.WriteAllText(Path.ChangeExtension(path, ".json"), JsonSerializer.Serialize(inputs, Json));
+        Report.CaseReport.Rebuild(caseDirectory);
         return path;
     }
 

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using ArtefactForge.Core.Report;
 
 namespace ArtefactForge.Core.Ioc;
 
@@ -88,8 +89,8 @@ public static class IocSweep
         IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
         var keys = iocs.Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
-        return await RunAsync(caseDirectory, iocs, Hosts(caseDirectory),
-            hit => keys.Contains(IocList.KeyFor(hit.IocType, hit.Ioc)), progress, cancellationToken);
+        return await ThenReport(caseDirectory, RunAsync(caseDirectory, iocs, Hosts(caseDirectory),
+            hit => keys.Contains(IocList.KeyFor(hit.IocType, hit.Ioc)), progress, cancellationToken));
     }
 
     /// <summary>
@@ -98,7 +99,11 @@ public static class IocSweep
     /// </summary>
     public static async Task<IocSweepResult> RebuildHostsAsync(
         string caseDirectory, IEnumerable<string> hosts,
-        IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null, CancellationToken cancellationToken = default) =>
+        await ThenReport(caseDirectory, SweepHostsAsync(caseDirectory, hosts, progress, cancellationToken));
+
+    private static async Task<IocSweepResult> SweepHostsAsync(
+        string caseDirectory, IEnumerable<string> hosts, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         var set = hosts.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var present = Hosts(caseDirectory).Where(set.Contains).ToList();
@@ -109,8 +114,8 @@ public static class IocSweep
     /// <summary>Rebuilds the whole hits file: every IOC on the list against every host.</summary>
     public static async Task<IocSweepResult> RebuildAllAsync(
         string caseDirectory, IProgress<string>? progress = null, CancellationToken cancellationToken = default) =>
-        await RunAsync(caseDirectory, IocList.Load(caseDirectory), Hosts(caseDirectory),
-            _ => true, progress, cancellationToken);
+        await ThenReport(caseDirectory, RunAsync(caseDirectory, IocList.Load(caseDirectory), Hosts(caseDirectory),
+            _ => true, progress, cancellationToken));
 
     /// <summary>Drops the hits of IOCs taken off the list.</summary>
     public static async Task RemoveHitsAsync(string caseDirectory, IEnumerable<IocEntry> removed)
@@ -120,6 +125,18 @@ public static class IocSweep
         await Gate.WaitAsync();
         try { Rewrite(caseDirectory, hit => keys.Contains(IocList.KeyFor(hit.IocType, hit.Ioc)), []); }
         finally { Gate.Release(); }
+        CaseReport.Rebuild(caseDirectory);
+    }
+
+    /// <summary>
+    /// Rebuilds the case report once the sweep has written its hits. The run's own sweep does not:
+    /// the run rebuilds the report itself at the end, from everything it produced.
+    /// </summary>
+    private static async Task<IocSweepResult> ThenReport(string caseDirectory, Task<IocSweepResult> sweep)
+    {
+        var result = await sweep;
+        CaseReport.Rebuild(caseDirectory);
+        return result;
     }
 
     /// <summary>
@@ -148,7 +165,7 @@ public static class IocSweep
                 return;
             }
 
-            await RebuildHostsAsync(caseDirectory, hosts);
+            await SweepHostsAsync(caseDirectory, hosts, null, CancellationToken.None);
         }
         catch (Exception ex)
         {

@@ -1323,6 +1323,7 @@ public partial class MainWindow : Window
             ShowEvidenceList(report.EvidenceList);
             Append($"Finished in {report.DurationSeconds:F1}s. {report.NeedsReview} item(s) need review.");
             if (report.EvidenceList is { } list) Append(list.Describe());
+            if (CaseReportLine(report.CaseDirectory) is { } reportLine) Append(reportLine);
         }
         catch (Exception ex)
         {
