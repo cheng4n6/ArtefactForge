@@ -20,7 +20,7 @@ internal static class ReportPage
         html{scroll-behavior:smooth}
         @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
         body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:14px;line-height:1.45}
-        .page{max-width:1400px;margin:0 auto;padding:0 16px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:24px}
+        .page{padding:0 24px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:24px}
         nav{position:sticky;top:0;align-self:start;padding-block:24px;display:flex;flex-direction:column;gap:2px}
         nav .brand{font-weight:600;font-size:13px;margin-bottom:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
         nav a{color:var(--fg);text-decoration:none;padding:6px 10px;border-radius:5px;display:flex;justify-content:space-between;gap:8px}
@@ -28,7 +28,7 @@ internal static class ReportPage
         nav a.on{background:var(--accent-soft);color:var(--accent)}
         nav a .c{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
         main{padding-block:24px 60px;display:flex;flex-direction:column;gap:28px;min-width:0}
-        @media (max-width:820px){.page{grid-template-columns:minmax(0,1fr);gap:0}
+        @media (max-width:820px){.page{grid-template-columns:minmax(0,1fr);gap:0;padding:0 16px}
           nav{flex-direction:row;overflow-x:auto;background:var(--bg);padding-block:10px;z-index:2;border-bottom:1px solid var(--line)}
           nav .brand{display:none} nav a{white-space:nowrap}}
         header.case{display:flex;flex-direction:column;gap:10px}
