@@ -86,7 +86,7 @@ public partial class MainWindow : Window
         ShowModuleView(Preferences.Current.ModuleView);
         LoadRunOptions();
         InitIocTab();
-        InitRdpTab();
+        InitAnalysisTab();
 
         OutputPath.Text = DefaultOutput;
         EvidencePath.LostFocus += (_, _) => Detect();
@@ -1320,7 +1320,7 @@ public partial class MainWindow : Window
             _results.AddRange(report.Results);
             _lastCaseDirectory = report.CaseDirectory;
             ShowResults();
-            ShowEvidenceList(report.EvidenceList);
+            if (report.EvidenceList is { } evidenceList) _evidenceList = (report.CaseDirectory, evidenceList);
             Append($"Finished in {report.DurationSeconds:F1}s. {report.NeedsReview} item(s) need review.");
             if (report.EvidenceList is { } list) Append(list.Describe());
             if (CaseReportLine(report.CaseDirectory) is { } reportLine) Append(reportLine);
@@ -1336,8 +1336,7 @@ public partial class MainWindow : Window
             RunButton.IsEnabled = true;
             StopButton.IsEnabled = false;
             UpdateRunStats();
-            RefreshIocs();
-            RefreshRdp();
+            if (Tabs.SelectedItem == AnalysisTab) RefreshAnalysis();
         }
     }
 
@@ -1426,7 +1425,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// Warns when the case's evidence list is open, as Excel locks it and the run cannot add the
     /// new collections to it. Carrying on is allowed: the list is marked out of date and can be
-    /// rebuilt from the results page once it is closed.
+    /// rebuilt from the Analysis tab once it is closed.
     /// </summary>
     private bool ConfirmEvidenceListClosed(string caseDirectory)
     {
@@ -1441,14 +1440,6 @@ public partial class MainWindow : Window
         var answer = MessageBox.Show(this, message, "Evidence list is open",
                                      MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         return answer == MessageBoxResult.Yes;
-    }
-
-    /// <summary>The case the results page acts on: the last run's, else the one set up to run.</summary>
-    private string? ResultsCaseDirectory()
-    {
-        if (_lastCaseDirectory is not null) return _lastCaseDirectory;
-        if (string.IsNullOrWhiteSpace(OutputPath.Text) || string.IsNullOrWhiteSpace(CaseName.Text)) return null;
-        return Path.Combine(OutputPath.Text.Trim(), CaseName.Text.Trim());
     }
 
     private void ShowEvidenceList(EvidenceListResult? result)
@@ -1466,7 +1457,7 @@ public partial class MainWindow : Window
 
     private void OnOpenEvidenceList(object sender, RoutedEventArgs e)
     {
-        if (ResultsCaseDirectory() is not { } caseDirectory) return;
+        if (AnalysisCaseDirectory() is not { } caseDirectory) return;
         var path = EvidenceList.PathFor(caseDirectory);
         if (!File.Exists(path))
         {
@@ -1480,7 +1471,7 @@ public partial class MainWindow : Window
 
     private async void OnRebuildEvidenceList(object sender, RoutedEventArgs e)
     {
-        if (ResultsCaseDirectory() is not { } caseDirectory || !Directory.Exists(caseDirectory))
+        if (AnalysisCaseDirectory() is not { } caseDirectory || !Directory.Exists(caseDirectory))
         {
             MessageBox.Show(this, "Choose the output folder and case name on the Setup page, or run the "
                                   + "case first, so there is a case folder to list.", "No case folder");
@@ -1491,6 +1482,7 @@ public partial class MainWindow : Window
         try
         {
             var result = await Task.Run(() => EvidenceList.Rebuild(caseDirectory));
+            _evidenceList = (caseDirectory, result);
             ShowEvidenceList(result);
         }
         finally

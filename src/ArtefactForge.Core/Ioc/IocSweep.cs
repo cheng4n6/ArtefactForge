@@ -160,7 +160,7 @@ public static class IocSweep
             if (report.Cancelled)
             {
                 Log(caseDirectory, "The run was stopped, so the IOC hits of " + string.Join(", ", hosts)
-                                   + " were not rebuilt and may be out of date. Sweep those hosts again from the IOCs tab "
+                                   + " were not rebuilt and may be out of date. Sweep those hosts again from Analysis > IOCs "
                                    + "or with 'ioc sweep'.", []);
                 return;
             }

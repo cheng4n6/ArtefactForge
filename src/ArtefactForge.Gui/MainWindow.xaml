@@ -682,24 +682,12 @@
                     <TextBlock x:Name="ResultsSummary" Style="{StaticResource Muted}" Margin="16,0,0,0"/>
                 </StackPanel>
 
-                <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Content="Open case report" Click="OnOpenCaseReport" MinWidth="130"
-                                ToolTip="Open CaseReport.html: hosts, detections, IOC hits, RDP traces and IP history in one page"/>
-                        <Button x:Name="ExportSnapshotButton" Content="Export snapshot" Click="OnExportSnapshot" MinWidth="130"
-                                ToolTip="Save a dated copy of the case report that is never updated, for sending"/>
-                        <Button Content="Open evidence list" Click="OnOpenEvidenceList" MinWidth="140"/>
-                        <Button x:Name="RebuildEvidenceListButton" Content="Rebuild evidence list"
-                                Click="OnRebuildEvidenceList" MinWidth="150"/>
-                        <Button Content="Open manifest" Click="OnOpenManifest" MinWidth="120"/>
-                        <Button Content="Open logs" Click="OnOpenLogs" MinWidth="100"/>
-                        <Button Content="Re-run failed" Click="OnRerunFailed" MinWidth="120"/>
-                    </StackPanel>
-                    <!-- Out of date (the list was open in Excel) is shown in the warning colour:
-                         the analyst has to act on it. -->
-                    <TextBlock x:Name="EvidenceListStatus" Style="{StaticResource Muted}"
-                               VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"/>
-                </DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button Content="Open manifest" Click="OnOpenManifest" MinWidth="120"/>
+                    <Button Content="Open logs" Click="OnOpenLogs" MinWidth="100"/>
+                    <Button Content="Re-run failed" Click="OnRerunFailed" MinWidth="120"/>
+                </StackPanel>
 
                 <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"
@@ -717,182 +705,292 @@
             </DockPanel>
         </TabItem>
 
-        <!-- The case's IOC list and how often each was found. Kept light: the detail of every hit
-             is in IocHits.csv and the case report. -->
-        <TabItem x:Name="IocTab" Header="IOCs" Padding="14,7">
+        <!-- Everything done with a case after it is processed: the IOC sweep, RDP trace, IP history
+             and evidence list, one sub-tab each, under a case bar with the case report. Kept light:
+             inputs and one-line results here, the detail in the CSVs and the case report. -->
+        <TabItem x:Name="AnalysisTab" Header="Analysis" Padding="14,7">
             <DockPanel Margin="0,10,0,0">
-                <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
-                    <StackPanel>
-                        <TextBlock x:Name="IocCaseText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="220"/>
-                                <ColumnDefinition Width="130"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Type" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Value" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Note" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="3" Text="Found on" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <ComboBox Grid.Row="1" Grid.Column="0" x:Name="IocTypeBox" Margin="0,0,6,0"
-                                      ToolTip="Auto works the type out from the value"/>
-                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="IocValueBox" Margin="0,0,6,0" KeyDown="OnIocValueKey"
-                                     ToolTip="A file name, path, hash, IP, domain or account. Enter adds it."/>
-                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="IocNoteBox" Margin="0,0,6,0"/>
-                            <TextBox Grid.Row="1" Grid.Column="3" x:Name="IocFoundOnBox" Margin="0,0,6,0"
-                                     ToolTip="The host it was first found on"/>
-                            <Button Grid.Row="1" Grid.Column="4" x:Name="IocAddButton" Content="Add" Click="OnIocAdd"
-                                    Style="{StaticResource RunButton}" Margin="0"
-                                    ToolTip="Add to the list and search every host's output for it"/>
-                        </Grid>
-                    </StackPanel>
+                <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="12,8">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="Open case folder" Click="OnOpenCaseFolder" MinWidth="130"/>
+                            <Button x:Name="ExportSnapshotButton" Content="Export snapshot" Click="OnExportSnapshot" MinWidth="130"
+                                    ToolTip="Save a dated copy of the case report that is never updated, for sending"/>
+                            <Button Content="Open report" Click="OnOpenCaseReport" MinWidth="110" Style="{StaticResource RunButton}"
+                                    ToolTip="Open CaseReport.html: hosts, detections, IOC hits, RDP traces and IP history in one page"/>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                            <TextBlock x:Name="AnalysisCaseText" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="AnalysisCaseDetail" Style="{StaticResource Muted}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </DockPanel>
                 </Border>
 
-                <TextBlock DockPanel.Dock="Top" x:Name="IocResult" TextWrapping="Wrap" Margin="2,0,0,10"/>
+                <TabControl x:Name="AnalysisTabs" Margin="0,10,0,0" SelectedIndex="0"
+                            Background="Transparent" BorderThickness="0">
 
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
-                            HorizontalAlignment="Right" Margin="0,10,0,0">
-                    <Button x:Name="IocImportButton" Content="Import..." Click="OnIocImport" MinWidth="100"
-                            ToolTip="Add IOCs from another case's IOCs.csv, or a list with one value per line"/>
-                    <Button x:Name="IocRemoveButton" Content="Remove" Click="OnIocRemove" MinWidth="100"
-                            ToolTip="Take the selected IOCs off the list, with their hits"/>
-                    <Button x:Name="IocSweepButton" Content="Sweep all" Click="OnIocSweepAll" MinWidth="100"
-                            ToolTip="Search every host's output again for the whole list, for example after editing IOCs.csv by hand"/>
-                    <Button Content="Open list" Click="OnIocOpenList" MinWidth="100"
-                            ToolTip="Open IOCs.csv"/>
-                    <Button Content="Open hits" Click="OnIocOpenHits" MinWidth="100"
-                            ToolTip="Open IocHits.csv: every hit with its host, file and matching line"/>
-                    <Button Content="Open report" Click="OnOpenTabReport" MinWidth="110"
-                            ToolTip="Open the case report, CaseReport.html"/>
-                </StackPanel>
+                    <!-- One line per tool, with the way in. Hits and stale traces are in the warning
+                         colour, as the analyst has to look at them. -->
+                    <TabItem x:Name="OverviewTab" Header="Overview" Padding="12,5">
+                        <Border Style="{StaticResource Card}" Margin="0,10,0,0" VerticalAlignment="Top">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="IOCs" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="OverviewIocText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="0" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="IocTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="1" Text="RDP trace" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="OverviewRdpText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="1" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="RdpTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="2" Text="IP history" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="OverviewIpText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="2" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="IpHistoryTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="3" Text="Evidence list" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="OverviewEvidenceText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="3" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="EvidenceListTab" Margin="0,3"/>
+                            </Grid>
+                        </Border>
+                    </TabItem>
+                    <!-- The case's IOC list and how often each was found. Kept light: the detail of every hit
+                         is in IocHits.csv and the case report. -->
+                    <TabItem x:Name="IocTab" Header="IOCs" Padding="12,5">
+                        <DockPanel Margin="0,10,0,0">
+                            <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="220"/>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Type" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Value" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="2" Text="Note" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="3" Text="Found on" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="0" x:Name="IocTypeBox" Margin="0,0,6,0"
+                                                  ToolTip="Auto works the type out from the value"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="IocValueBox" Margin="0,0,6,0" KeyDown="OnIocValueKey"
+                                                 ToolTip="A file name, path, hash, IP, domain or account. Enter adds it."/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" x:Name="IocNoteBox" Margin="0,0,6,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="3" x:Name="IocFoundOnBox" Margin="0,0,6,0"
+                                                 ToolTip="The host it was first found on"/>
+                                        <Button Grid.Row="1" Grid.Column="4" x:Name="IocAddButton" Content="Add" Click="OnIocAdd"
+                                                Style="{StaticResource RunButton}" Margin="0"
+                                                ToolTip="Add to the list and search every host's output for it"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
 
-                <DataGrid x:Name="IocGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                          CanUserSortColumns="True" SelectionMode="Extended">
-                    <DataGrid.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Trace RDP from this" Click="OnIocTraceRdp"
-                                      ToolTip="List the RDP sessions from this IP address or account on the RDP trace tab"/>
-                        </ContextMenu>
-                    </DataGrid.ContextMenu>
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
-                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
-                        <DataGridTextColumn Header="Note" Binding="{Binding Note}" Width="220"/>
-                        <DataGridTextColumn Header="Found on" Binding="{Binding FoundOn}" Width="110"/>
-                        <DataGridTextColumn Header="Hits" Binding="{Binding Hits}" Width="70" SortMemberPath="HitCount">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasHits}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
-                                            <Setter Property="FontWeight" Value="SemiBold"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Header="Hosts" Binding="{Binding Hosts}" Width="70" SortMemberPath="HostCount">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasHits}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
-                                            <Setter Property="FontWeight" Value="SemiBold"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </DockPanel>
-        </TabItem>
+                            <TextBlock DockPanel.Dock="Top" x:Name="IocResult" TextWrapping="Wrap" Margin="2,0,0,10"/>
 
-        <!-- Follows an RDP logon back host by host. Kept light like the IOCs tab: the hops are in the
-             saved RdpTrace CSV and the case report; this shows the picker and a one-line result. -->
-        <TabItem x:Name="RdpTab" Header="RDP trace" Padding="14,7">
-            <DockPanel Margin="0,10,0,0">
-                <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
-                    <StackPanel>
-                        <TextBlock x:Name="RdpCaseText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="150"/>
-                                <ColumnDefinition Width="160"/>
-                                <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Receiving host" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Around (UTC)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Window (h)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="3" Text="Source IP" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="4" Text="Account" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <TextBlock Grid.Row="0" Grid.Column="5" Text="Look back (h)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
-                            <ComboBox Grid.Row="1" Grid.Column="0" x:Name="RdpHostBox" Margin="0,0,6,0"
-                                      ToolTip="The host the RDP logon arrived at"/>
-                            <TextBox Grid.Row="1" Grid.Column="1" x:Name="RdpTimeBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
-                                     ToolTip="yyyy-MM-dd HH:mm:ss in UTC. Leave blank for any time."/>
-                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="RdpWindowBox" Text="24" Margin="0,0,6,0" KeyDown="OnRdpKey"
-                                     ToolTip="Hours either side of the time to list sessions from"/>
-                            <TextBox Grid.Row="1" Grid.Column="3" x:Name="RdpIpBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
-                                     ToolTip="Optional: only sessions from this address"/>
-                            <TextBox Grid.Row="1" Grid.Column="4" x:Name="RdpAccountBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
-                                     ToolTip="Optional: only sessions for this account (the domain is ignored)"/>
-                            <TextBox Grid.Row="1" Grid.Column="5" x:Name="RdpLookbackBox" Text="12" Margin="0,0,6,0"
-                                     ToolTip="At each hop, how many hours back to look for the session the connection came from"/>
-                            <Button Grid.Row="1" Grid.Column="6" x:Name="RdpFindButton" Content="Find sessions" Click="OnRdpFind"
-                                    Style="{StaticResource RunButton}" Margin="0"
-                                    ToolTip="List the RDP sessions that match. The first time, this reads each host's event log output."/>
-                        </Grid>
-                    </StackPanel>
-                </Border>
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" Margin="0,10,0,0">
+                                <Button x:Name="IocImportButton" Content="Import..." Click="OnIocImport" MinWidth="100"
+                                        ToolTip="Add IOCs from another case's IOCs.csv, or a list with one value per line"/>
+                                <Button x:Name="IocRemoveButton" Content="Remove" Click="OnIocRemove" MinWidth="100"
+                                        ToolTip="Take the selected IOCs off the list, with their hits"/>
+                                <Button x:Name="IocSweepButton" Content="Sweep all" Click="OnIocSweepAll" MinWidth="100"
+                                        ToolTip="Search every host's output again for the whole list, for example after editing IOCs.csv by hand"/>
+                                <Button Content="Open list" Click="OnIocOpenList" MinWidth="100"
+                                        ToolTip="Open IOCs.csv"/>
+                                <Button Content="Open hits" Click="OnIocOpenHits" MinWidth="100"
+                                        ToolTip="Open IocHits.csv: every hit with its host, file and matching line"/>
+                            </StackPanel>
 
-                <TextBlock DockPanel.Dock="Top" x:Name="RdpResult" TextWrapping="Wrap" Margin="2,0,0,4"/>
-                <TextBlock DockPanel.Dock="Top" x:Name="RdpSavedText" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"/>
+                            <DataGrid x:Name="IocGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                      CanUserSortColumns="True" SelectionMode="Extended">
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Trace RDP from this" Click="OnIocTraceRdp"
+                                                  ToolTip="List the RDP sessions from this IP address or account on the RDP trace tab"/>
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
+                                    <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                                    <DataGridTextColumn Header="Note" Binding="{Binding Note}" Width="220"/>
+                                    <DataGridTextColumn Header="Found on" Binding="{Binding FoundOn}" Width="110"/>
+                                    <DataGridTextColumn Header="Hits" Binding="{Binding Hits}" Width="70" SortMemberPath="HitCount">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasHits}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="Hosts" Binding="{Binding Hosts}" Width="70" SortMemberPath="HostCount">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasHits}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
 
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
-                            HorizontalAlignment="Right" Margin="0,10,0,0">
-                    <Button x:Name="RdpTraceButton" Content="Trace" Click="OnRdpTrace" MinWidth="100"
-                            ToolTip="Follow the selected session back host by host, and save the trace in the case folder"/>
-                    <Button x:Name="RdpOpenButton" Content="Open trace" Click="OnRdpOpen" MinWidth="100"
-                            ToolTip="Open the most recent saved trace (RdpTrace_*.csv)"/>
-                    <Button x:Name="RdpIocIpButton" Content="Add end IP as IOC" Click="OnRdpAddIp" MinWidth="130"
-                            ToolTip="Add the address the trace ended at to the case's IOC list and sweep for it"/>
-                    <Button x:Name="RdpIocAccountButton" Content="Add accounts as IOCs" Click="OnRdpAddAccounts" MinWidth="140"
-                            ToolTip="Add the accounts the trace used to the case's IOC list and sweep for them"/>
-                    <Button Content="Open report" Click="OnOpenTabReport" MinWidth="110"
-                            ToolTip="Open the case report, CaseReport.html"/>
-                </StackPanel>
+                    <!-- Follows an RDP logon back host by host. Kept light like the IOCs tab: the hops are in the
+                         saved RdpTrace CSV and the case report; this shows the picker and a one-line result. -->
+                    <TabItem x:Name="RdpTab" Header="RDP trace" Padding="12,5">
+                        <DockPanel Margin="0,10,0,0">
+                            <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="80"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Receiving host" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Around (UTC)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="2" Text="Window (h)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="3" Text="Source IP" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="4" Text="Account" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="5" Text="Look back (h)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="0" x:Name="RdpHostBox" Margin="0,0,6,0"
+                                                  ToolTip="The host the RDP logon arrived at"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="RdpTimeBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                                 ToolTip="yyyy-MM-dd HH:mm:ss in UTC. Leave blank for any time."/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" x:Name="RdpWindowBox" Text="24" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                                 ToolTip="Hours either side of the time to list sessions from"/>
+                                        <TextBox Grid.Row="1" Grid.Column="3" x:Name="RdpIpBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                                 ToolTip="Optional: only sessions from this address"/>
+                                        <TextBox Grid.Row="1" Grid.Column="4" x:Name="RdpAccountBox" Margin="0,0,6,0" KeyDown="OnRdpKey"
+                                                 ToolTip="Optional: only sessions for this account (the domain is ignored)"/>
+                                        <TextBox Grid.Row="1" Grid.Column="5" x:Name="RdpLookbackBox" Text="12" Margin="0,0,6,0"
+                                                 ToolTip="At each hop, how many hours back to look for the session the connection came from"/>
+                                        <Button Grid.Row="1" Grid.Column="6" x:Name="RdpFindButton" Content="Find sessions" Click="OnRdpFind"
+                                                Style="{StaticResource RunButton}" Margin="0"
+                                                ToolTip="List the RDP sessions that match. The first time, this reads each host's event log output."/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
 
-                <DataGrid x:Name="RdpSessionGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                          CanUserSortColumns="True" SelectionMode="Single"
-                          SelectionChanged="OnRdpSessionSelected" MouseDoubleClick="OnRdpSessionDoubleClick">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Start (UTC)" Binding="{Binding Start}" Width="140"/>
-                        <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="110"/>
-                        <DataGridTextColumn Header="Account" Binding="{Binding Account}" Width="160"/>
-                        <DataGridTextColumn Header="Source IP" Binding="{Binding SourceIp}" Width="120"/>
-                        <DataGridTextColumn Header="Client" Binding="{Binding ClientName}" Width="110"/>
-                        <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="110"/>
-                        <DataGridTextColumn Header="Ended (UTC)" Binding="{Binding End}" Width="140"/>
-                        <DataGridTextColumn Header="Evidence" Binding="{Binding EvidenceText}" Width="*"/>
-                    </DataGrid.Columns>
-                </DataGrid>
+                            <TextBlock DockPanel.Dock="Top" x:Name="RdpResult" TextWrapping="Wrap" Margin="2,0,0,4"/>
+                            <TextBlock DockPanel.Dock="Top" x:Name="RdpSavedText" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"/>
+
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" Margin="0,10,0,0">
+                                <Button x:Name="RdpTraceButton" Content="Trace" Click="OnRdpTrace" MinWidth="100"
+                                        ToolTip="Follow the selected session back host by host, and save the trace in the case folder"/>
+                                <Button x:Name="RdpOpenButton" Content="Open trace" Click="OnRdpOpen" MinWidth="100"
+                                        ToolTip="Open the most recent saved trace (RdpTrace_*.csv)"/>
+                                <Button x:Name="RdpIocIpButton" Content="Add end IP as IOC" Click="OnRdpAddIp" MinWidth="130"
+                                        ToolTip="Add the address the trace ended at to the case's IOC list and sweep for it"/>
+                                <Button x:Name="RdpIocAccountButton" Content="Add accounts as IOCs" Click="OnRdpAddAccounts" MinWidth="140"
+                                        ToolTip="Add the accounts the trace used to the case's IOC list and sweep for them"/>
+                            </StackPanel>
+
+                            <DataGrid x:Name="RdpSessionGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                      CanUserSortColumns="True" SelectionMode="Single"
+                                      SelectionChanged="OnRdpSessionSelected" MouseDoubleClick="OnRdpSessionDoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Start (UTC)" Binding="{Binding Start}" Width="140"/>
+                                    <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="110"/>
+                                    <DataGridTextColumn Header="Account" Binding="{Binding Account}" Width="160"/>
+                                    <DataGridTextColumn Header="Source IP" Binding="{Binding SourceIp}" Width="120"/>
+                                    <DataGridTextColumn Header="Client" Binding="{Binding ClientName}" Width="110"/>
+                                    <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="110"/>
+                                    <DataGridTextColumn Header="Ended (UTC)" Binding="{Binding End}" Width="140"/>
+                                    <DataGridTextColumn Header="Evidence" Binding="{Binding EvidenceText}" Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+
+                    <!-- Who had an address and when, from the case's IpHistory.csv. The full lookup and
+                         the table are in the case report; this answers one address at a time. -->
+                    <TabItem x:Name="IpHistoryTab" Header="IP history" Padding="12,5">
+                        <DockPanel Margin="0,10,0,0">
+                            <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="180"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="IP address" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="At (UTC)" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,3"/>
+                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="IpLookupAddressBox" Margin="0,0,6,0" KeyDown="OnIpLookupKey"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="IpLookupTimeBox" Margin="0,0,6,0" KeyDown="OnIpLookupKey"
+                                             ToolTip="yyyy-MM-dd HH:mm:ss in UTC. Leave blank for the most recent."/>
+                                    <Button Grid.Row="1" Grid.Column="2" x:Name="IpLookupButton" Content="Look up" Click="OnIpLookup"
+                                            Style="{StaticResource RunButton}" Margin="0"
+                                            ToolTip="Which machine had this address at that time"/>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock DockPanel.Dock="Top" x:Name="IpHistoryStatus" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,6"/>
+                            <TextBlock DockPanel.Dock="Top" x:Name="IpLookupText" TextWrapping="Wrap" Margin="2,0,0,10"/>
+
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" Margin="0,10,0,0">
+                                <Button x:Name="IpHistoryOpenButton" Content="Open IP history" Click="OnIpHistoryOpen" MinWidth="130"
+                                        ToolTip="Open IpHistory.csv, the case's merged history"/>
+                            </StackPanel>
+
+                            <Border/>
+                        </DockPanel>
+                    </TabItem>
+
+                    <!-- The case's evidence list spreadsheet, moved here from the results page. -->
+                    <TabItem x:Name="EvidenceListTab" Header="Evidence list" Padding="12,5">
+                        <DockPanel Margin="0,10,0,0">
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"
+                                       Text="EvidenceList.xlsx lists every collection in the case. Each run adds new collections to it and keeps what you typed in it. Rebuild brings it up to date at any time; close it in Excel first."/>
+                            <!-- Out of date (the list was open in Excel) is shown in the warning colour:
+                                 the analyst has to act on it. -->
+                            <TextBlock DockPanel.Dock="Top" x:Name="EvidenceListStatus" TextWrapping="Wrap" Margin="2,0,0,10"/>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Open evidence list" Click="OnOpenEvidenceList" MinWidth="140"/>
+                                <Button x:Name="RebuildEvidenceListButton" Content="Rebuild evidence list"
+                                        Click="OnRebuildEvidenceList" MinWidth="150"/>
+                            </StackPanel>
+                            <Border/>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
             </DockPanel>
         </TabItem>
 

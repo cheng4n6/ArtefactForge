@@ -10,11 +10,8 @@ namespace ArtefactForge.Gui;
 /// </summary>
 public partial class MainWindow
 {
-    /// <summary>Results page: the last run's case, else the one set up to run.</summary>
-    private async void OnOpenCaseReport(object sender, RoutedEventArgs e) => await OpenCaseReport(ResultsCaseDirectory());
-
-    /// <summary>IOCs and RDP trace tabs: the case those tabs show.</summary>
-    private async void OnOpenTabReport(object sender, RoutedEventArgs e) => await OpenCaseReport(IocCaseDirectory());
+    /// <summary>The Analysis tab's case bar: the case the tab shows.</summary>
+    private async void OnOpenCaseReport(object sender, RoutedEventArgs e) => await OpenCaseReport(AnalysisCaseDirectory());
 
     private async Task OpenCaseReport(string? caseDirectory)
     {
@@ -40,7 +37,7 @@ public partial class MainWindow
 
     private async void OnExportSnapshot(object sender, RoutedEventArgs e)
     {
-        var caseDirectory = ResultsCaseDirectory();
+        var caseDirectory = AnalysisCaseDirectory();
         if (caseDirectory is null || !Directory.Exists(caseDirectory))
         {
             MessageBox.Show(this, "Choose the output folder and case name on the Setup page, or run the case "
@@ -58,6 +55,7 @@ public partial class MainWindow
                 return;
             }
             Append(result.Describe());
+            RefreshCaseBar();
             Open(result.Path);
         }
         finally
