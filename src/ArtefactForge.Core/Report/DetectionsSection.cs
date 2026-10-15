@@ -32,31 +32,35 @@ internal sealed class DetectionsSection : ICaseReportSection
         var critical = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var high = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var host in context.Hosts)
+        foreach (var machine in context.Machines)
         {
-            var detections = context.Detections.GetValueOrDefault(host.Collection) ?? HostDetections.None;
-            anyTool |= detections.Tools.Count > 0;
-            problems.AddRange(detections.Problems.Select(p => $"{host.Name}: {p}"));
+            var name = machine[0].Name;
+            foreach (var host in machine)
+            {
+                var detections = context.Detections.GetValueOrDefault(host.Collection) ?? HostDetections.None;
+                anyTool |= detections.Tools.Count > 0;
+                problems.AddRange(detections.Problems.Select(p => $"{host.Collection}: {p}"));
+            }
 
-            foreach (var hit in context.RatedDetections.GetValueOrDefault(host.Collection) ?? Array.Empty<RuleHits>())
+            foreach (var hit in context.MachineDetections.GetValueOrDefault(name) ?? [])
             {
                 if (hit.Level == DetectionSummary.Informational) continue;
                 if (!rules.TryGetValue(hit.Title, out var rule)) rules[hit.Title] = rule = new Rule { Title = hit.Title, Level = hit.Level };
                 if (rule.Level.Length == 0) rule.Level = hit.Level;
                 foreach (var tag in hit.Tags.Split(", ", StringSplitOptions.RemoveEmptyEntries)) rule.Tags.Add(tag);
                 foreach (var tool in hit.Tool.Split(", ", StringSplitOptions.RemoveEmptyEntries)) rule.Tools.Add(tool);
-                rule.Hosts.Add(host.Name);
+                rule.Hosts.Add(name);
                 rule.Hits += hit.Hits;
                 if (hit.First is { } f && (rule.First is null || f < rule.First)) rule.First = f;
                 if (hit.Last is { } l && (rule.Last is null || l > rule.Last)) rule.Last = l;
 
                 var tally = hit.Level == DetectionSummary.Critical ? critical : hit.Level == DetectionSummary.High ? high : null;
-                if (tally is not null) tally[host.Name] = tally.GetValueOrDefault(host.Name) + hit.Hits;
+                if (tally is not null) tally[name] = tally.GetValueOrDefault(name) + hit.Hits;
             }
         }
 
-        const string source = "Hayabusa and Chainsaw, grouped by rule. A rule both report is counted once per host. "
-                              + "Informational hits are left out; every hit is in each host's EventLogs folder.";
+        const string source = "Hayabusa and Chainsaw, grouped by rule. A rule both report, or a host collected more than once, "
+                              + "is counted once per host. Informational hits are left out; every hit is in each host's EventLogs folder.";
         if (!anyTool)
             return new ReportSection
             {

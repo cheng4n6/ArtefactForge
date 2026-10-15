@@ -103,8 +103,33 @@ public sealed class CaseReportContext
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<RuleHits>> RatedDetections => _rated ??= Rate();
 
+    /// <summary>
+    /// The case's machines, each with its collections in folder order. Folders whose system
+    /// summaries give the same hostname are one machine collected more than once; a folder with no
+    /// summary is a machine of its own, since nothing says which machine it is.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<ReportHost>> Machines => _machines ??=
+        Hosts.GroupBy(h => h.Name, StringComparer.OrdinalIgnoreCase)
+             .Select(g => (IReadOnlyList<ReportHost>)g.ToList())
+             .ToList();
+
+    /// <summary>
+    /// Each machine's detections by its name, one row per rule, counted once however many times it
+    /// was collected. A later collection reads the same event logs again, so adding its counts to
+    /// the first's would count the same events twice; each rule takes the higher count instead.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<RuleHits>> MachineDetections => _machineDetections ??=
+        Machines.ToDictionary(
+            m => m[0].Name,
+            m => m.Count == 1
+                ? RatedDetections.GetValueOrDefault(m[0].Collection) ?? []
+                : DetectionSummary.MergeByRule(m.SelectMany(h => RatedDetections.GetValueOrDefault(h.Collection) ?? [])),
+            StringComparer.OrdinalIgnoreCase);
+
     private Dictionary<string, HostDetections>? _detections;
     private Dictionary<string, IReadOnlyList<RuleHits>>? _rated;
+    private List<IReadOnlyList<ReportHost>>? _machines;
+    private Dictionary<string, IReadOnlyList<RuleHits>>? _machineDetections;
 
     private Dictionary<string, IReadOnlyList<RuleHits>> Rate()
     {
