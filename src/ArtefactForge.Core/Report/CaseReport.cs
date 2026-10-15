@@ -195,7 +195,7 @@ public static class CaseReport
             }
         }
 
-        return (Page(context, sections), hosts.Count);
+        return (Page(context, sections), context.Machines.Count);
     }
 
     private static string Page(CaseReportContext context, IReadOnlyList<ReportSection> sections)
@@ -215,15 +215,18 @@ public static class CaseReport
         html.Append("</nav><main>");
 
         // --- header
-        var windows = context.Hosts.Count(h => h.IsWindows);
-        var linux = context.Hosts.Count(h => h.IsLinux);
+        // Counted by machine: a host collected twice is still one host.
+        var machines = context.Machines.Select(m => m[0]).ToList();
+        var windows = machines.Count(h => h.IsWindows);
+        var linux = machines.Count(h => h.IsLinux);
         var mix = new List<string>();
         if (windows > 0) mix.Add($"{windows} Windows");
         if (linux > 0) mix.Add($"{linux} Linux");
-        var other = context.Hosts.Count - windows - linux;
+        var other = machines.Count - windows - linux;
         if (other > 0) mix.Add($"{other} not identified");
-        var hostLine = $"{context.Hosts.Count} {Plural(context.Hosts.Count, "host", "hosts")}"
-                       + (mix.Count > 0 ? ": " + string.Join(", ", mix) : "");
+        var hostLine = $"{machines.Count} {Plural(machines.Count, "host", "hosts")}"
+                       + (mix.Count > 0 ? ": " + string.Join(", ", mix) : "")
+                       + (context.Hosts.Count > machines.Count ? $" ({context.Hosts.Count} collections)" : "");
 
         html.Append("<header class=\"case\" id=\"overview\">")
             .Append($"<h1>{E(context.CaseName)}</h1><div class=\"meta\">")

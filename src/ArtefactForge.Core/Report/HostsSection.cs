@@ -25,6 +25,9 @@ internal sealed class HostsSection : ICaseReportSection
 
         var rows = new StringBuilder();
         var gaps = new List<string>();
+        var repeated = context.Machines.Where(m => m.Count > 1).ToList();
+        var collections = repeated.SelectMany(m => m.Select(h => (h.Collection, m.Count)))
+            .ToDictionary(c => c.Collection, c => c.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var host in context.Hosts)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -53,6 +56,7 @@ internal sealed class HostsSection : ICaseReportSection
             rows.Append("<tr>")
                 .Append($"<td><b>{E(host.Name)}</b>")
                 .Append(host.Name.Equals(host.Collection, StringComparison.OrdinalIgnoreCase) ? "" : $"<br><small class=\"muted\">{E(host.Collection)}</small>")
+                .Append(collections.TryGetValue(host.Collection, out var times) ? "<br>" + Pill($"Collected {times} times", "med") : "")
                 .Append("</td>")
                 .Append($"<td>{role}</td><td>{os}</td><td class=\"mono\">{AddressList(host.Addresses)}</td>")
                 .Append(processed)
@@ -67,6 +71,13 @@ internal sealed class HostsSection : ICaseReportSection
         if (gaps.Count > 0)
             findings.Add(new ReportFinding(FindingLevel.Medium, N(gaps.Count), Plural(gaps.Count, "Coverage gap", "Coverage gaps"),
                 string.Join("; ", gaps.Take(2)) + (gaps.Count > 2 ? $"; and {gaps.Count - 2} more" : ""), "hosts"));
+        // A machine with a row per collection: say so, so the analyst knows why its detections are
+        // counted once and can check which collection is the one they meant to keep.
+        if (repeated.Count > 0)
+            findings.Add(new ReportFinding(FindingLevel.Medium, N(repeated.Count), "Collected more than once",
+                string.Join("; ", repeated.Take(2).Select(m => $"{m[0].Name} in {string.Join(", ", m.Select(h => h.Collection))}"))
+                + (repeated.Count > 2 ? $"; and {repeated.Count - 2} more" : "")
+                + ". Detections are counted once per host.", "hosts"));
 
         var body = new StringBuilder()
             .Append("<div class=\"box tbl\"><table><thead><tr><th>Host</th><th>Role</th><th>OS</th><th>IP</th>")
@@ -74,11 +85,15 @@ internal sealed class HostsSection : ICaseReportSection
             .Append("</tr></thead><tbody>").Append(rows).Append("</tbody></table></div>")
             .Append("<div class=\"legend\"><span><i class=\"s-crit\"></i>Critical</span><span><i class=\"s-high\"></i>High</span>")
             .Append("<span><i class=\"s-med\"></i>Medium</span><span><i class=\"s-low\"></i>Low</span>")
-            .Append("<span>Collection gaps are artefacts listed in the host's system summary as not collected.</span></div>");
+            .Append("<span>Collection gaps are artefacts listed in the host's system summary as not collected.</span>")
+            .Append(repeated.Count > 0
+                ? "<span>A host collected more than once has a row per collection; its detections are counted once.</span>"
+                : "")
+            .Append("</div>");
 
         return new ReportSection
         {
-            Id = "hosts", Title = "Hosts", Count = N(context.Hosts.Count),
+            Id = "hosts", Title = "Hosts", Count = N(context.Machines.Count),
             Source = "From each host's system summary, the last run that processed it and its event log output",
             Body = body.ToString(),
             Findings = findings

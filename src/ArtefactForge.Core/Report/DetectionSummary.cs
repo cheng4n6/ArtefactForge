@@ -17,18 +17,7 @@ public sealed record HostDetections(IReadOnlyList<RuleHits> Rules, IReadOnlyList
     /// One row per rule: a rule both tools report is the same events seen twice, so it counts the
     /// higher of the two rather than the sum.
     /// </summary>
-    public IReadOnlyList<RuleHits> Merged() =>
-        Rules.GroupBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
-             .Select(g => new RuleHits(
-                 g.First().Title,
-                 g.Select(r => r.Level).FirstOrDefault(l => l.Length > 0) ?? "",
-                 string.Join(", ", g.SelectMany(r => r.Tags.Split(", ", StringSplitOptions.RemoveEmptyEntries))
-                                    .Distinct(StringComparer.OrdinalIgnoreCase)),
-                 string.Join(", ", g.Select(r => r.Tool).Distinct()),
-                 g.Max(r => r.Hits),
-                 g.Min(r => r.First),
-                 g.Max(r => r.Last)))
-             .ToList();
+    public IReadOnlyList<RuleHits> Merged() => DetectionSummary.MergeByRule(Rules);
 }
 
 /// <summary>
@@ -71,6 +60,27 @@ public static class DetectionSummary
     {
         Critical => 0, High => 1, Medium => 2, Low => 3, "" => 4, _ => 5
     };
+
+    /// <summary>
+    /// One row per rule from rows that see the same events: the higher count, not the sum, with
+    /// the widest time span and every tag and tool. Used for a rule both tools report on a host,
+    /// and for a host collected more than once, whose later collection reads the same logs again.
+    /// </summary>
+    public static IReadOnlyList<RuleHits> MergeByRule(IEnumerable<RuleHits> rows) =>
+        rows.GroupBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new RuleHits(
+                g.First().Title,
+                g.Select(r => r.Level).FirstOrDefault(l => l.Length > 0) ?? "",
+                Join(g.Select(r => r.Tags)),
+                Join(g.Select(r => r.Tool)),
+                g.Max(r => r.Hits),
+                g.Min(r => r.First),
+                g.Max(r => r.Last)))
+            .ToList();
+
+    private static string Join(IEnumerable<string> lists) =>
+        string.Join(", ", lists.SelectMany(l => l.Split(", ", StringSplitOptions.RemoveEmptyEntries))
+                               .Distinct(StringComparer.OrdinalIgnoreCase));
 
     public static HostDetections ForHost(CaseReportContext context, ReportHost host)
     {

@@ -102,6 +102,33 @@ public class CaseReportTests
     }
 
     [Fact]
+    public void A_host_collected_twice_has_its_detections_counted_once_and_is_flagged()
+    {
+        using var dir = Case();
+        // DC01 collected again later: the same Security log, now with one more event in it.
+        SystemInfo(dir, "DC01_2", ("Hostname", "DC01"), ("ProductName", "Windows Server 2022"));
+        Write(dir, Path.Combine("DC01_2", "EventLogs", "Hayabusa_Timeline.csv"),
+              HayabusaHeader,
+              Hayabusa("2026-03-01 10:00:00.000", "Mimikatz Use", "crit", "T1003.001"),
+              Hayabusa("2026-03-01 10:05:00.000", "Mimikatz Use", "crit", "T1003.001"),
+              Hayabusa("2026-03-01 10:10:00.000", "Encoded PowerShell", "high"),
+              Hayabusa("2026-03-02 08:00:00.000", "Encoded PowerShell", "high"));
+
+        CaseReport.Rebuild(dir.Path);
+
+        var html = Report(dir);
+        // Mimikatz 2, Encoded PowerShell 2 (the later collection's), Chainsaw Only Rule 1: not 8.
+        Assert.Contains("Detections <span class=\"c\">5</span>", html);
+        Assert.Contains("DC01 2", html);
+        Assert.DoesNotContain("DC01 4", html);
+        Assert.Contains("2026-03-02 08:00:00", html);
+        Assert.Contains("Collected more than once", html);
+        Assert.Contains("DC01 in DC01, DC01_2", html);
+        Assert.Contains("Collected 2 times", html);
+        Assert.Contains("2 hosts: 1 Windows, 1 Linux (3 collections)", html);
+    }
+
+    [Fact]
     public void A_cleared_security_log_is_shown_and_raised_as_a_coverage_gap()
     {
         using var dir = Case();
