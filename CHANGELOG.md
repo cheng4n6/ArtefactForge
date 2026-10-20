@@ -1,7 +1,91 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-10-20
 
+- The tools you use on a case after it is processed are grouped on one **Analysis**
+  tab, so the main tabs are Setup, Run, Results, Analysis, Tools and Settings. A bar at the top
+  shows the case, its host count and when its report was last updated, with Open case folder,
+  Export snapshot and Open report. Below it are pages for IOCs, RDP trace, IP history and the
+  evidence list, and an Overview page with a one-line status for each and a button to open it.
+- Each case now has a case report, `CaseReport.html` in the case folder: one page that opens in
+  any browser with no internet and no server. It starts with what needs attention (critical and
+  high detections, IOC hits, RDP traces that end outside the case, hosts to collect next and
+  gaps such as a cleared Security log), then has a section each for the hosts (role, OS,
+  addresses, how their last run went, how far back the Security log reaches and detections by
+  level), Hayabusa and Chainsaw detections grouped by rule, IOC hits with the matching text
+  marked, saved RDP traces drawn as a chain with their hops and flags, and the IP history with
+  a "who had this address at this time" lookup. It follows the system's light or dark theme.
+- The report is rebuilt after every run, IOC sweep and RDP trace. Nothing in it is typed by
+  hand, so rebuilding never loses anything. "Open report" at the top of the Analysis tab opens
+  it; "Export snapshot" beside it saves a dated copy,
+  `CaseReport_<date>_<time>.html`, that is never updated, for sending.
+- `ArtefactForgeCli report <case folder>` rebuilds the report, and `--snapshot` saves a dated copy.
+- A host collected more than once into the case (two folders whose system summaries give the
+  same hostname) counts as one host in the report header, and its detections are counted once:
+  each rule takes the higher of the collections' counts. The host is marked "Collected N times"
+  in the Hosts section and raised under "Needs attention".
+- Each case now has an evidence list, `EvidenceList.xlsx` at the case root, with one row per
+  collection: hostname, domain, IP addresses, OS version, detected role and serial number, the
+  zip or folder it came from and the date it was added. The shaded columns (evidence reference,
+  confirmed role, serial number, notes) are yours, as is any column or row you add: what you
+  type is kept every time the list is rebuilt. New collections are added as new rows, and a
+  collection removed from the case keeps its row, marked Missing.
+- The list is rebuilt after every run, and from Analysis > Evidence list with "Rebuild evidence
+  list" (or `ArtefactForgeCli evidence-list <case folder>`) without running any modules. If the
+  list is open in Excel when a run starts you are asked to save and close it; if it is still open
+  when the run ends it is left untouched and marked out of date until you rebuild it.
+- Linux collections from UAC show the addresses the system was using at collection time (from
+  `ip addr`) and the system serial number (from `dmidecode`) in the system summary.
+- A case can keep a list of IOCs, and ArtefactForge searches every host's parsed output for them.
+  The list is `IOCs.csv` in the case folder (Type, Value, Note, Found on), edited from the IOCs
+  page of the Analysis tab or with the new `ioc` command, and can be imported from another case's
+  list or a plain list of values. Adding an IOC searches for that IOC alone across every host;
+  processing a host again rebuilds that host's hits against the whole list and leaves the other
+  hosts' hits as they were. Hits go to `IocHits.csv` in the case folder, with the host, module,
+  time, output file and matching line, and the IOCs page shows how many hits and hosts each IOC
+  has. File names match on the name in any folder, hashes match in any hash column, and IPs,
+  domains and accounts match anywhere in a line as a whole value. ArtefactForge never rewrites
+  `IOCs.csv` on its own: only adding, removing or importing IOCs changes it, and an edit made in
+  Excel in the meantime is kept.
+- New **RDP trace** page on the Analysis tab: pick a receiving host and a time (with an optional
+  source IP, account and search window), choose one of the RDP sessions it lists, and
+  ArtefactForge follows it back host by host until the address is outside the case. Each hop is
+  Confirmed (the source host has a client event for the connection), Inferred (the address maps to
+  the host but nothing there records connecting), Collect next (an internal host not in the case)
+  or End of chain (an external or loopback address). Flags cover DHCP reuse, an address and client
+  name that point to different machines (VPN, NAT or a jump host), loopback (tunnelled RDP), log
+  gaps and cleared logs, clock differences between hosts, other candidate sessions and account
+  changes. The one-line result says how many hops and where it ends; the trace is saved as
+  `RdpTrace_<host>_<time>.csv` in the case folder and never overwritten, and saved traces are
+  marked when a host they read has been reprocessed or a host has been added. The end IP and the
+  accounts used can be added to the IOC list in one click, and an IP or account on the IOC list
+  can start a trace (right-click, Trace RDP from this).
+- Each Windows host now gets `RemoteAccess\RemoteAccess.csv` after a run: the RDP events from
+  its EvtxECmd output (Security 4624 type 10, 4778, 4779, 4634; RemoteConnectionManager 1149;
+  LocalSessionManager 21, 23, 24, 25; RdpCoreTS 131; RDPClient 1024 and 1102) plus the Terminal
+  Server Client registry keys, mstsc.exe in Prefetch and Amcache, and its jump list.
+  `RemoteAccessSources.csv` beside it shows where each log starts and ends and when it was
+  cleared. Only a host whose output changed is rebuilt; cases processed earlier build the file
+  the first time they are traced.
+- `ArtefactForgeCli rdp <case folder>` lists the RDP sessions (filter with `--host`, `--at`,
+  `--window`, `--ip`, `--account`) and `--trace <n>` traces one and saves it.
+- When a domain controller is processed, ArtefactForge builds a history of which machine had which
+  IP address and when, in `IpHistory\IpHistory.csv` for that collection and `IpHistory.csv` at the
+  case root, merged across every DC and each host's own addresses. The columns are IpAddress,
+  HostName, Account, MacAddress, FirstSeenUtc, LastSeenUtc, Source, EventCount and Collection.
+  The main source is the DC's Kerberos events (4768 and 4769, from EvtxECmd), so EvtxECmd has to
+  be selected. DHCP server audit logs and the DNS Server audit log are added when the collection
+  has them. `IpHistory\IpHistorySources.csv` and the run results show which sources were used,
+  the time range each covers, and which were not present. A DC with no Kerberos events is
+  marked for review.
+- New module `WindowsDhcpServerLog`: the DHCP server's audit logs (`DhcpSrvLog-*.log`,
+  `DhcpV6SrvLog-*.log`), about a week of leases with address, host name and MAC. Times are
+  converted from the server's local time to UTC using the time zone in its SYSTEM hive.
+- `ArtefactForgeCli ip <case folder> <address> --at "yyyy-MM-dd HH:mm:ss"` answers "who had this
+  address at this time (UTC)" from the case's IP history, with any other machine seen on the
+  same address in that period listed as a conflict.
+- The new IP history page shows what the case's `IpHistory.csv` holds and answers "which machine
+  had this address at this time" for one address, warning when two machines held it in that span.
 - Checking for Hayabusa and Chainsaw updates shows the installed version. It said "installed
   version unknown" for tools copied into `Tools\`, because the version came only from a
   `VERSIONS.txt` that the package does not include. The version is now read from the program
