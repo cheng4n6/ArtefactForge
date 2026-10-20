@@ -46,11 +46,42 @@ public sealed class ModuleItem : Observable
         ? ""
         : "Flags: " + (ModuleOptions.Expand(Definition, OptionValues) is { Length: > 0 } f ? f : "(none)");
 
+    public bool HasNoOptions => Definition.Options.Count == 0;
+
+    private IReadOnlyList<OptionItem>? _optionItems;
+
+    /// <summary>The declared options as editors, for the full screen rail's module cards.</summary>
+    public IReadOnlyList<OptionItem> OptionItems =>
+        _optionItems ??= Definition.Options.Select(o => new OptionItem(this, o)).ToList();
+
+    public int ChangedOptionCount => OptionItems.Count(o => o.IsChanged);
+    public bool HasChangedOptions => ChangedOptionCount > 0;
+    public string ChangedText => $"{ChangedOptionCount} changed";
+
+    /// <summary>After OptionValues was replaced from outside: the dialog, a profile, Reset all.</summary>
     public void RefreshOptions()
+    {
+        foreach (var option in OptionItems) option.Refresh();
+        OptionsEdited();
+    }
+
+    /// <summary>After one option was edited in place; the editor's own value is already current.</summary>
+    internal void OptionsEdited()
     {
         Raise(nameof(IsTuned));
         Raise(nameof(OptionsTooltip));
+        Raise(nameof(ChangedOptionCount));
+        Raise(nameof(HasChangedOptions));
+        Raise(nameof(ChangedText));
     }
+
+    /// <summary>Disk-bound or memory-hungry: the run limits how many of these go at once.</summary>
+    public bool IsHeavy =>
+        Definition.IoWeight == IoWeight.Heavy || Definition.MemoryWeight == MemoryWeight.Heavy;
+
+    public string HeavyTooltip => Definition.MemoryWeight == MemoryWeight.Heavy
+        ? "Heavy: can use several GB of memory, so only one runs at a time"
+        : "Heavy: disk-bound, so only as many run at once as Heavy IO allows";
 
     /// <summary>Opt-in modules are left out of Default and All; the row says so.</summary>
     public bool IsOptIn => !Definition.DefaultEnabled;
@@ -97,6 +128,87 @@ public sealed class ModuleItem : Observable
         get => _isSelected;
         set => Set(ref _isSelected, value);
     }
+}
+
+/// <summary>
+/// One declared option of a module, edited in place on the full screen rail. The value lives in the
+/// module's OptionValues, as the Module options dialog keeps it, so either way of editing sees the
+/// other's changes and a profile saves both.
+/// </summary>
+public sealed class OptionItem(ModuleItem module, ModuleOption option) : Observable
+{
+    private const string NotSet = "(not set)";
+
+    public ModuleOption Option { get; } = option;
+    public string Name => Option.Name;
+    public string Help => Option.Description ?? "";
+    public bool IsFlag => Option.Kind == OptionKind.Flag;
+    public bool IsChoice => Option.Kind == OptionKind.Choice;
+    public bool IsText => Option.Kind == OptionKind.Text;
+
+    // An empty choice is how an option is switched off; label it so it is pickable.
+    public IReadOnlyList<string> Choices => Option.Choices.Select(Display).ToList();
+
+    public string Value
+    {
+        get => module.OptionValues.TryGetValue(Option.Name, out var value) ? value : Option.Default;
+        set
+        {
+            if (value == Value) return;
+            module.OptionValues[Option.Name] = value;
+            Edited();
+        }
+    }
+
+    public bool IsOn
+    {
+        get => IsTrue(Value);
+        set => Value = value ? "true" : "false";
+    }
+
+    public string Choice
+    {
+        get => Display(Option.Choices.FirstOrDefault(
+                   c => string.Equals(c, Value, StringComparison.OrdinalIgnoreCase)) ?? Value);
+        set => Value = value is null or NotSet ? "" : value;
+    }
+
+    /// <summary>The same test the run uses to decide which overrides to send.</summary>
+    public bool IsChanged => IsFlag
+        ? IsTrue(Value) != IsTrue(Option.Default)
+        : !string.Equals(Value, Option.Default, StringComparison.OrdinalIgnoreCase);
+
+    public string DefaultText => "Default: " + (IsFlag ? (IsTrue(Option.Default) ? "on" : "off")
+                                                : Option.Default.Length == 0 ? NotSet
+                                                : Option.Default) + ".";
+
+    public void Reset()
+    {
+        module.OptionValues.Remove(Option.Name);
+        Refresh();
+        module.OptionsEdited();
+    }
+
+    public void Refresh()
+    {
+        Raise(nameof(Value));
+        Raise(nameof(IsOn));
+        Raise(nameof(Choice));
+        Raise(nameof(IsChanged));
+    }
+
+    private void Edited()
+    {
+        Refresh();
+        module.OptionsEdited();
+    }
+
+    private static string Display(string choice) => choice.Length == 0 ? NotSet : choice;
+
+    private static bool IsTrue(string value) =>
+        value.Equals("true", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
+        || value == "1";
 }
 
 /// <summary>How much of a category is selected, for the count pill in the rail view.</summary>
@@ -157,8 +269,23 @@ public sealed class CategoryGroup : Observable
         {
             Set(ref _isExpanded, value);
             Raise(nameof(ShowNote));
+            Raise(nameof(ShowRunsOn));
+            Raise(nameof(ShowHeavy));
         }
     }
+
+    /// <summary>The full screen list's Runs on for a collapsed row: the shared value, or Mixed.</summary>
+    public string RunsOnSummary => Modules.Select(m => m.RunsOn).Distinct().ToList() is [var only] ? only : "Mixed";
+
+    public bool ShowRunsOn => !_isExpanded;
+
+    /// <summary>A collapsed row is Heavy if any module in it is; opened, each module says so itself.</summary>
+    public bool ShowHeavy => !_isExpanded && Modules.Any(m => m.IsHeavy);
+
+    /// <summary>The blue dot on the full screen rail: a module here has options off their defaults.</summary>
+    public bool HasChangedOptions => Modules.Any(m => m.HasChangedOptions);
+
+    public void RefreshOptions() => Raise(nameof(HasChangedOptions));
 
     /// <summary>
     /// What a collapsed row would otherwise hide: modules switched off, and selected modules that

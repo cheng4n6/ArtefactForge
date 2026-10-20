@@ -1,6 +1,7 @@
 <Window x:Class="ArtefactForge.Gui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ArtefactForge.Gui"
         Title="ArtefactForge" Height="820" Width="1180" Icon="artefactforge.ico"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBrush}" Foreground="{DynamicResource TextBrush}"
@@ -89,6 +90,87 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Full screen Setup (above WideLayoutWidth): the list's module chips, the Heavy and
+             changed-options badges, and the rail's option rows. -->
+        <Style x:Key="ModuleChip" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,2,6,2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" CornerRadius="11" BorderThickness="1" Padding="9,2"
+                                Background="{DynamicResource SelectionBrush}" BorderBrush="{DynamicResource AccentBrush}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- A chip's name: struck through and greyed when the module is off. -->
+        <Style x:Key="ModuleChipText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="12"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+                    <Setter Property="TextDecorations" Value="Strikethrough"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="HeavyBadge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+        <Style x:Key="ChangedBadge" TargetType="Border" BasedOn="{StaticResource HeavyBadge}">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}"/>
+        </Style>
+        <Style x:Key="OptionRow" TargetType="Border">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Margin" Value="-6,0,-6,2"/>
+            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="CornerRadius" Value="0,4,4,0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource SelectionBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- The rail's dot for a category with changed options, shown only at full screen. -->
+        <Style x:Key="ChangedDot" TargetType="Ellipse">
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="Height" Value="7"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="Fill" Value="{DynamicResource AccentBorderBrush}"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Setter Property="ToolTip" Value="Options changed in this category"/>
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasChangedOptions}" Value="True"/>
+                        <Condition Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="wide"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <TabControl x:Name="Tabs" Margin="10" Background="Transparent" BorderThickness="0">
@@ -170,6 +252,18 @@
                                 <Grid DockPanel.Dock="Top" Margin="12,12,12,8">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock x:Name="ModuleCount" Style="{StaticResource Muted}"/>
+                                        <!-- Full screen rail only: options are edited on the cards, so
+                                             how many are off their defaults is said up here. -->
+                                        <StackPanel x:Name="OptionsSummary" Orientation="Horizontal" Visibility="Collapsed">
+                                            <Border Style="{StaticResource ChangedBadge}" Margin="10,0,0,0">
+                                                <TextBlock x:Name="OptionsChangedText" FontSize="11"
+                                                           Foreground="{DynamicResource AccentBorderBrush}"/>
+                                            </Border>
+                                            <TextBlock FontSize="12" Margin="8,0,0,0">
+                                                <Hyperlink Click="OnResetAllOptions" Foreground="{DynamicResource AccentBorderBrush}"
+                                                           ToolTip="Return every module's options to their defaults">Reset all options</Hyperlink>
+                                            </TextBlock>
+                                        </StackPanel>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                         <Button Content="Default" Click="OnSelectDefault" MinWidth="64"
@@ -196,9 +290,18 @@
                                         </StackPanel>
                                     </Border>
                                     <StackPanel x:Name="ExpandButtons" DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <StackPanel x:Name="HeavyLegend" Orientation="Horizontal" Margin="12,0,6,0"
+                                                    Visibility="Collapsed" ToolTip="Disk-bound or memory-hungry: fewer of these run at once">
+                                            <Ellipse Width="6" Height="6" Fill="{DynamicResource WarningBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Heavy" FontSize="12" Margin="5,0,0,0" Style="{StaticResource Muted}"/>
+                                        </StackPanel>
                                         <Button Content="Expand all" Click="OnExpandCategories" MinWidth="0" Padding="10,4"/>
                                         <Button Content="Collapse all" Click="OnCollapseCategories" MinWidth="0" Padding="10,4"/>
                                     </StackPanel>
+                                    <CheckBox x:Name="OnlyChanged" DockPanel.Dock="Right" Content="Only show changed"
+                                              Margin="12,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"
+                                              Checked="OnOnlyChangedToggled" Unchecked="OnOnlyChangedToggled"
+                                              ToolTip="Show only modules with options changed from their defaults"/>
                                     <TextBlock DockPanel.Dock="Left" Text="Filter" Style="{StaticResource Muted}" Margin="14,0,6,0"/>
                                     <TextBox x:Name="ModuleFilter" TextChanged="OnFilterModules"
                                              ToolTip="Filter by module name, category or description"/>
@@ -307,6 +410,144 @@
                                         </ScrollViewer>
                                     </DockPanel>
 
+                                    <!-- List at full screen: the same rows, with the width given to a chip per
+                                         module, so a module can be switched without opening its category. -->
+                                    <DockPanel x:Name="ModuleListWide" Visibility="Collapsed">
+                                        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource CardBorderBrush}"
+                                                BorderThickness="0,1" Padding="12,5">
+                                            <Grid TextElement.FontSize="11">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="42"/>
+                                                    <ColumnDefinition Width="170"/>
+                                                    <ColumnDefinition Width="56"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="110"/>
+                                                    <ColumnDefinition Width="80"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="1" Text="ARTEFACT" Style="{StaticResource Muted}"/>
+                                                <TextBlock Grid.Column="2" Text="ON" Style="{StaticResource Muted}"/>
+                                                <TextBlock Grid.Column="3" Text="MODULES (CLICK TO TOGGLE)" Style="{StaticResource Muted}"/>
+                                                <TextBlock Grid.Column="4" Text="RUNS ON" Style="{StaticResource Muted}"/>
+                                                <TextBlock Grid.Column="5" Text="WEIGHT" Style="{StaticResource Muted}"/>
+                                            </Grid>
+                                        </Border>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsControl x:Name="CategoryListWide" Margin="0,4,0,8">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel>
+                                                            <StackPanel Orientation="Horizontal" Margin="12,10,12,2" Opacity="{Binding HeaderOpacity}"
+                                                                        Visibility="{Binding ShowHeading, Converter={StaticResource BoolToVisibility}}">
+                                                                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource MutedBrush}"/>
+                                                                <TextBlock Text="{Binding Summary}" FontSize="12" Margin="8,0,0,0" Foreground="{DynamicResource FaintBrush}"/>
+                                                                <TextBlock Text="{Binding AppliesText}" FontSize="12" Margin="8,0,0,0" Foreground="{DynamicResource FaintBrush}"/>
+                                                            </StackPanel>
+                                                            <ItemsControl ItemsSource="{Binding Categories}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <StackPanel Margin="12,1,12,0">
+                                                                            <!-- The row opens and closes the category; the tick and the chips
+                                                                                 inside it are controls of their own and do not. -->
+                                                                            <ToggleButton Style="{StaticResource ExpanderHeader}" Foreground="{DynamicResource TextBrush}"
+                                                                                          IsChecked="{Binding IsExpanded, Mode=TwoWay}" Focusable="False">
+                                                                                <Grid Margin="0,2">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="24"/>
+                                                                                        <ColumnDefinition Width="170"/>
+                                                                                        <ColumnDefinition Width="56"/>
+                                                                                        <ColumnDefinition Width="*"/>
+                                                                                        <ColumnDefinition Width="110"/>
+                                                                                        <ColumnDefinition Width="80"/>
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                                                              ToolTip="Select or clear every module in this category"/>
+                                                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                                                               TextTrimming="CharacterEllipsis"/>
+                                                                                    <TextBlock Grid.Column="2" Text="{Binding Summary}" FontSize="11"
+                                                                                               Foreground="{DynamicResource FaintBrush}"/>
+                                                                                    <ItemsControl Grid.Column="3" ItemsSource="{Binding Modules}" Margin="0,0,10,0">
+                                                                                        <ItemsControl.ItemsPanel>
+                                                                                            <ItemsPanelTemplate>
+                                                                                                <WrapPanel/>
+                                                                                            </ItemsPanelTemplate>
+                                                                                        </ItemsControl.ItemsPanel>
+                                                                                        <ItemsControl.ItemTemplate>
+                                                                                            <DataTemplate>
+                                                                                                <ToggleButton Style="{StaticResource ModuleChip}" IsChecked="{Binding IsSelected}"
+                                                                                                              Opacity="{Binding RowOpacity}" ToolTip="{Binding RowTooltip}">
+                                                                                                    <StackPanel Orientation="Horizontal">
+                                                                                                        <Ellipse Width="6" Height="6" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                                                                                 Fill="{DynamicResource WarningBrush}"
+                                                                                                                 Visibility="{Binding IsHeavy, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                                        <TextBlock Text="{Binding Name}" Style="{StaticResource ModuleChipText}"/>
+                                                                                                    </StackPanel>
+                                                                                                </ToggleButton>
+                                                                                            </DataTemplate>
+                                                                                        </ItemsControl.ItemTemplate>
+                                                                                    </ItemsControl>
+                                                                                    <TextBlock Grid.Column="4" Text="{Binding RunsOnSummary}" FontSize="12"
+                                                                                               Foreground="{DynamicResource MutedBrush}"
+                                                                                               Visibility="{Binding ShowRunsOn, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                    <Border Grid.Column="5" Style="{StaticResource HeavyBadge}"
+                                                                                            ToolTip="One or more modules in this category are heavy"
+                                                                                            Visibility="{Binding ShowHeavy, Converter={StaticResource BoolToVisibility}}">
+                                                                                        <TextBlock Text="Heavy" FontSize="11" Foreground="{DynamicResource WarningBrush}"/>
+                                                                                    </Border>
+                                                                                </Grid>
+                                                                            </ToggleButton>
+                                                                            <ItemsControl ItemsSource="{Binding Modules}" Margin="18,0,0,6"
+                                                                                          Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                                                                                <ItemsControl.ItemTemplate>
+                                                                                    <DataTemplate>
+                                                                                        <Border Background="{DynamicResource RaisedBrush}" CornerRadius="3" Padding="0,4" Margin="0,1"
+                                                                                                Opacity="{Binding RowOpacity}" ToolTip="{Binding RowTooltip}">
+                                                                                            <Grid>
+                                                                                                <Grid.ColumnDefinitions>
+                                                                                                    <ColumnDefinition Width="24"/>
+                                                                                                    <ColumnDefinition Width="*"/>
+                                                                                                    <ColumnDefinition Width="110"/>
+                                                                                                    <ColumnDefinition Width="80"/>
+                                                                                                </Grid.ColumnDefinitions>
+                                                                                                <DockPanel Grid.Column="1" Margin="0,0,10,0">
+                                                                                                    <CheckBox DockPanel.Dock="Left" IsChecked="{Binding IsSelected}" Margin="0,0,8,0"/>
+                                                                                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Name}" FontWeight="SemiBold" Width="200"
+                                                                                                               TextTrimming="CharacterEllipsis"/>
+                                                                                                    <Button DockPanel.Dock="Right" Content="Options" Click="OnModuleOptions" Tag="{Binding}"
+                                                                                                            MinWidth="0" Padding="8,1" FontSize="12" Margin="8,0,0,0"
+                                                                                                            ToolTip="{Binding OptionsTooltip}"
+                                                                                                            Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                                    <Border DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,0" CornerRadius="3"
+                                                                                                            BorderThickness="1" BorderBrush="{DynamicResource ControlBorderBrush}"
+                                                                                                            VerticalAlignment="Center" ToolTip="Opt-in: not included by Default or All"
+                                                                                                            Visibility="{Binding IsOptIn, Converter={StaticResource BoolToVisibility}}">
+                                                                                                        <TextBlock Text="opt-in" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                                                                                    </Border>
+                                                                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource MutedBrush}"
+                                                                                                               TextTrimming="CharacterEllipsis"/>
+                                                                                                </DockPanel>
+                                                                                                <TextBlock Grid.Column="2" Text="{Binding RunsOn}" FontSize="12"
+                                                                                                           Foreground="{DynamicResource MutedBrush}" ToolTip="{Binding RunsOnTooltip}"/>
+                                                                                                <Border Grid.Column="3" Style="{StaticResource HeavyBadge}" ToolTip="{Binding HeavyTooltip}"
+                                                                                                        Visibility="{Binding IsHeavy, Converter={StaticResource BoolToVisibility}}">
+                                                                                                    <TextBlock Text="Heavy" FontSize="11" Foreground="{DynamicResource WarningBrush}"/>
+                                                                                                </Border>
+                                                                                            </Grid>
+                                                                                        </Border>
+                                                                                    </DataTemplate>
+                                                                                </ItemsControl.ItemTemplate>
+                                                                            </ItemsControl>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </DockPanel>
+
                                     <!-- Rail: categories on the left with a count, the chosen one's modules
                                          on the right, each with its description and a switch. -->
                                     <Grid x:Name="ModuleRailView" Visibility="Collapsed">
@@ -333,9 +574,11 @@
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
                                                             </Grid.ColumnDefinitions>
                                                             <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
-                                                            <Border Grid.Column="1" Style="{StaticResource CountPill}">
+                                                            <Ellipse Grid.Column="1" Style="{StaticResource ChangedDot}" VerticalAlignment="Center"/>
+                                                            <Border Grid.Column="2" Style="{StaticResource CountPill}">
                                                                 <TextBlock Text="{Binding ShortSummary}" Style="{StaticResource CountPillText}"/>
                                                             </Border>
                                                         </Grid>
@@ -361,43 +604,148 @@
                                                 </Grid>
                                                 <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource CardBorderBrush}"/>
                                                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                                                    <ItemsControl ItemsSource="{Binding Modules}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource GridLineBrush}" Padding="0,10"
-                                                                        Background="Transparent" Opacity="{Binding RowOpacity}" ToolTip="{Binding RowTooltip}">
-                                                                    <Grid>
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="*"/>
-                                                                            <ColumnDefinition Width="Auto"/>
-                                                                            <ColumnDefinition Width="Auto"/>
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <StackPanel>
-                                                                            <StackPanel Orientation="Horizontal">
-                                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
-                                                                                <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="3" BorderThickness="1"
-                                                                                        BorderBrush="{DynamicResource ControlBorderBrush}" VerticalAlignment="Center"
-                                                                                        ToolTip="Opt-in: not included by Default or All"
-                                                                                        Visibility="{Binding IsOptIn, Converter={StaticResource BoolToVisibility}}">
-                                                                                    <TextBlock Text="opt-in" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
-                                                                                </Border>
-                                                                                <TextBlock Text="{Binding RunsOn}" FontSize="12" Margin="10,0,0,0"
-                                                                                           Foreground="{DynamicResource FaintBrush}" ToolTip="{Binding RunsOnTooltip}"/>
+                                                    <Grid>
+                                                        <!-- Full screen: a card per module, its options edited in place, so the
+                                                             Module options dialog is not needed. -->
+                                                        <ItemsControl x:Name="RailCards" ItemsSource="{Binding Modules}" Margin="0,12,4,8"
+                                                                      Visibility="Collapsed">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <local:CardGrid Columns="4" MinColumnWidth="250" Spacing="12"/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                                                            BorderThickness="1" CornerRadius="6" Opacity="{Binding RowOpacity}">
+                                                                        <DockPanel>
+                                                                            <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" Padding="12,9"
+                                                                                    BorderBrush="{DynamicResource CardBorderBrush}" Background="Transparent"
+                                                                                    ToolTip="{Binding RowTooltip}">
+                                                                                <DockPanel>
+                                                                                    <CheckBox DockPanel.Dock="Left" Style="{StaticResource Switch}" IsChecked="{Binding IsSelected}"
+                                                                                              VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                                                    <Border DockPanel.Dock="Right" Style="{StaticResource HeavyBadge}" Margin="6,0,0,0"
+                                                                                            ToolTip="{Binding HeavyTooltip}"
+                                                                                            Visibility="{Binding IsHeavy, Converter={StaticResource BoolToVisibility}}">
+                                                                                        <TextBlock Text="Heavy" FontSize="11" Foreground="{DynamicResource WarningBrush}"/>
+                                                                                    </Border>
+                                                                                    <Border DockPanel.Dock="Right" Style="{StaticResource ChangedBadge}" Margin="6,0,0,0"
+                                                                                            ToolTip="{Binding OptionsTooltip}"
+                                                                                            Visibility="{Binding HasChangedOptions, Converter={StaticResource BoolToVisibility}}">
+                                                                                        <TextBlock Text="{Binding ChangedText}" FontSize="11" Foreground="{DynamicResource AccentBorderBrush}"/>
+                                                                                    </Border>
+                                                                                    <Border DockPanel.Dock="Right" Margin="6,0,0,0" Padding="5,0" CornerRadius="3" BorderThickness="1"
+                                                                                            BorderBrush="{DynamicResource ControlBorderBrush}" VerticalAlignment="Center"
+                                                                                            ToolTip="Opt-in: not included by Default or All"
+                                                                                            Visibility="{Binding IsOptIn, Converter={StaticResource BoolToVisibility}}">
+                                                                                        <TextBlock Text="opt-in" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                                                                    </Border>
+                                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                                                </DockPanel>
+                                                                            </Border>
+                                                                            <StackPanel Margin="12,8,12,10">
+                                                                                <StackPanel.Style>
+                                                                                    <Style TargetType="StackPanel">
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsSelected}" Value="False">
+                                                                                                <Setter Property="Opacity" Value="0.6"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </StackPanel.Style>
+                                                                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
+                                                                                           Foreground="{DynamicResource MutedBrush}">
+                                                                                    <Run Text="{Binding Description, Mode=OneWay}"/>
+                                                                                    <Run Text="Runs on" Foreground="{DynamicResource FaintBrush}"/><Run Text=" "/><Run
+                                                                                         Text="{Binding RunsOn, Mode=OneWay}" Foreground="{DynamicResource FaintBrush}"/><Run
+                                                                                         Text="." Foreground="{DynamicResource FaintBrush}"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock Text="No options for this module." FontSize="11" Margin="0,2,0,0"
+                                                                                           Foreground="{DynamicResource FaintBrush}"
+                                                                                           Visibility="{Binding HasNoOptions, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                <ItemsControl ItemsSource="{Binding OptionItems}">
+                                                                                    <ItemsControl.ItemTemplate>
+                                                                                        <DataTemplate>
+                                                                                            <Border Style="{StaticResource OptionRow}">
+                                                                                                <Grid>
+                                                                                                    <Grid.ColumnDefinitions>
+                                                                                                        <ColumnDefinition Width="110"/>
+                                                                                                        <ColumnDefinition Width="*"/>
+                                                                                                    </Grid.ColumnDefinitions>
+                                                                                                    <Grid.RowDefinitions>
+                                                                                                        <RowDefinition Height="Auto"/>
+                                                                                                        <RowDefinition Height="Auto"/>
+                                                                                                    </Grid.RowDefinitions>
+                                                                                                    <TextBlock Text="{Binding Name}" FontSize="12" TextWrapping="Wrap" Margin="0,0,8,0"/>
+                                                                                                    <CheckBox Grid.Column="1" IsChecked="{Binding IsOn}" VerticalAlignment="Center"
+                                                                                                              AutomationProperties.Name="{Binding Name}"
+                                                                                                              Visibility="{Binding IsFlag, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                                    <ComboBox Grid.Column="1" ItemsSource="{Binding Choices}" SelectedItem="{Binding Choice}"
+                                                                                                              MinHeight="24" AutomationProperties.Name="{Binding Name}"
+                                                                                                              Visibility="{Binding IsChoice, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                                    <TextBox Grid.Column="1" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                                                                             Padding="4,2" AutomationProperties.Name="{Binding Name}"
+                                                                                                             Visibility="{Binding IsText, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,2,0,0">
+                                                                                                        <TextBlock Text="{Binding Help}" FontSize="11" TextWrapping="Wrap"
+                                                                                                                   Foreground="{DynamicResource FaintBrush}"/>
+                                                                                                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                                                                                                                   Visibility="{Binding IsChanged, Converter={StaticResource BoolToVisibility}}">
+                                                                                                            <Run Text="{Binding DefaultText, Mode=OneWay}" Foreground="{DynamicResource AccentBorderBrush}"/>
+                                                                                                            <Hyperlink Click="OnResetOption" Foreground="{DynamicResource AccentBorderBrush}"
+                                                                                                                       ToolTip="Return this option to its default">Reset</Hyperlink>
+                                                                                                        </TextBlock>
+                                                                                                    </StackPanel>
+                                                                                                </Grid>
+                                                                                            </Border>
+                                                                                        </DataTemplate>
+                                                                                    </ItemsControl.ItemTemplate>
+                                                                                </ItemsControl>
                                                                             </StackPanel>
-                                                                            <TextBlock Text="{Binding Description}" FontSize="12" Margin="0,2,0,0"
-                                                                                       Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/>
-                                                                        </StackPanel>
-                                                                        <Button Grid.Column="1" Content="Options" Click="OnModuleOptions" Tag="{Binding}"
-                                                                                MinWidth="0" Padding="8,1" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
-                                                                                ToolTip="{Binding OptionsTooltip}"
-                                                                                Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}"/>
-                                                                        <CheckBox Grid.Column="2" Style="{StaticResource Switch}" Margin="14,0,0,0"
-                                                                                  VerticalAlignment="Center" IsChecked="{Binding IsSelected}"/>
-                                                                    </Grid>
-                                                                </Border>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
+                                                                        </DockPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <ItemsControl x:Name="RailRows" ItemsSource="{Binding Modules}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource GridLineBrush}" Padding="0,10"
+                                                                            Background="Transparent" Opacity="{Binding RowOpacity}" ToolTip="{Binding RowTooltip}">
+                                                                        <Grid>
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="*"/>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <StackPanel>
+                                                                                <StackPanel Orientation="Horizontal">
+                                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                                                    <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="3" BorderThickness="1"
+                                                                                            BorderBrush="{DynamicResource ControlBorderBrush}" VerticalAlignment="Center"
+                                                                                            ToolTip="Opt-in: not included by Default or All"
+                                                                                            Visibility="{Binding IsOptIn, Converter={StaticResource BoolToVisibility}}">
+                                                                                        <TextBlock Text="opt-in" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                                                                    </Border>
+                                                                                    <TextBlock Text="{Binding RunsOn}" FontSize="12" Margin="10,0,0,0"
+                                                                                               Foreground="{DynamicResource FaintBrush}" ToolTip="{Binding RunsOnTooltip}"/>
+                                                                                </StackPanel>
+                                                                                <TextBlock Text="{Binding Description}" FontSize="12" Margin="0,2,0,0"
+                                                                                           Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"/>
+                                                                            </StackPanel>
+                                                                            <Button Grid.Column="1" Content="Options" Click="OnModuleOptions" Tag="{Binding}"
+                                                                                    MinWidth="0" Padding="8,1" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                                                    ToolTip="{Binding OptionsTooltip}"
+                                                                                    Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}"/>
+                                                                            <CheckBox Grid.Column="2" Style="{StaticResource Switch}" Margin="14,0,0,0"
+                                                                                      VerticalAlignment="Center" IsChecked="{Binding IsSelected}"/>
+                                                                        </Grid>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </Grid>
                                                 </ScrollViewer>
                                             </DockPanel>
                                         </Border>
