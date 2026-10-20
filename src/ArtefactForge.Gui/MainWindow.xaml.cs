@@ -423,9 +423,10 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Client width from which Setup uses its full screen layout: chips in the list, option cards
-    /// in the rail. The default window (1180 wide) stays on the layout it was designed for.
+    /// in the rail: 125% of the default window's 1180, which itself stays on the layout it was
+    /// designed for.
     /// </summary>
-    private const double WideLayoutWidth = 1600;
+    private const double WideLayoutWidth = 1475;
 
     private bool _wide;
     private ModuleView _moduleView;
