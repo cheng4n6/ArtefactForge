@@ -265,6 +265,29 @@ if ($Archive -and $NoTools) {
             # Sections end with a '---' rule, which is layout, not notes.
             if ($text -match $pattern) { $notes = ($Matches[1].Trim() -replace '\s*-{3,}\s*$', '').Trim() }
         }
+        # The changelog is wrapped at 100 columns for reading in an editor, but the updater shows the
+        # notes in a panel that wraps them itself. Join each list item and paragraph back into one
+        # line, or every line breaks partway across the panel. Blank lines, headings, rules and the
+        # start of each list item (nested ones keep their indent) still begin a new line, as does
+        # text indented less than the item above it, which belongs to the item's parent.
+        if ($notes) {
+            $flowed = New-Object System.Collections.Generic.List[string]
+            $textIndent = 0
+            foreach ($line in ($notes -split '\r?\n')) {
+                $t = $line.Trim()
+                $indent = $line.Length - $line.TrimStart().Length
+                $prev = if ($flowed.Count) { $flowed[$flowed.Count - 1].Trim() } else { '' }
+                $item = $t -match '^([-*+]|\d+\.)\s'
+                $startsLine = $t -eq '' -or $item -or $t -match '^#|^-{3,}$' -or $indent -lt $textIndent
+                $prevEnds = $prev -eq '' -or $prev -match '^#|^-{3,}$'
+                if ($startsLine -or $prevEnds) {
+                    $flowed.Add($line.TrimEnd())
+                    $textIndent = if ($item) { $indent + 2 } else { $indent }
+                }
+                else { $flowed[$flowed.Count - 1] = $flowed[$flowed.Count - 1].TrimEnd() + ' ' + $t }
+            }
+            $notes = $flowed -join "`r`n"
+        }
         if (-not $notes) { Write-Warning "CHANGELOG.md has no '## $version' section - the release will have no notes." }
 
         $release = [ordered]@{
