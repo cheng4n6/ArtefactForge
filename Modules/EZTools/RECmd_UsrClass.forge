@@ -13,5 +13,6 @@ Processors:
   -
     Executable: eztools\RECmd\RECmd.exe
     CommandLine: -f "%root%\Users\%user%\AppData\Local\Microsoft\Windows\UsrClass.dat" --bn "%toolsDir%\eztools\RECmd\BatchExamples\Kroll_Batch.reb" --csv "%destinationDirectory%" --csvf "%user%_RECmd_UsrClass.csv"
+    NoLogsArgument: --nl
     ExportFormat: csv
     ExportFile: "%user%_RECmd_UsrClass.csv"

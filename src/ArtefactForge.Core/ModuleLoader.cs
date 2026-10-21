@@ -130,7 +130,8 @@ public static class ModuleLoader
                 ExportFile = p.ExportFile,
                 WorkingDirectory = string.IsNullOrWhiteSpace(p.WorkingDirectory) ? null : p.WorkingDirectory.Trim(),
                 ContinueOnError = p.ContinueOnError ?? false,
-                ExpectedStderr = ReadPatterns(p.ExpectedStderr, $"{label} {i + 1}")
+                ExpectedStderr = ReadPatterns(p.ExpectedStderr, $"{label} {i + 1}"),
+                NoLogsArgument = string.IsNullOrWhiteSpace(p.NoLogsArgument) ? null : p.NoLogsArgument.Trim()
             });
         }
         return result;
@@ -200,5 +201,6 @@ public static class ModuleLoader
         public string? WorkingDirectory { get; set; }
         public bool? ContinueOnError { get; set; }
         public List<string>? ExpectedStderr { get; set; }
+        public string? NoLogsArgument { get; set; }
     }
 }

@@ -12,4 +12,5 @@ Processors:
   -
     Executable: eztools\AmcacheParser.exe
     CommandLine: -f "%root%\Windows\appcompat\Programs\Amcache.hve" -i --csv "%destinationDirectory%"
+    NoLogsArgument: --nl
     ExportFormat: csv

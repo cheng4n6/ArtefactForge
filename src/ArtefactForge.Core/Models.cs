@@ -70,6 +70,14 @@ public sealed class ProcessorDefinition
     /// Chainsaw's analyse shimcache.
     /// </summary>
     public List<string> ExpectedStderr { get; init; } = [];
+
+    /// <summary>
+    /// The switch that makes this tool read a dirty registry hive whose transaction logs were not
+    /// collected (<c>--nl</c> for the EZ Tools hive readers). Without it they skip such a hive,
+    /// say so on stdout and still exit 0. When the log says that, the step is run once more with
+    /// this added, and the module is flagged CheckLog because recent entries may be missing.
+    /// </summary>
+    public string? NoLogsArgument { get; init; }
 }
 
 /// <summary>
