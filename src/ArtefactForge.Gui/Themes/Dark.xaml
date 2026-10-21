@@ -6,6 +6,8 @@
     <SolidColorBrush x:Key="CardBrush" Color="#252523"/>
     <SolidColorBrush x:Key="CardBorderBrush" Color="#3A3936"/>
     <SolidColorBrush x:Key="GridLineBrush" Color="#33322F"/>
+    <!-- A card or row set inside a card: the full screen module cards and opened list rows. -->
+    <SolidColorBrush x:Key="RaisedBrush" Color="#2B2B29"/>
 
     <SolidColorBrush x:Key="TextBrush" Color="#E9E7E2"/>
     <SolidColorBrush x:Key="MutedBrush" Color="#A8A6A0"/>

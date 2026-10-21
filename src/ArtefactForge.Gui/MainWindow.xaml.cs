@@ -66,6 +66,7 @@ public partial class MainWindow : Window
         // In the title bar it is just noise.
         Title = $"ArtefactForge v{BuildInfo.Version}";
         CategoryList.ItemsSource = _platforms;
+        CategoryListWide.ItemsSource = _platforms;
         RailList.ItemsSource = _railView;
         CollectionList.ItemsSource = _collections;
         ProgressList.ItemsSource = _progress;
@@ -84,6 +85,8 @@ public partial class MainWindow : Window
         DarkModeSwitch.IsChecked = ThemeManager.IsDark;
         (Preferences.Current.ModuleView == ModuleView.Rail ? ModuleViewRail : ModuleViewList).IsChecked = true;
         ShowModuleView(Preferences.Current.ModuleView);
+        Tabs.SizeChanged += (_, args) =>
+            SetWide(args.NewSize.Width + Tabs.Margin.Left + Tabs.Margin.Right >= WideLayoutWidth);
         LoadRunOptions();
         InitIocTab();
         InitAnalysisTab();
@@ -117,6 +120,7 @@ public partial class MainWindow : Window
             item.PropertyChanged += (_, args) =>
             {
                 if (args.PropertyName == nameof(ModuleItem.IsSelected)) UpdateModuleCount();
+                else if (args.PropertyName == nameof(ModuleItem.ChangedOptionCount)) UpdateOptionsSummary();
             };
             _allItems.Add(item);
         }
@@ -134,7 +138,7 @@ public partial class MainWindow : Window
     private void LoadProfiles()
     {
         ProfileBox.Items.Clear();
-        ProfileBox.Items.Add("(current selection)");
+        ProfileBox.Items.Add(CurrentSelection);
         ProfileBox.SelectedIndex = 0;
 
         var dir = ProfileFile.Directory(_repoRoot);
@@ -395,10 +399,93 @@ public partial class MainWindow : Window
     {
         // Fires once while the window is still being built, before both views exist.
         if (ModuleRailView is null || ExpandButtons is null) return;
+        _moduleView = view;
         var rail = view == ModuleView.Rail;
-        ModuleListView.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
-        ExpandButtons.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
-        ModuleRailView.Visibility = rail ? Visibility.Visible : Visibility.Collapsed;
+        var wideRail = rail && _wide;
+        ModuleListView.Visibility = Show(!rail && !_wide);
+        ModuleListWide.Visibility = Show(!rail && _wide);
+        HeavyLegend.Visibility = Show(_wide);
+        ExpandButtons.Visibility = Show(!rail);
+        ModuleRailView.Visibility = Show(rail);
+        RailRows.Visibility = Show(!_wide);
+        RailCards.Visibility = Show(_wide);
+        RailList.Tag = _wide ? "wide" : null;
+        OptionsButton.Visibility = Show(!wideRail);
+        OnlyChanged.Visibility = Show(wideRail);
+        // Hidden, the box must not keep filtering the list out of sight.
+        if (!wideRail && OnlyChanged.IsChecked == true) OnlyChanged.IsChecked = false;
+        UpdateOptionsSummary();
+    }
+
+    private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+
+    // ------------------------------------------------------------ full screen
+
+    /// <summary>
+    /// Client width from which Setup uses its full screen layout: chips in the list, option cards
+    /// in the rail: 125% of the default window's 1180, which itself stays on the layout it was
+    /// designed for.
+    /// </summary>
+    private const double WideLayoutWidth = 1475;
+
+    private bool _wide;
+    private ModuleView _moduleView;
+
+    private void SetWide(bool wide)
+    {
+        if (wide == _wide) return;
+        _wide = wide;
+        ShowModuleView(_moduleView);
+    }
+
+    /// <summary>
+    /// The full screen rail's "3 options changed in 2 modules", the rail dots and the profile's
+    /// "modified" label, after any change to options however it was made.
+    /// </summary>
+    private void UpdateOptionsSummary()
+    {
+        if (OptionsSummary is null) return;
+        var options = _allItems.Sum(m => m.ChangedOptionCount);
+        var modules = _allItems.Count(m => m.HasChangedOptions);
+        var wideRail = _wide && _moduleView == ModuleView.Rail;
+
+        OptionsChangedText.Text = $"{options} option{(options == 1 ? "" : "s")} changed in " +
+                                  $"{modules} module{(modules == 1 ? "" : "s")}";
+        OptionsSummary.Visibility = Show(wideRail && options > 0);
+        foreach (var category in _railCategories) category.RefreshOptions();
+
+        var label = wideRail && options > 0 ? CurrentSelectionModified : CurrentSelection;
+        if (ProfileBox.Items.Count == 0 || Equals(ProfileBox.Items[0], label)) return;
+        // Replacing the selected item clears the selection; put it back. Index 0 loads nothing.
+        var selected = ProfileBox.SelectedIndex;
+        ProfileBox.Items[0] = label;
+        ProfileBox.SelectedIndex = selected;
+    }
+
+    private const string CurrentSelection = "(current selection)";
+    private const string CurrentSelectionModified = "(current selection, modified)";
+
+    private void OnResetOption(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkContentElement { DataContext: OptionItem option }) option.Reset();
+    }
+
+    private void OnResetAllOptions(object sender, RoutedEventArgs e)
+    {
+        foreach (var item in _allItems.Where(m => m.OptionValues.Count > 0))
+        {
+            item.OptionValues.Clear();
+            item.RefreshOptions();
+        }
+        if (OnlyChanged.IsChecked == true) BuildCategories(ModuleFilter.Text);
+        SetupStatus.Text = "Module options are at their defaults.";
+    }
+
+    private void OnOnlyChangedToggled(object sender, RoutedEventArgs e)
+    {
+        if (ModuleFilter is null) return;
+        BuildCategories(ModuleFilter.Text);
+        UpdateModuleCount();
     }
 
     // ------------------------------------------------------- application update
@@ -549,7 +636,7 @@ public partial class MainWindow : Window
         var railSelection = RailList.SelectedItem as CategoryGroup;
         _platforms.Clear();
         _railCategories.Clear();
-        var matches = _allItems.Where(m => Matches(m, filter)).ToList();
+        var matches = _allItems.Where(m => Matches(m, filter) && PassesOnlyChanged(m)).ToList();
         var filtering = !string.IsNullOrWhiteSpace(filter);
 
         // Windows first, then Linux, then anything platform-agnostic. Fixed order rather than
@@ -693,6 +780,9 @@ public partial class MainWindow : Window
             || item.Description.Contains(needle, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>The full screen rail's "Only show changed": modules with options off their defaults.</summary>
+    private bool PassesOnlyChanged(ModuleItem item) => OnlyChanged.IsChecked != true || item.HasChangedOptions;
+
     private void OnFilterModules(object sender, TextChangedEventArgs e)
     {
         if (!IsLoaded && _allItems.Count == 0) return;
@@ -738,8 +828,8 @@ public partial class MainWindow : Window
 
     private void UpdateModuleCount()
     {
-        // Only the text filter counts as hiding: the other platform is a switch away, not hidden.
-        var hidden = _allItems.Count(m => !Matches(m, ModuleFilter.Text));
+        // Only the filters count as hiding: the other platform is a switch away, not hidden.
+        var hidden = _allItems.Count(m => !Matches(m, ModuleFilter.Text) || !PassesOnlyChanged(m));
         var isDefault = _allItems.All(m => m.IsSelected == m.Definition.DefaultEnabled);
         ModuleCount.Text = $"{AllModules.Count(m => m.IsSelected)} of {_allItems.Count} selected"
                            + (isDefault ? " (default)" : "")
@@ -850,6 +940,7 @@ public partial class MainWindow : Window
         };
         File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
         LoadProfiles();
+        UpdateOptionsSummary();
         SetupStatus.Text = $"Saved profile '{profile.Name}'";
     }
 
