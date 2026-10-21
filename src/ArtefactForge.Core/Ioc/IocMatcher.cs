@@ -82,11 +82,12 @@ public sealed class IocMatcher
     public IReadOnlyList<IocEntry> Iocs => _needles.Select(n => n.Entry).ToList();
 
     /// <summary>The IOCs found in one record. Fields are split only when a record is a candidate.</summary>
-    public List<IocEntry> Match(string record, CsvHeader header, out string[]? fields)
+    public IReadOnlyList<IocEntry> Match(string record, CsvHeader header, out string[]? fields)
     {
         fields = null;
+        // Most records match nothing, so they cost no allocation.
+        if (_any is null || record.AsSpan().IndexOfAny(_any) < 0) return [];
         var found = new List<IocEntry>();
-        if (_any is null || record.AsSpan().IndexOfAny(_any) < 0) return found;
 
         foreach (var needle in _needles)
         {

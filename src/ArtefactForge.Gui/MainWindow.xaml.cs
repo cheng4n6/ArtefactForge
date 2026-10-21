@@ -33,6 +33,9 @@ public partial class MainWindow : Window
     private readonly List<WorkResult> _results = [];
     private readonly StringBuilder _log = new();
     private readonly DispatcherTimer _elapsedTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    // The log is shown a few times a second, not once per line: setting the whole text for every
+    // line laid it all out again each time, which slowed the window as a big batch went on.
+    private readonly DispatcherTimer _logTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
 
     private CancellationTokenSource? _cancellation;
     private IReleaseSource? _offerSource;
@@ -73,6 +76,12 @@ public partial class MainWindow : Window
 
         _elapsedTimer.Tick += (_, _) =>
             StatElapsed.Text = (DateTimeOffset.Now - _runStarted).ToString(@"mm\:ss");
+        _logTimer.Tick += (_, _) =>
+        {
+            _logTimer.Stop();
+            LogText.Text = _log.ToString();
+            LogScroller.ScrollToEnd();
+        };
 
         UpdateList.ItemsSource = _updates;
         AppList.ItemsSource = _apps;
@@ -1290,6 +1299,7 @@ public partial class MainWindow : Window
         _progress.Clear();
         _results.Clear();
         _log.Clear();
+        _logTimer.Stop();
         LogText.Text = "";
 
         // Seed the tree from the plan so every module is visible as pending before anything starts.
@@ -1332,7 +1342,9 @@ public partial class MainWindow : Window
         StatCollections.Text = $"0 / {_progress.Count}";
 
         var engine = new RunEngine();
-        engine.Extraction += evt => Dispatcher.Invoke(() =>
+        // Posted, not invoked: Invoke held every worker, and the extraction loop, until the window
+        // had redrawn. Posts run in the order they were made.
+        engine.Extraction += evt => Dispatcher.InvokeAsync(() =>
         {
             foreach (var target in evt.Collections)
             {
@@ -1385,7 +1397,7 @@ public partial class MainWindow : Window
                 Append($"[Skipped] {Path.GetFileName(evt.ArchivePath)}: {evt.Message}");
             UpdateRunStats();
         });
-        engine.Progress += evt => Dispatcher.Invoke(() =>
+        engine.Progress += evt => Dispatcher.InvokeAsync(() =>
         {
             if (!lookup.TryGetValue(evt.Item.Key, out var runItem)) return;
 
@@ -1477,8 +1489,7 @@ public partial class MainWindow : Window
     private void Append(string line)
     {
         _log.AppendLine($"{DateTime.Now:HH:mm:ss}  {line}");
-        LogText.Text = _log.ToString();
-        LogScroller.ScrollToEnd();
+        if (!_logTimer.IsEnabled) _logTimer.Start();
     }
 
     // ---------------------------------------------------------------- results

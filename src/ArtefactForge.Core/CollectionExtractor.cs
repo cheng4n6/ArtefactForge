@@ -88,6 +88,10 @@ public static class CollectionExtractor
             LogPath = logPath
         };
 
+        // The zip's SHA-256 is read beside the extraction rather than before it: hashing first meant
+        // a full extra read of a multi-GB zip, with nothing to show for it, before a file appeared.
+        Task<string>? hashing = null;
+
         try
         {
             if (isFolder && (root + Path.DirectorySeparatorChar).StartsWith(
@@ -102,9 +106,12 @@ public static class CollectionExtractor
             if (!isFolder)
             {
                 record.ArchiveBytes = new FileInfo(sourcePath).Length;
-                record.ArchiveSha256 = await HashAsync(sourcePath, cancellationToken);
+                hashing = Task.Run(() => HashAsync(sourcePath, cancellationToken), cancellationToken);
             }
-            var signature = await SignatureAsync(sourcePath, record.ArchiveSha256, cancellationToken);
+            // A folder's signature is cheap; a zip's needs the hash, so it is taken when needed.
+            var signature = isFolder ? await SignatureAsync(sourcePath, null, cancellationToken) : null;
+            async Task<string> Signature() =>
+                signature ??= await SignatureAsync(sourcePath, record.ArchiveSha256 ??= await hashing!, cancellationToken);
 
             var markerPath = Path.Combine(root, MarkerName);
             if (Directory.Exists(root))
@@ -118,7 +125,7 @@ public static class CollectionExtractor
                     return record;
                 }
 
-                if (marker is { Completed: true } && marker.Signature == signature)
+                if (marker is { Completed: true } && marker.Signature == await Signature())
                 {
                     record.Reused = true;
                     record.Files = marker.Files;
@@ -154,13 +161,20 @@ public static class CollectionExtractor
             }
 
             Directory.CreateDirectory(root);
-            WriteMarker(markerPath, new Marker { Archive = record.ArchivePath, Signature = signature });
+            // Partial, so never reused: a zip's signature waits for its hash, written at the end.
+            WriteMarker(markerPath, new Marker { Archive = record.ArchivePath, Signature = signature ?? "" });
 
             using var log = logPath is null ? null : OpenLog(logPath);
             log?.WriteLine("Entry,ExtractedTo,Bytes,Result");
 
             long done = 0;
             var buffer = new byte[1 << 20];
+            // A collection of 100,000 files asks for the same few thousand folders over and over.
+            var made = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void MakeFolder(string path)
+            {
+                if (made.Add(path)) Directory.CreateDirectory(path);
+            }
             var links = new List<(string Path, string Target, string Entry)>();
             // A tar or a UAC collection comes from Unix, where '\' is an ordinary character in a
             // name (systemd escapes '-' as \x2d), not a folder separator as in a Windows zip.
@@ -196,7 +210,7 @@ public static class CollectionExtractor
 
                 if (entry.IsDirectory)
                 {
-                    Directory.CreateDirectory(target);
+                    MakeFolder(target);
                     continue;
                 }
 
@@ -207,7 +221,7 @@ public static class CollectionExtractor
                         // target would point outside the evidence. Listed instead, for the modules
                         // that read link targets. Its folder is made: it existed on the source, and
                         // a folder holding only links (a *.wants) would otherwise vanish.
-                        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                        MakeFolder(Path.GetDirectoryName(target)!);
                         links.Add((Relative(root, target), entry.LinkTarget ?? "", entry.FullName));
                         log?.WriteLine(Csv(entry.FullName, target, "0",
                             $"symbolic link to {entry.LinkTarget ?? "an unreadable target"} - listed in {SymlinkList}, not created"));
@@ -226,7 +240,7 @@ public static class CollectionExtractor
                             Problem(record, log, entry, target, "not extracted: another entry already wrote this path");
                             continue;
                         }
-                        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                        MakeFolder(Path.GetDirectoryName(target)!);
                         File.Copy(first, target);
                         var copied = new FileInfo(target).Length;
                         record.Files++;
@@ -254,7 +268,7 @@ public static class CollectionExtractor
                     continue;
                 }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                MakeFolder(Path.GetDirectoryName(target)!);
                 Action<int> report = bytes => progress?.Report((done += bytes, total));
                 var expand = item.Sparse is not null && !item.Compact;
                 var result = expand
@@ -305,7 +319,7 @@ public static class CollectionExtractor
 
             WriteMarker(markerPath, new Marker
             {
-                Archive = record.ArchivePath, Signature = signature, Completed = true,
+                Archive = record.ArchivePath, Signature = await Signature(), Completed = true,
                 Files = record.Files, Bytes = record.Bytes, Problems = record.Problems, Notes = record.Notes
             });
             return record;
@@ -317,6 +331,16 @@ public static class CollectionExtractor
         }
         finally
         {
+            // Recorded for the manifest even when extraction failed part-way, as it was before.
+            if (hashing is not null && record.ArchiveSha256 is null)
+            {
+                try { record.ArchiveSha256 = await hashing; }
+                catch (OperationCanceledException) { /* the run was stopped */ }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    record.Error ??= "could not read the zip to hash it: " + ex.Message;
+                }
+            }
             record.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
         }
     }
@@ -414,7 +438,7 @@ public static class CollectionExtractor
         SourceEntry entry, string target, byte[] buffer, CancellationToken cancellationToken,
         Action<int> reportBytes)
     {
-        var crc = Crc32.Seed;
+        var crc = new System.IO.Hashing.Crc32();
         long written = 0;
         try
         {
@@ -425,7 +449,7 @@ public static class CollectionExtractor
             while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
             {
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                crc = Crc32.Update(crc, buffer.AsSpan(0, read));
+                crc.Append(buffer.AsSpan(0, read));
                 written += read;
                 reportBytes(read);
             }
@@ -442,7 +466,7 @@ public static class CollectionExtractor
 
         if (written != entry.Length)
             return $"{written:N0} of {entry.Length:N0} bytes - entry truncated?";
-        if (entry.Crc32 is { } expected && Crc32.Finish(crc) != expected)
+        if (entry.Crc32 is { } expected && crc.GetCurrentHashAsUInt32() != expected)
             return "CRC-32 does not match the zip - entry corrupt";
         return null;
     }
@@ -528,7 +552,7 @@ public static class CollectionExtractor
         if (data.Sum(r => r.FileLength) != entry.Length)
             return $"its sparse index describes {data.Sum(r => r.FileLength):N0} bytes of data but the source holds {entry.Length:N0}";
 
-        var crc = Crc32.Seed;
+        var crc = new System.IO.Hashing.Crc32();
         long read = 0;
         try
         {
@@ -546,7 +570,7 @@ public static class CollectionExtractor
                     var n = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), cancellationToken);
                     if (n == 0) return $"{read:N0} of {entry.Length:N0} bytes - entry truncated?";
                     await output.WriteAsync(buffer.AsMemory(0, n), cancellationToken);
-                    crc = Crc32.Update(crc, buffer.AsSpan(0, n));
+                    crc.Append(buffer.AsSpan(0, n));
                     read += n;
                     remaining -= n;
                     reportBytes(n);
@@ -563,7 +587,7 @@ public static class CollectionExtractor
             return "compressed data is corrupt (" + ex.Message + ")";
         }
 
-        return entry.Crc32 is { } expected && Crc32.Finish(crc) != expected
+        return entry.Crc32 is { } expected && crc.GetCurrentHashAsUInt32() != expected
             ? "CRC-32 does not match the zip - entry corrupt"
             : null;
     }
@@ -657,25 +681,4 @@ public static class CollectionExtractor
 
     internal static string Size(long bytes) =>
         bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):F1} GB" : $"{bytes / (double)(1L << 20):F0} MB";
-}
-
-/// <summary>CRC-32 as zip records it (IEEE 802.3, reflected), to check each extracted entry.</summary>
-internal static class Crc32
-{
-    public const uint Seed = 0xFFFFFFFF;
-
-    private static readonly uint[] Table = Enumerable.Range(0, 256).Select(n =>
-    {
-        var c = (uint)n;
-        for (var k = 0; k < 8; k++) c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
-        return c;
-    }).ToArray();
-
-    public static uint Update(uint crc, ReadOnlySpan<byte> data)
-    {
-        foreach (var b in data) crc = Table[(crc ^ b) & 0xFF] ^ (crc >> 8);
-        return crc;
-    }
-
-    public static uint Finish(uint crc) => crc ^ 0xFFFFFFFF;
 }

@@ -364,7 +364,7 @@ internal sealed class CollectionSource : IDisposable
             _file.ReadExactly(trailer);
             var crc = BitConverter.ToUInt32(trailer[..4]);
             var size = BitConverter.ToUInt32(trailer[4..]);
-            if (crc != Crc32.Finish(_counting.Crc) || size != (uint)_counting.Count)
+            if (crc != _counting.Crc || size != (uint)_counting.Count)
                 throw new InvalidDataException("the gzip trailer does not match the data - file truncated?");
         }
 
@@ -378,7 +378,8 @@ internal sealed class CollectionSource : IDisposable
     /// <summary>Counts and checksums what is read through it.</summary>
     private sealed class Counting(Stream inner) : Stream
     {
-        public uint Crc { get; private set; } = ArtefactForge.Core.Crc32.Seed;
+        private readonly System.IO.Hashing.Crc32 _crc = new();
+        public uint Crc => _crc.GetCurrentHashAsUInt32();
         public long Count { get; private set; }
 
         public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
@@ -386,7 +387,7 @@ internal sealed class CollectionSource : IDisposable
         public override int Read(Span<byte> buffer)
         {
             var n = inner.Read(buffer);
-            Crc = ArtefactForge.Core.Crc32.Update(Crc, buffer[..n]);
+            _crc.Append(buffer[..n]);
             Count += n;
             return n;
         }
