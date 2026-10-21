@@ -13,11 +13,13 @@ Processors:
   -
     Executable: eztools\RECmd\RECmd.exe
     CommandLine: -d "%root%\Windows\System32\config" --bn "%toolsDir%\eztools\RECmd\BatchExamples\Kroll_Batch.reb" --csv "%destinationDirectory%" --csvf RECmd_SYSTEM.csv %vss%
+    NoLogsArgument: --nl
     ExportFormat: csv
     ExportFile: RECmd_SYSTEM.csv
   -
     # Run keys Kroll_Batch misses (32-bit SOFTWARE Run/RunOnce). Own --csvf so Kroll's file stands.
     Executable: eztools\RECmd\RECmd.exe
     CommandLine: -d "%root%\Windows\System32\config" --bn "%scriptsDir%\RECmd\ArtefactForge_Autoruns.reb" --csv "%destinationDirectory%" --csvf RECmd_SYSTEM_Autoruns.csv %vss%
+    NoLogsArgument: --nl
     ExportFormat: csv
     ExportFile: RECmd_SYSTEM_Autoruns.csv

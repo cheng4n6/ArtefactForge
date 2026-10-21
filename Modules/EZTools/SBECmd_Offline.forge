@@ -16,4 +16,5 @@ Processors:
   -
     Executable: eztools\SBECmd.exe
     CommandLine: -d "%root%\Users\%user%" --csv "%destinationDirectory%" --dedupe
+    NoLogsArgument: --nl
     ExportFormat: csv
