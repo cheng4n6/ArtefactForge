@@ -303,6 +303,7 @@ async Task<int> Run(CommandLine options)
         var count = report.Count(status);
         if (count > 0) Console.WriteLine($"  {status,-12} {count}");
     }
+    if (report.DescribePeakMemory() is { } memory) Console.WriteLine(memory);
     Console.WriteLine($"\nOutput   : {report.CaseDirectory}");
     Console.WriteLine($"Manifest : {Path.Combine(report.LogDirectory, "manifest.csv")}");
     foreach (var extraction in report.Extractions.Where(x => !x.CleanedUp && x.Error is null))

@@ -1425,6 +1425,7 @@ public partial class MainWindow : Window
             ShowResults();
             if (report.EvidenceList is { } evidenceList) _evidenceList = (report.CaseDirectory, evidenceList);
             Append($"Finished in {report.DurationSeconds:F1}s. {report.NeedsReview} item(s) need review.");
+            if (report.DescribePeakMemory() is { } memory) Append(memory);
             if (report.EvidenceList is { } list) Append(list.Describe());
             if (CaseReportLine(report.CaseDirectory) is { } reportLine) Append(reportLine);
         }

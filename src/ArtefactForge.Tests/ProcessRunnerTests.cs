@@ -61,4 +61,29 @@ public class ProcessRunnerTests
         Assert.True(outcome.WroteToStderr);
         Assert.Equal(5, File.ReadAllLines(stdout).Length);
     }
+
+    [Fact]
+    public async Task A_tool_runs_peak_memory_is_recorded_on_windows()
+    {
+        using var dir = new TempDirectory();
+        var (exe, args) = Chatty(5);
+
+        var outcome = await ProcessRunner.RunAsync(exe, args, Path.Combine(dir.Path, "tool.log"),
+            Path.Combine(dir.Path, "tool.err.log"), 60, CancellationToken.None);
+
+        if (OperatingSystem.IsWindows()) Assert.True(outcome.PeakMemoryBytes > 0);
+        else Assert.Null(outcome.PeakMemoryBytes);
+    }
+
+    [Fact]
+    public async Task A_tool_that_cannot_start_has_no_peak_memory()
+    {
+        using var dir = new TempDirectory();
+
+        var outcome = await ProcessRunner.RunAsync(Path.Combine(dir.Path, "missing.exe"), "",
+            Path.Combine(dir.Path, "tool.log"), Path.Combine(dir.Path, "tool.err.log"), 60, CancellationToken.None);
+
+        Assert.NotNull(outcome.Error);
+        Assert.Null(outcome.PeakMemoryBytes);
+    }
 }

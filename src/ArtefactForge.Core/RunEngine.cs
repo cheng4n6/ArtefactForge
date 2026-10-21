@@ -25,6 +25,22 @@ public sealed class RunReport
     public int NeedsReview => Count(WorkStatus.Failed) + Count(WorkStatus.NoOutput)
                             + Count(WorkStatus.CheckLog) + Count(WorkStatus.ToolMissing)
                             + Count(WorkStatus.TimedOut);
+
+    /// <summary>
+    /// The tools that used the most memory, for the end of the run: "Most memory: Hayabusa on
+    /// HOST01 3.2 GB, ...". Null when no peak was recorded (builtins only, or not Windows).
+    /// </summary>
+    public string? DescribePeakMemory(int top = 3)
+    {
+        var heaviest = Results
+            .SelectMany(r => r.Processors.Where(p => p.PeakMemoryBytes > 0)
+                                         .Select(p => (Result: r, Peak: p.PeakMemoryBytes!.Value)))
+            .OrderByDescending(x => x.Peak)
+            .Take(top)
+            .Select(x => $"{x.Result.Module} on {x.Result.Collection} {x.Peak / (double)(1L << 30):F1} GB")
+            .ToList();
+        return heaviest.Count == 0 ? null : "Most memory: " + string.Join(", ", heaviest) + " (all in manifest.csv)";
+    }
 }
 
 public sealed class RunEngine
@@ -544,6 +560,7 @@ public sealed class RunEngine
                 WroteToStderr = outcome.WroteToStderr,
                 StderrExpected = outcome.WroteToStderr && OnlyExpectedStderr(stderr, processor.ExpectedStderr),
                 DurationSeconds = outcome.DurationSeconds,
+                PeakMemoryBytes = outcome.PeakMemoryBytes,
                 StdoutLog = stdout,
                 StderrLog = stderr,
                 OutputFilesCreated = harvested.Files.Count,
@@ -755,7 +772,7 @@ public sealed class RunEngine
         File.WriteAllText(Path.Combine(logDir, "manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions));
 
         var csv = new StringBuilder();
-        csv.AppendLine("Collection,Category,Module,Iteration,Status,Reason,DurationSec,Phase,Executable,ToolVersion,ToolSha256,ExitCode,Stderr,OutputFiles,OutputBytes,CommandLine,Destination");
+        csv.AppendLine("Collection,Category,Module,Iteration,Status,Reason,DurationSec,Phase,Executable,ToolVersion,ToolSha256,ExitCode,Stderr,OutputFiles,OutputBytes,CommandLine,Destination,PeakMemoryMB");
         foreach (var r in ordered)
         {
             if (r.Processors.Count == 0)
@@ -820,7 +837,8 @@ public sealed class RunEngine
             r.DurationSeconds.ToString("F1"), p?.Phase ?? "", p?.Executable ?? "", p?.ToolVersion ?? "", p?.ToolSha256 ?? "",
             p?.ExitCode.ToString() ?? "", p is null ? "" : p.StderrExpected ? "expected" : p.WroteToStderr.ToString(),
             p?.OutputFilesCreated.ToString() ?? "", p?.OutputBytes.ToString() ?? "",
-            p?.Arguments ?? "", r.Destination
+            p?.Arguments ?? "", r.Destination,
+            p?.PeakMemoryBytes is { } peak ? Math.Ceiling(peak / (1024.0 * 1024)).ToString("F0") : ""
         };
         return string.Join(",", fields.Select(Escape));
     }
