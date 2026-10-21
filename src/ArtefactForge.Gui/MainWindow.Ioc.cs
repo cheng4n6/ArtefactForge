@@ -34,9 +34,12 @@ public partial class MainWindow
         IocTypeBox.SelectedIndex = 0;
     }
 
-    private void RefreshIocs(string? result = null)
+    private int _iocVersion;
+
+    private async void RefreshIocs(string? result = null)
     {
         var caseDir = AnalysisCaseDirectory();
+        var version = ++_iocVersion;
         if (caseDir is null)
         {
             IocGrid.ItemsSource = null;
@@ -47,16 +50,25 @@ public partial class MainWindow
 
         try
         {
-            var counts = IocSweep.Summarise(caseDir);
-            IocGrid.ItemsSource = IocList.Load(caseDir).Select(e =>
+            // Read off the window's thread: a case with many hits has a large IocHits.csv.
+            var (rows, last) = await Task.Run(() =>
             {
-                var count = counts.GetValueOrDefault(e.Key);
-                return new IocRow { Entry = e, HitCount = count?.Hits ?? 0, HostCount = count?.Hosts ?? 0 };
-            }).ToList();
-            IocResult.Text = result ?? IocSweep.LastResult(caseDir) ?? "No sweep has run on this case yet.";
+                var counts = IocSweep.Summarise(caseDir);
+                var list = IocList.Load(caseDir).Select(e =>
+                {
+                    var count = counts.GetValueOrDefault(e.Key);
+                    return new IocRow { Entry = e, HitCount = count?.Hits ?? 0, HostCount = count?.Hosts ?? 0 };
+                }).ToList();
+                return (list, result ?? IocSweep.LastResult(caseDir));
+            });
+            // A slower refresh for an earlier case must not overwrite a newer one.
+            if (version != _iocVersion) return;
+            IocGrid.ItemsSource = rows;
+            IocResult.Text = last ?? "No sweep has run on this case yet.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
+            if (version != _iocVersion) return;
             IocGrid.ItemsSource = null;
             IocResult.Text = ex.Message;
         }

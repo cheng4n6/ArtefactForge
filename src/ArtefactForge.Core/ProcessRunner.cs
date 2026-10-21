@@ -91,6 +91,7 @@ public static class ProcessRunner
             try
             {
                 process.Start();
+                LowerPriority(process);
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
             }
@@ -119,6 +120,21 @@ public static class ProcessRunner
             // Flush the tail of the async output readers before the writers are disposed.
             process.WaitForExit();
             return new ProcessOutcome(process.ExitCode, stderrBytes > 0, stopwatch.Elapsed.TotalSeconds, false, null);
+        }
+    }
+
+    /// <summary>
+    /// Tools run below normal priority, which processes they start inherit. A batch keeps every core
+    /// busy for hours; at normal priority it left the app and the rest of the PC slow to respond.
+    /// An idle PC gives the tools the same time either way.
+    /// </summary>
+    private static void LowerPriority(Process process)
+    {
+        try { process.PriorityClass = ProcessPriorityClass.BelowNormal; }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception
+                                       or PlatformNotSupportedException)
+        {
+            // Already exited, or not allowed: the tool runs at normal priority, as it always did.
         }
     }
 }

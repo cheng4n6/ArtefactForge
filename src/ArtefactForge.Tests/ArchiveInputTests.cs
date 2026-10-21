@@ -208,6 +208,51 @@ public class ArchiveInputTests
     }
 
     [Fact]
+    public async Task The_recorded_hash_is_the_sha256_of_the_whole_zip()
+    {
+        // The hash is read beside the extraction now, not before it; it must be the same value.
+        using var dir = new TempDirectory();
+        var zip = CylrZip(Path.Combine(dir.Path, "HOST01.zip"), ("C/Users/alice/NTUSER.DAT", new string('x', 3 << 20)));
+
+        var record = await CollectionExtractor.ExtractAsync(
+            zip, Path.Combine(dir.Path, "out", "HOST01"), null, null, CancellationToken.None);
+
+        Assert.Null(record.Error);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(zip))),
+                     record.ArchiveSha256);
+    }
+
+    [Fact]
+    public async Task A_zip_refused_before_extracting_still_has_its_hash_recorded()
+    {
+        using var dir = new TempDirectory();
+        var zip = CylrZip(Path.Combine(dir.Path, "HOST01.zip"));
+        dir.File(@"out\HOST01\case-notes.txt");
+
+        var record = await CollectionExtractor.ExtractAsync(
+            zip, Path.Combine(dir.Path, "out", "HOST01"), null, null, CancellationToken.None);
+
+        Assert.NotNull(record.Error);
+        Assert.Equal(64, record.ArchiveSha256!.Length);
+    }
+
+    [Fact]
+    public async Task A_zip_replaced_since_its_extraction_is_extracted_again()
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "HOST01.zip");
+        var to = Path.Combine(dir.Path, "out", "HOST01");
+        await CollectionExtractor.ExtractAsync(CylrZip(path), to, null, null, CancellationToken.None);
+
+        File.Delete(path);
+        CylrZip(path, ("C/Windows/new.txt", "added since"));
+        var second = await CollectionExtractor.ExtractAsync(path, to, null, null, CancellationToken.None);
+
+        Assert.False(second.Reused);
+        Assert.Equal("added since", File.ReadAllText(Path.Combine(to, "C", "Windows", "new.txt")));
+    }
+
+    [Fact]
     public async Task A_partial_extraction_is_discarded_and_redone()
     {
         using var dir = new TempDirectory();

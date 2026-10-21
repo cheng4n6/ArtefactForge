@@ -241,19 +241,24 @@ public static class IocSweep
             if (!matcher.IsEmpty)
             {
                 var modules = ModuleMap(caseDirectory);
-                var work = new List<(string Host, string File)>();
+                var work = new List<(string Host, string File, long Size)>();
                 foreach (var host in hosts)
                 {
                     try
                     {
-                        work.AddRange(Directory.EnumerateFiles(Path.Combine(caseDirectory, host), "*.csv", SearchOption.AllDirectories)
-                                               .Select(f => (host, f)));
+                        work.AddRange(new DirectoryInfo(Path.Combine(caseDirectory, host))
+                                          .EnumerateFiles("*.csv", SearchOption.AllDirectories)
+                                          .Select(f => (host, f.FullName, f.Length)));
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
                         problems.Add($"{host}: could not list its output: {ex.Message}");
                     }
                 }
+
+                // Largest first: a multi-GB MFT or event log CSV met last would be swept alone at
+                // the end while the other workers sat idle.
+                work.Sort((a, b) => b.Size.CompareTo(a.Size));
 
                 var done = 0;
                 // A few files at once: the disk, not the CPU, sets the pace of a plain scan.
@@ -266,11 +271,10 @@ public static class IocSweep
                 {
                     try
                     {
-                        var size = new FileInfo(item.File).Length;
                         foreach (var hit in ScanFile(caseDirectory, item.Host, item.File, matcher, modules, cancellationToken))
                             hits.Add(hit);
                         Interlocked.Increment(ref files);
-                        Interlocked.Add(ref bytes, size);
+                        Interlocked.Add(ref bytes, item.Size);
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
