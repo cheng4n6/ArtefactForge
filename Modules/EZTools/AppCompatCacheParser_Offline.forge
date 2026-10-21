@@ -12,4 +12,5 @@ Processors:
   -
     Executable: eztools\AppCompatCacheParser.exe
     CommandLine: -f "%root%\Windows\System32\config\SYSTEM" --csv "%destinationDirectory%"
+    NoLogsArgument: --nl
     ExportFormat: csv

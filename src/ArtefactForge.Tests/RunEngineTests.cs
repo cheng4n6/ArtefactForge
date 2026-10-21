@@ -193,6 +193,90 @@ public class RunEngineTests
         Assert.Equal("HalfDone_out.csv", Path.GetFileName(Assert.Single(kept)));
     }
 
+    /// <summary>
+    /// Stands in for an EZ Tools hive reader given a dirty hive whose logs were not collected:
+    /// without --nl it leaves a header-only CSV, prints the library's message and exits 0, as
+    /// SBECmd does; with --nl it parses the hive.
+    /// </summary>
+    private static ModuleDefinition DirtyHiveModule(TempDirectory dir, string? noLogsArgument)
+    {
+        File.WriteAllText(Path.Combine(dir.Path, "hivetool.cmd"),
+            "@echo off\r\n"
+            + "if \"%~2\"==\"--nl\" (\r\n"
+            + "  echo Name,Value> \"%~1\\hive.csv\"\r\n"
+            + "  echo Run,evil.exe>> \"%~1\\hive.csv\"\r\n"
+            + "  exit /b 0\r\n"
+            + ")\r\n"
+            + "echo Name,Value> \"%~1\\hive.csv\"\r\n"
+            + "echo Registry hive is dirty and no transaction logs were found in the same directory! "
+            + "LOGs should have same base name as the hive. Aborting!!\r\n");
+        return new ModuleDefinition
+        {
+            Description = "Hive",
+            Category = "Test",
+            SourcePath = @"C:\modules\Hive.forge",
+            Processors =
+            [
+                new ProcessorDefinition
+                {
+                    Executable = "hivetool.cmd",
+                    CommandLine = "\"%destinationDirectory%\"",
+                    NoLogsArgument = noLogsArgument
+                }
+            ]
+        };
+    }
+
+    [Fact]
+    public async Task A_dirty_hive_without_its_logs_is_read_again_without_them_and_flagged_for_review()
+    {
+        using var dir = new TempDirectory();
+        var report = await new RunEngine().RunAsync(Config(dir, [DirtyHiveModule(dir, "--nl")]));
+
+        var result = Assert.Single(report.Results);
+        Assert.Equal(WorkStatus.CheckLog, result.Status);
+        Assert.Contains("read again with --nl", result.Reason);
+        Assert.Contains("recent entries may be missing", result.Reason);
+        Assert.EndsWith(" --nl", Assert.Single(result.Processors).Arguments);
+
+        // Only the second attempt's output is delivered, and the first attempt's log is kept.
+        var delivered = Assert.Single(Directory.GetFiles(Path.Combine(report.CaseDirectory, "TESTCOL", "Test")));
+        Assert.Contains("evil.exe", File.ReadAllText(delivered));
+        Assert.Contains("hive is dirty", File.ReadAllText(
+            Path.Combine(report.LogDirectory, "Console", "TESTCOL_Hive_first.log")));
+    }
+
+    [Fact]
+    public async Task A_dirty_hive_skipped_by_a_tool_with_no_retry_is_flagged_not_passed()
+    {
+        // The header-only CSV the tool leaves behind used to make this pass as Completed.
+        using var dir = new TempDirectory();
+        var report = await new RunEngine().RunAsync(Config(dir, [DirtyHiveModule(dir, null)]));
+
+        var result = Assert.Single(report.Results);
+        Assert.Equal(WorkStatus.CheckLog, result.Status);
+        Assert.Contains("the tool skipped it", result.Reason);
+        Assert.DoesNotContain("--nl", Assert.Single(result.Processors).Arguments);
+    }
+
+    [Fact]
+    public void NoLogsArgument_is_read_from_a_module()
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "Hive.forge");
+        File.WriteAllText(path, """
+            Description: Hive
+            Category: Test
+            Processors:
+              -
+                Executable: eztools\RECmd\RECmd.exe
+                CommandLine: -f "%root%\x"
+                NoLogsArgument: --nl
+            """);
+
+        Assert.Equal("--nl", Assert.Single(ModuleLoader.LoadFile(path).Processors).NoLogsArgument);
+    }
+
     [Fact]
     public async Task Cancellation_kills_running_tools()
     {

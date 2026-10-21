@@ -407,6 +407,8 @@ public sealed class RunEngine
         var delivered = 0;
         var emptyFiles = 0;
         var notMoved = new List<string>();
+        // Set when a tool's log said it skipped a dirty hive with no logs; the reason for the review flag.
+        string? dirtyHiveNote = null;
 
         var baseStem = Sanitise(item.Target.CollectionName + "_" + item.Module.Name
                                 + (item.IterationKey is null ? "" : "_" + item.IterationKey));
@@ -494,9 +496,43 @@ public sealed class RunEngine
             var stdout = Path.Combine(consoleDir, stem + ".log");
             var stderr = Path.Combine(consoleDir, stem + ".err.log");
 
-            var outcome = Builtins.IsBuiltin(tool.FullPath)
-                ? await Builtins.RunAsync(tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken)
-                : await ProcessRunner.RunAsync(
+            var outcome = await RunToolAsync();
+
+            // A dirty hive whose .LOG1/.LOG2 were not collected: the EZ Tools hive readers skip it,
+            // say so on stdout and exit 0, sometimes leaving header-only CSVs that would pass for a
+            // clean run. Read it again without the logs where the tool can, keeping the first
+            // attempt's log beside the second; either way the module goes for review.
+            if (outcome is { ExitCode: 0, TimedOut: false, LogError: null }
+                && !cancellationToken.IsCancellationRequested
+                && ReportsDirtyHiveWithoutLogs(stdout))
+            {
+                if (processor.NoLogsArgument is { } noLogs)
+                {
+                    var firstStdout = Path.Combine(consoleDir, stem + "_first.log");
+                    File.Move(stdout, firstStdout, overwrite: true);
+                    File.Move(stderr, Path.Combine(consoleDir, stem + "_first.err.log"), overwrite: true);
+                    if (staging is not null)
+                    {
+                        TryDeleteDirectory(staging);
+                        Directory.CreateDirectory(staging);
+                    }
+                    arguments += " " + noLogs;
+                    outcome = await RunToolAsync();
+                    dirtyHiveNote ??= "a registry hive was dirty and its transaction logs (.LOG1/.LOG2) were "
+                                    + $"not collected, so it was read again with {noLogs}, as last written to "
+                                    + "disk - recent entries may be missing; see " + Path.GetFileName(firstStdout);
+                }
+                else
+                {
+                    dirtyHiveNote ??= "a registry hive was dirty and its transaction logs (.LOG1/.LOG2) were "
+                                    + "not collected, so the tool skipped it and its entries are missing; see "
+                                    + Path.GetFileName(stdout);
+                }
+            }
+
+            Task<ProcessOutcome> RunToolAsync() => Builtins.IsBuiltin(tool.FullPath)
+                ? Builtins.RunAsync(tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken)
+                : ProcessRunner.RunAsync(
                     tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken, workingDirectory);
 
             // A process killed part-way - timed out or cancelled - may have left files half written.
@@ -605,6 +641,15 @@ public sealed class RunEngine
                 result.Reason = emptyFiles > 0
                     ? $"exit 0 but every output file was empty (0 bytes, {emptyFiles} file(s)) - the tool likely could not read its input; check the log"
                     : "exit 0 but no output files were produced - artefact may be empty, or check the log";
+                if (dirtyHiveNote is not null) result.Reason += "; " + dirtyHiveNote;
+            }
+            else if (dirtyHiveNote is not null)
+            {
+                result.Status = WorkStatus.CheckLog;
+                result.Reason = dirtyHiveNote
+                                + (result.Processors.Any(p => p.WroteToStderr && !p.StderrExpected)
+                                    ? "; the tool also wrote to stderr - review the .err.log"
+                                    : "");
             }
             else if (result.Processors.Any(p => p.WroteToStderr && !p.StderrExpected))
             {
@@ -807,6 +852,24 @@ public sealed class RunEngine
             return false;
         }
         catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// True when the stdout log holds the line the EZ Tools registry library prints when it skips
+    /// a dirty hive because its transaction logs are not beside it. A log that cannot be read is
+    /// false: the usual checks on output and stderr still apply.
+    /// </summary>
+    public static bool ReportsDirtyHiveWithoutLogs(string stdoutLog)
+    {
+        try
+        {
+            return File.ReadLines(stdoutLog).Any(line =>
+                line.Contains("hive is dirty and no transaction logs were found", StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
         }

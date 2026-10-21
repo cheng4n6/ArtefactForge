@@ -20,11 +20,13 @@ Processors:
   -
     Executable: eztools\RECmd\RECmd.exe
     CommandLine: -f "%root%\Users\%user%\NTUSER.DAT" --bn "%toolsDir%\eztools\RECmd\BatchExamples\Kroll_Batch.reb" --csv "%destinationDirectory%" --csvf "%user%_RECmd_NTUSER.csv"
+    NoLogsArgument: --nl
     ExportFormat: csv
     ExportFile: "%user%_RECmd_NTUSER.csv"
   -
     # Run keys Kroll_Batch misses (per-user Policies\Explorer\Run). Own --csvf so Kroll's file stands.
     Executable: eztools\RECmd\RECmd.exe
     CommandLine: -f "%root%\Users\%user%\NTUSER.DAT" --bn "%scriptsDir%\RECmd\ArtefactForge_Autoruns.reb" --csv "%destinationDirectory%" --csvf "%user%_RECmd_NTUSER_Autoruns.csv"
+    NoLogsArgument: --nl
     ExportFormat: csv
     ExportFile: "%user%_RECmd_NTUSER_Autoruns.csv"
