@@ -111,6 +111,12 @@ public sealed class ProcessorRecord
     /// <summary>True when everything on stderr matched the processor's ExpectedStderr patterns.</summary>
     public bool StderrExpected { get; init; }
     public double DurationSeconds { get; init; }
+    /// <summary>
+    /// The tool process's peak working set, on Windows; null for builtins and elsewhere. Measured
+    /// on the PC that ran it: tools such as Hayabusa start more threads, and use more memory, on a
+    /// PC with more cores.
+    /// </summary>
+    public long? PeakMemoryBytes { get; init; }
     public string? StdoutLog { get; init; }
     public string? StderrLog { get; init; }
     public int OutputFilesCreated { get; init; }

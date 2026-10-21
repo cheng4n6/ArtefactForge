@@ -324,6 +324,9 @@ public class RunEngineTests
         Assert.NotNull(processor.ToolSha256);
         Assert.Equal(64, processor.ToolSha256.Length);
         Assert.Contains("echo hello", processor.Arguments);
+        Assert.True(processor.PeakMemoryBytes > 0);
+        Assert.EndsWith(",PeakMemoryMB", File.ReadLines(manifest).First());
+        Assert.StartsWith("Most memory: Writer on ", report.DescribePeakMemory());
     }
 
     [Fact]

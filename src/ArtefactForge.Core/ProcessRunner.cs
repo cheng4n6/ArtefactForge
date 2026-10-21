@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace ArtefactForge.Core;
 
@@ -6,9 +7,14 @@ namespace ArtefactForge.Core;
 /// Set when the tool's console log could not be written (a full disk, typically). The run went on,
 /// but the log is incomplete, so stderr can no longer be judged and the module must not pass.
 /// </param>
+/// <param name="PeakMemoryBytes">
+/// The most memory the tool's process held at once (peak working set), on Windows. Processes it
+/// starts are not counted. Null where it could not be read, and for builtins, which run inside
+/// ArtefactForge itself.
+/// </param>
 public sealed record ProcessOutcome(
     int ExitCode, bool WroteToStderr, double DurationSeconds, bool TimedOut, string? Error,
-    string? LogError = null);
+    string? LogError = null, long? PeakMemoryBytes = null);
 
 public static class ProcessRunner
 {
@@ -84,7 +90,7 @@ public static class ProcessRunner
                 }
             }
         }
-        return outcome with { LogError = Volatile.Read(ref logError) };
+        return outcome with { LogError = Volatile.Read(ref logError), PeakMemoryBytes = PeakMemory(process) };
 
         async Task<ProcessOutcome> RunStartedAsync()
         {
@@ -122,6 +128,46 @@ public static class ProcessRunner
             return new ProcessOutcome(process.ExitCode, stderrBytes > 0, stopwatch.Elapsed.TotalSeconds, false, null);
         }
     }
+
+    /// <summary>
+    /// Read once the tool has finished, from its process handle, which Windows keeps until the
+    /// handle is closed. One call per tool: nothing is sampled while it runs.
+    /// </summary>
+    private static long? PeakMemory(Process process)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        try
+        {
+            var counters = new MemoryCounters { Size = (uint)Marshal.SizeOf<MemoryCounters>() };
+            return GetProcessMemoryInfo(process.SafeHandle, ref counters, counters.Size)
+                ? (long)counters.PeakWorkingSetSize
+                : null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return null;   // never started
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MemoryCounters
+    {
+        public uint Size;
+        public uint PageFaultCount;
+        public nuint PeakWorkingSetSize;
+        public nuint WorkingSetSize;
+        public nuint QuotaPeakPagedPoolUsage;
+        public nuint QuotaPagedPoolUsage;
+        public nuint QuotaPeakNonPagedPoolUsage;
+        public nuint QuotaNonPagedPoolUsage;
+        public nuint PagefileUsage;
+        public nuint PeakPagefileUsage;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "K32GetProcessMemoryInfo", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessMemoryInfo(
+        Microsoft.Win32.SafeHandles.SafeProcessHandle process, ref MemoryCounters counters, uint size);
 
     /// <summary>
     /// Tools run below normal priority, which processes they start inherit. A batch keeps every core
