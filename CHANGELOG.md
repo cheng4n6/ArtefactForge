@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The release notes shown by Check for updates fill the width of the panel. Each line broke
+  partway across it, because the notes kept the line breaks the changelog is written with.
+
 ## 0.2.0 - 2026-10-20
 
 - The tools you use on a case after it is processed are grouped on one **Analysis**
