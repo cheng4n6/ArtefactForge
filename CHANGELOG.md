@@ -2,8 +2,14 @@
 
 ## Unreleased
 
-- The release notes shown by Check for updates fill the width of the panel. Each line broke
-  partway across it, because the notes kept the line breaks the changelog is written with.
+## 0.2.1 - 2026-10-21
+
+### Bug fixes
+
+* **Registry:** a dirty hive collected without its .LOG1/.LOG2 files is read as last written to
+  disk instead of being skipped in silence, and the module is flagged for review, as recent
+  entries may be missing. Re-run Amcache, ShimCache, ShellBags and RECmd on affected collections.
+* **Updates:** the release notes shown by Check for updates fill the width of the panel.
 
 ## 0.2.0 - 2026-10-20
 
