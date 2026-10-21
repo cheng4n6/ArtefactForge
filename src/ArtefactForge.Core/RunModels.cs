@@ -18,10 +18,10 @@ public sealed class RunConfiguration
     /// <summary>Concurrent IoWeight=heavy modules. Disk, not CPU, is the real ceiling.</summary>
     public int MaxHeavyWorkers { get; init; } = 2;
     /// <summary>
-    /// Concurrent MemoryWeight=heavy modules. Null works it out from the memory free when the run
-    /// starts (<see cref="MemorySlots"/>); set it to pin the number.
+    /// Memory the memory-heavy modules may share. Null takes the memory free when the run starts
+    /// (<see cref="MemoryBudget"/>); set it to pin the budget.
     /// </summary>
-    public int? MaxMemoryHeavyWorkers { get; init; }
+    public long? MemoryBudgetBytes { get; init; }
     public bool Vss { get; init; }
     /// <summary>Skip work already recorded complete, so a failed batch resumes where it stopped.</summary>
     public bool SkipCompleted { get; init; } = true;

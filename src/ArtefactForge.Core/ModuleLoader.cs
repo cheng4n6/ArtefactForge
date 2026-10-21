@@ -61,6 +61,7 @@ public static class ModuleLoader
             Elevation    = Yaml.ParseEnum(dto.Elevation, ElevationRequirement.None,   "Elevation"),
             Scope        = Yaml.ParseEnum(dto.Scope,     TargetScope.Any,             "Scope"),
             Priority     = dto.Priority ?? 50,
+            MemoryEstimateMB = dto.MemoryEstimateMB,
             SupportsVss  = dto.SupportsVss ?? false,
             DefaultEnabled = dto.DefaultEnabled ?? true,
             OutputName   = string.IsNullOrWhiteSpace(dto.OutputName) ? null : dto.OutputName.Trim(),
@@ -173,6 +174,7 @@ public static class ModuleLoader
         public int? Priority { get; set; }
         public string? IoWeight { get; set; }
         public string? MemoryWeight { get; set; }
+        public int? MemoryEstimateMB { get; set; }
         public string? Elevation { get; set; }
         public string? Scope { get; set; }
         public bool? SupportsVss { get; set; }

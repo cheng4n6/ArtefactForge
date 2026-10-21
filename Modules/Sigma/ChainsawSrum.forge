@@ -28,6 +28,7 @@ Platform: windows
 Priority: 61
 IoWeight: heavy
 MemoryWeight: heavy
+MemoryEstimateMB: 5500
 Timeout: 3600
 Processors:
   -

@@ -103,10 +103,12 @@ public sealed class ModuleDefinition
     public int Priority { get; init; } = 50;
     public IoWeight IoWeight { get; init; } = IoWeight.Light;
     /// <summary>
-    /// Heavy: the tool can take several GB (Chainsaw and Hayabusa over a full Logs folder), so only
-    /// one memory-heavy module runs at a time across the whole run.
+    /// Heavy: the tool can take GBs, so memory-heavy modules share the memory free when the run
+    /// starts (<see cref="MemoryBudget"/>) instead of running whenever a worker is free.
     /// </summary>
     public MemoryWeight MemoryWeight { get; init; } = MemoryWeight.Light;
+    /// <summary>A memory-heavy module's expected peak, from measurements; null uses the default.</summary>
+    public int? MemoryEstimateMB { get; init; }
     public ElevationRequirement Elevation { get; init; } = ElevationRequirement.None;
     public TargetScope Scope { get; init; } = TargetScope.Any;
     public bool SupportsVss { get; init; }

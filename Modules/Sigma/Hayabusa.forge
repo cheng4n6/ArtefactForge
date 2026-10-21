@@ -25,6 +25,7 @@ Elevation: live              # locked or admin-only on a live system; collection
 Priority: 25
 IoWeight: heavy
 MemoryWeight: heavy
+MemoryEstimateMB: 600          # 0.5 GB over 269 logs (419 MB), 2026-10-21
 Timeout: 7200
 
 Options:
