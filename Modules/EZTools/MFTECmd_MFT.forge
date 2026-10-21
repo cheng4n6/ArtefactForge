@@ -9,6 +9,8 @@ Platform: windows
 Elevation: live              # locked or admin-only on a live system; collections read fine
 Priority: 10
 IoWeight: heavy
+# Memory-heavy: about twice the $MFT in memory (2.4 GB for a 1.2 GB $MFT, 2026-10-21).
+MemoryWeight: heavy
 SupportsVss: true
 Processors:
   -

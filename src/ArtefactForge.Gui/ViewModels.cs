@@ -80,7 +80,7 @@ public sealed class ModuleItem : Observable
         Definition.IoWeight == IoWeight.Heavy || Definition.MemoryWeight == MemoryWeight.Heavy;
 
     public string HeavyTooltip => Definition.MemoryWeight == MemoryWeight.Heavy
-        ? "Heavy: can use several GB of memory, so only one runs at a time"
+        ? "Heavy: can use several GB of memory, so these share a slot for each 6 GB free when the run starts (one on most workstations)"
         : "Heavy: disk-bound, so only as many run at once as Heavy IO allows";
 
     /// <summary>Opt-in modules are left out of Default and All; the row says so.</summary>

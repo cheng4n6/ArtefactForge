@@ -18,6 +18,9 @@ public sealed class RunReport
     public EvidenceListResult? EvidenceList { get; set; }
     /// <summary>One per zip unpacked during the run.</summary>
     public List<ExtractionRecord> Extractions { get; } = [];
+    /// <summary>How many memory-heavy modules could run at once, and the free memory that decided it.</summary>
+    public int MemoryHeavyWorkers { get; set; } = 1;
+    public long? FreeMemoryBytesAtStart { get; set; }
 
     public int Count(WorkStatus status) => Results.Count(r => r.Status == status);
 
@@ -75,9 +78,13 @@ public sealed class RunEngine
         var results = new ConcurrentBag<WorkResult>();
         using var workers = new SemaphoreSlim(Math.Max(1, config.MaxWorkers));
         using var heavy = new SemaphoreSlim(Math.Max(1, config.MaxHeavyWorkers));
-        // One memory-heavy tool at a time across the whole run, zips included: three Chainsaw runs
-        // at once took about 18 GB and brought down a 16 GB workstation.
-        using var memoryHeavy = new SemaphoreSlim(1);
+        // Memory-heavy tools share a few slots across the whole run, zips included: three of them at
+        // once took about 18 GB and brought down a 16 GB workstation. How many is set by the memory
+        // free now, so a workstation keeps to one and a large server runs several.
+        report.FreeMemoryBytesAtStart = MemorySlots.Available();
+        report.MemoryHeavyWorkers = Math.Max(1, config.MaxMemoryHeavyWorkers
+                                                ?? MemorySlots.For(report.FreeMemoryBytesAtStart));
+        using var memoryHeavy = new SemaphoreSlim(report.MemoryHeavyWorkers);
 
         // What the manifest lists as processed: zips appear once extracted, under their real root.
         var collections = config.Targets.Where(t => !t.IsArchive)
@@ -180,7 +187,7 @@ public sealed class RunEngine
                 // everything else they would all run at the end, one after another. This way the
                 // first starts at once and the rest follow back to back while the pool works
                 // through the other modules beside them, at the cost of one process more than
-                // Workers and Heavy IO allow.
+                // Workers and Heavy IO allow, for each memory slot.
                 var isMemoryHeavy = item.Module.MemoryWeight == MemoryWeight.Heavy;
                 var isHeavy = !isMemoryHeavy && item.Module.IoWeight == IoWeight.Heavy;
                 if (isMemoryHeavy) await memoryHeavy.WaitAsync(cancellationToken);
@@ -763,6 +770,8 @@ public sealed class RunEngine
             DurationSeconds = report.DurationSeconds,
             config.MaxWorkers,
             config.MaxHeavyWorkers,
+            report.MemoryHeavyWorkers,
+            report.FreeMemoryBytesAtStart,
             Vss = config.Vss,
             Cancelled = report.Cancelled,
             Collections = collections,

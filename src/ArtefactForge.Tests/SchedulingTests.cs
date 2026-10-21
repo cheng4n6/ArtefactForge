@@ -4,7 +4,8 @@ using Xunit;
 namespace ArtefactForge.Tests;
 
 /// <summary>
-/// Memory-heavy modules (Chainsaw, Hayabusa) run one at a time, but start straight away and run
+/// Memory-heavy modules (Chainsaw, Hayabusa) share a slot for each 6 GB free, one on most
+/// workstations, but start straight away and run
 /// beside the rest of the pool rather than queueing behind it. Timed with real processes, so the
 /// tool is a short sleep and the assertions allow generous slack.
 /// </summary>
@@ -53,7 +54,8 @@ public class SchedulingTests
         ],
         Modules = modules,
         MaxWorkers = 1,
-        MaxHeavyWorkers = 1
+        MaxHeavyWorkers = 1,
+        MaxMemoryHeavyWorkers = 1
     };
 
     private static (DateTimeOffset Start, DateTimeOffset End) Span(RunReport report, string module)
@@ -92,15 +94,61 @@ public class SchedulingTests
     }
 
     [Fact]
-    public void The_Chainsaw_and_Hayabusa_modules_are_memory_heavy()
+    public async Task Two_memory_slots_let_two_memory_heavy_modules_run_together()
+    {
+        using var dir = new TempDirectory();
+        var config = Config(dir,
+        [
+            Module(dir, "HeavyA", 3, priority: 90, memoryHeavy: true),
+            Module(dir, "HeavyB", 3, priority: 91, memoryHeavy: true)
+        ]);
+        var report = await new RunEngine().RunAsync(new RunConfiguration
+        {
+            CaseName = config.CaseName, OutputRoot = config.OutputRoot, ToolRoots = config.ToolRoots,
+            Targets = config.Targets, Modules = config.Modules, MaxWorkers = 1, MaxHeavyWorkers = 1,
+            MaxMemoryHeavyWorkers = 2
+        });
+
+        var heavyA = Span(report, "HeavyA");
+        var heavyB = Span(report, "HeavyB");
+        Assert.Equal(2, report.MemoryHeavyWorkers);
+        Assert.True(heavyB.Start < heavyA.End && heavyA.Start < heavyB.End,
+            $"HeavyA {heavyA} and HeavyB {heavyB} ran one after the other");
+    }
+
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData(3_400_000_000L, 1)]
+    [InlineData(13_000_000_000L, 2)]
+    [InlineData(30_000_000_000L, 4)]
+    [InlineData(1_000_000_000_000L, MemorySlots.Max)]
+    public void Memory_slots_follow_the_free_memory_one_for_every_6_GB(long? free, int slots) =>
+        Assert.Equal(slots, MemorySlots.For(free));
+
+    [Fact]
+    public void Free_memory_is_read_on_this_machine() =>
+        Assert.True(MemorySlots.Available() > 0);
+
+    [Theory]
+    [InlineData("Sigma", "Chainsaw")]
+    [InlineData("Sigma", "ChainsawSrum")]
+    [InlineData("Sigma", "Hayabusa")]
+    [InlineData("EZTools", "MFTECmd_MFT")]
+    public void The_modules_measured_at_gigabytes_are_memory_heavy(string folder, string name) =>
+        Assert.Equal(MemoryWeight.Heavy, Load(folder, name).MemoryWeight);
+
+    [Fact]
+    public void ChainsawGaps_is_not_memory_heavy_it_peaked_at_30_MB() =>
+        Assert.Equal(MemoryWeight.Light, Load("Sigma", "ChainsawGaps").MemoryWeight);
+
+    private static ModuleDefinition Load(string folder, string name)
     {
         var root = AppContext.BaseDirectory;
         while (root is not null && !Directory.Exists(Path.Combine(root, "Modules"))) root = Path.GetDirectoryName(root);
         Assert.NotNull(root);
 
-        var modules = ModuleLoader.LoadDirectory(Path.Combine(root!, "Modules", "Sigma"));
+        var modules = ModuleLoader.LoadDirectory(Path.Combine(root!, "Modules", folder));
         Assert.Empty(modules.Errors);
-        foreach (var name in new[] { "Chainsaw", "ChainsawGaps", "ChainsawSrum", "Hayabusa" })
-            Assert.Equal(MemoryWeight.Heavy, modules.Items.Single(m => m.Name == name).MemoryWeight);
+        return modules.Items.Single(m => m.Name == name);
     }
 }
