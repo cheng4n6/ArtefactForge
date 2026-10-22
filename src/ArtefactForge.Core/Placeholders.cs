@@ -3,7 +3,7 @@ using System.Text;
 namespace ArtefactForge.Core;
 
 /// <summary>Values a module's CommandLine can reference. Names are matched case-insensitively.</summary>
-public sealed class PlaceholderContext
+public sealed record PlaceholderContext
 {
     public required string Root { get; init; }
     public required string DestinationDirectory { get; init; }
@@ -27,6 +27,10 @@ public sealed class PlaceholderContext
     /// <summary>Resolved module options, already expanded to command-line fragments.</summary>
     public string Options { get; init; } = "";
     public bool VssEnabled { get; init; }
+    /// <summary>A Split step's input: one part's folder, or the whole folder when it runs unsplit.</summary>
+    public string SplitDir { get; init; } = "";
+    /// <summary>"_part2" for a Split step's second part; nothing when it runs unsplit.</summary>
+    public string SplitPart { get; init; } = "";
 }
 
 public static class Placeholders
@@ -57,7 +61,9 @@ public static class Placeholders
             ["matchName"]            = ctx.Match is null ? "" : Path.GetFileName(ctx.Match),
             // Expands to nothing unless the run enables VSS and the tool supports it, so the
             // switch can sit unconditionally in every CommandLine.
-            ["vss"]                  = ctx.VssEnabled ? "--vss" : ""
+            ["vss"]                  = ctx.VssEnabled ? "--vss" : "",
+            ["splitDir"]             = ctx.SplitDir.TrimEnd(Path.DirectorySeparatorChar),
+            ["splitPart"]            = ctx.SplitPart
         };
 
         var result = new StringBuilder();

@@ -39,7 +39,20 @@ public static class ModuleLoader
 
         var processors = ReadProcessors(dto.Processors, "Processor");
         var prepare = ReadProcessors(dto.Prepare, "Prepare step");
-        var options = ReadOptions(dto.Options);
+        if (prepare.Any(p => p.Split is not null))
+            throw new FormatException("A Prepare step cannot Split: only a step that delivers output is joined.");
+        var splitOptions = processors.Select(p => p.Split?.Option).OfType<string>().ToList();
+        foreach (var name in splitOptions)
+            if (dto.Options?.Any(o => string.Equals(o.Name?.Trim(), name, StringComparison.OrdinalIgnoreCase)) != true)
+                throw new FormatException($"Split names option '{name}', which is not declared under Options.");
+        var options = ReadOptions(dto.Options, splitOptions);
+        foreach (var name in splitOptions)
+        {
+            var option = options.First(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+            foreach (var value in option.Choices.Append(option.Default).Where(v => v.Length > 0))
+                if (!InputSplit.TryParseParts(value, out _))
+                    throw new FormatException($"Option '{name}': '{value}' is not auto or a number of parts.");
+        }
 
         return new ModuleDefinition
         {
@@ -70,7 +83,11 @@ public static class ModuleLoader
         };
     }
 
-    private static List<ModuleOption> ReadOptions(List<OptionDto>? source)
+    /// <param name="engineOptions">
+    /// Options the engine reads itself (a Split's number of parts): they add nothing to the command
+    /// line, so they need no Expand.
+    /// </param>
+    private static List<ModuleOption> ReadOptions(List<OptionDto>? source, IReadOnlyList<string> engineOptions)
     {
         var result = new List<ModuleOption>();
         if (source is null) return result;
@@ -80,8 +97,11 @@ public static class ModuleLoader
             var o = source[i];
             if (string.IsNullOrWhiteSpace(o.Name))
                 throw new FormatException($"Option {i + 1}: Name is required.");
-            if (string.IsNullOrWhiteSpace(o.Expand))
+            var forEngine = engineOptions.Contains(o.Name.Trim(), StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(o.Expand) && !forEngine)
                 throw new FormatException($"Option '{o.Name}': Expand is required.");
+            if (!string.IsNullOrWhiteSpace(o.Expand) && forEngine)
+                throw new FormatException($"Option '{o.Name}': set by Split, so it takes no Expand.");
 
             var kind = Yaml.ParseEnum(o.Kind, OptionKind.Flag, "Kind");
             var choices = o.Choices ?? [];
@@ -104,7 +124,7 @@ public static class ModuleLoader
                 Kind = kind,
                 Choices = choices,
                 Default = def,
-                Expand = o.Expand.Trim()
+                Expand = o.Expand?.Trim() ?? ""
             });
         }
         return result;
@@ -132,10 +152,28 @@ public static class ModuleLoader
                 WorkingDirectory = string.IsNullOrWhiteSpace(p.WorkingDirectory) ? null : p.WorkingDirectory.Trim(),
                 ContinueOnError = p.ContinueOnError ?? false,
                 ExpectedStderr = ReadPatterns(p.ExpectedStderr, $"{label} {i + 1}"),
-                NoLogsArgument = string.IsNullOrWhiteSpace(p.NoLogsArgument) ? null : p.NoLogsArgument.Trim()
+                NoLogsArgument = string.IsNullOrWhiteSpace(p.NoLogsArgument) ? null : p.NoLogsArgument.Trim(),
+                Split = ReadSplit(p.Split, $"{label} {i + 1}")
             });
         }
         return result;
+    }
+
+    private static SplitDefinition? ReadSplit(SplitDto? s, string label)
+    {
+        if (s is null) return null;
+        if (string.IsNullOrWhiteSpace(s.Folder) || string.IsNullOrWhiteSpace(s.Pattern)
+            || string.IsNullOrWhiteSpace(s.MergeInto))
+            throw new FormatException($"{label}: Split needs Folder, Pattern and MergeInto.");
+        if (s.MergeInto.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            throw new FormatException($"{label}: Split MergeInto must be a file name, not a path.");
+        return new SplitDefinition
+        {
+            Folder = s.Folder.Trim(),
+            Pattern = s.Pattern.Trim(),
+            MergeInto = s.MergeInto.Trim(),
+            Option = string.IsNullOrWhiteSpace(s.Option) ? null : s.Option.Trim()
+        };
     }
 
     private static List<string> ReadPatterns(List<string>? source, string label)
@@ -204,5 +242,14 @@ public static class ModuleLoader
         public bool? ContinueOnError { get; set; }
         public List<string>? ExpectedStderr { get; set; }
         public string? NoLogsArgument { get; set; }
+        public SplitDto? Split { get; set; }
+    }
+
+    private sealed class SplitDto
+    {
+        public string? Folder { get; set; }
+        public string? Pattern { get; set; }
+        public string? MergeInto { get; set; }
+        public string? Option { get; set; }
     }
 }

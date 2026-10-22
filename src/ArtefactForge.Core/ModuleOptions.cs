@@ -37,6 +37,8 @@ public static class ModuleOptions
 
         foreach (var option in module.Options)
         {
+            // An option the engine reads itself, such as a Split's number of parts.
+            if (option.Expand.Length == 0) continue;
             var value = values[option.Name];
 
             if (option.Kind == OptionKind.Flag)

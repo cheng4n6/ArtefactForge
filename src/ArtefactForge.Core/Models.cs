@@ -78,6 +78,32 @@ public sealed class ProcessorDefinition
     /// this added, and the module is flagged CheckLog because recent entries may be missing.
     /// </summary>
     public string? NoLogsArgument { get; init; }
+
+    /// <summary>
+    /// Runs this step as several processes at once, each over a share of the input files, and
+    /// joins their CSVs into one. For a tool that reads a folder of files one after another on a
+    /// single core: EvtxECmd over 265 event logs took 159 s alone and 54 s in four parts.
+    /// </summary>
+    public SplitDefinition? Split { get; init; }
+}
+
+/// <summary>
+/// How a processor's input folder is shared out. The CommandLine reads %splitDir% and names its
+/// CSV with %splitPart%; unsplit they are the folder itself and nothing, so the same command line
+/// runs either way.
+/// </summary>
+public sealed class SplitDefinition
+{
+    /// <summary>The folder whose files are shared out, with placeholders (%root%\...).</summary>
+    public required string Folder { get; init; }
+    /// <summary>The files in it that are shared out, such as '*.evtx'.</summary>
+    public required string Pattern { get; init; }
+    /// <summary>The CSV the parts are joined into: the name the step writes when it runs unsplit.</summary>
+    public required string MergeInto { get; init; }
+    /// <summary>
+    /// The module option that sets how many parts: "auto" or a number. Without one, auto.
+    /// </summary>
+    public string? Option { get; init; }
 }
 
 /// <summary>
