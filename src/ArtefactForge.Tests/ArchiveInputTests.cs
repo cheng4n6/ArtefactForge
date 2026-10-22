@@ -321,6 +321,67 @@ public class ArchiveInputTests
     }
 
     [Fact]
+    public async Task A_zip_of_many_compressed_files_extracts_every_one_intact_in_parallel()
+    {
+        // Several readers inflate at once; every file must still match, byte for byte, and the
+        // log must list them in the zip's order as a one-at-a-time run did.
+        using var dir = new TempDirectory();
+        var zipPath = Path.Combine(dir.Path, "HOST01.zip");
+        var expected = new Dictionary<string, byte[]>();
+        using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            var random = new Random(7);
+            foreach (var name in new[] { "C/Windows/System32/config/SYSTEM", "C/$MFT" }
+                         .Concat(Enumerable.Range(0, 20).Select(i => $"C/Logs/file{i:D2}.evtx")))
+            {
+                // Sizes from a few bytes to a few MB, half random (incompressible), half repetitive.
+                var data = new byte[random.Next(1, 3) == 1 ? random.Next(1, 4096) : random.Next(1 << 20, 3 << 20)];
+                if (expected.Count % 2 == 0) random.NextBytes(data);
+                else for (var i = 0; i < data.Length; i++) data[i] = (byte)(i % 251);
+                expected[name] = data;
+                using var stream = zip.CreateEntry(name, CompressionLevel.Optimal).Open();
+                stream.Write(data);
+            }
+        }
+        var to = Path.Combine(dir.Path, "out", "HOST01");
+        var log = Path.Combine(dir.Path, "extract.csv");
+        long reported = 0;
+        var gate = new object();
+
+        var record = await CollectionExtractor.ExtractAsync(zipPath, to, log,
+            new SyncProgress(p => { lock (gate) reported = Math.Max(reported, p.Done); }), CancellationToken.None);
+
+        Assert.Null(record.Error);
+        Assert.Empty(record.Problems);
+        Assert.Equal(expected.Count, record.Files);
+        Assert.Equal(expected.Values.Sum(v => (long)v.Length), record.Bytes);
+        Assert.Equal(record.Bytes, reported);
+        foreach (var (name, data) in expected)
+            Assert.Equal(data, File.ReadAllBytes(Path.Combine(new[] { to }.Concat(name.Split('/')).ToArray())));
+        Assert.Equal(expected.Keys, File.ReadLines(log).Skip(1).Select(l => l[..l.IndexOf(',')]));
+    }
+
+    [Fact]
+    public async Task Of_two_entries_landing_on_one_file_the_first_in_the_zip_is_kept()
+    {
+        using var dir = new TempDirectory();
+        var zip = CylrZip(Path.Combine(dir.Path, "HOST01.zip"),
+            ("C/Windows/notes.txt", "first"), ("C/Windows/NOTES.TXT", "second"));
+        var to = Path.Combine(dir.Path, "out", "HOST01");
+
+        var record = await CollectionExtractor.ExtractAsync(zip, to, null, null, CancellationToken.None);
+
+        Assert.Equal("first", File.ReadAllText(Path.Combine(to, "C", "Windows", "notes.txt")));
+        Assert.Contains(record.Problems, p => p.StartsWith("C/Windows/NOTES.TXT") && p.Contains("already wrote"));
+    }
+
+    /// <summary>Reports on the calling thread, unlike Progress, so the test sees every report before the end.</summary>
+    private sealed class SyncProgress(Action<(long Done, long Total)> report) : IProgress<(long Done, long Total)>
+    {
+        public void Report((long Done, long Total) value) => report(value);
+    }
+
+    [Fact]
     public async Task A_name_Windows_cannot_hold_is_made_safe_and_logged()
     {
         using var dir = new TempDirectory();

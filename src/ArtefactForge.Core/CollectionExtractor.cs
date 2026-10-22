@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -169,6 +170,16 @@ public static class CollectionExtractor
 
             long done = 0;
             var buffer = new byte[1 << 20];
+            Action<int> report = bytes => progress?.Report((Interlocked.Add(ref done, bytes), total));
+            // Deflate is CPU bound, so a zip's files are inflated a few at a time once the plan is
+            // made, each reader with its own opening of the zip. A tar is one stream and a folder is
+            // a plain copy, so both stay one entry at a time.
+            var copies = source.IsZip ? new List<CopyJob>() : null;
+            var zipIndex = copies is null ? null
+                : source.Entries.Select((e, i) => (e, i))
+                    .ToDictionary<(SourceEntry e, int i), SourceEntry, int>(p => p.e, p => p.i, ReferenceEqualityComparer.Instance);
+            // Claimed when planned, since a parallel copy has not written its file yet.
+            var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             // A collection of 100,000 files asks for the same few thousand folders over and over.
             var made = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             void MakeFolder(string path)
@@ -235,7 +246,7 @@ public static class CollectionExtractor
                             Problem(record, log, entry, target, $"not extracted: hard link to {entry.LinkTarget}, which was not extracted");
                             continue;
                         }
-                        if (File.Exists(target))
+                        if (!claimed.Add(target) || File.Exists(target))
                         {
                             Problem(record, log, entry, target, "not extracted: another entry already wrote this path");
                             continue;
@@ -259,7 +270,7 @@ public static class CollectionExtractor
                         continue;
                 }
 
-                if (File.Exists(target))
+                if (!claimed.Add(target) || File.Exists(target))
                 {
                     // Two entries landing on one file - a duplicate, names differing only in case,
                     // or one file read through two Velociraptor accessors. The first is kept (the
@@ -269,17 +280,34 @@ public static class CollectionExtractor
                 }
 
                 MakeFolder(Path.GetDirectoryName(target)!);
-                Action<int> report = bytes => progress?.Report((done += bytes, total));
                 var expand = item.Sparse is not null && !item.Compact;
+                if (copies is not null)
+                {
+                    copies.Add(new CopyJob(item, target, renamed, expand, zipIndex![entry]));
+                    continue;
+                }
                 var result = expand
                     ? await CopySparseEntryAsync(entry, target, item.Sparse!, buffer, cancellationToken, report)
                     : await CopyEntryAsync(entry, target, buffer, cancellationToken, report);
+                Copied(item, target, renamed, expand, result);
+            }
 
+            if (copies is { Count: > 0 })
+            {
+                var results = await CopyZipEntriesAsync(sourcePath, copies, cancellationToken, report);
+                // Recorded in plan order, after the entries the plan left out or could not place.
+                for (var i = 0; i < copies.Count; i++)
+                    Copied(copies[i].Item, copies[i].Target, copies[i].Renamed, copies[i].Expand, results[i]);
+            }
+
+            void Copied(PlannedEntry item, string target, bool renamed, bool expand, string? result)
+            {
+                var entry = item.Entry;
                 if (result is not null)
                 {
                     TryDelete(target);
                     Problem(record, log, entry, target, "removed: " + result);
-                    continue;
+                    return;
                 }
 
                 if (entry.LastWriteUtc is { } written) File.SetLastWriteTimeUtc(target, written);
@@ -293,7 +321,7 @@ public static class CollectionExtractor
                 if (item.Sparse is not null && item.Compact)
                 {
                     outcome += ", sparse holes not expanded - stored data only";
-                    Note(record, $"{item.Mapped.Replace('/', '\\')} written as its {Size(entry.Length)} of data; its "
+                    Note(record, $"{item.Mapped!.Replace('/', '\\')} written as its {Size(entry.Length)} of data; its "
                                  + $"{Size(VelociraptorCollection.OriginalLength(item.Sparse))} sparse size was not expanded");
                 }
                 log?.WriteLine(Csv(entry.FullName, target, length.ToString(), outcome));
@@ -469,6 +497,52 @@ public static class CollectionExtractor
         if (entry.Crc32 is { } expected && crc.GetCurrentHashAsUInt32() != expected)
             return "CRC-32 does not match the zip - entry corrupt";
         return null;
+    }
+
+    /// <summary>A zip entry planned for extraction, copied once the whole plan is made.</summary>
+    private sealed record CopyJob(PlannedEntry Item, string Target, bool Renamed, bool Expand, int Index);
+
+    /// <summary>Readers at once for one zip. More rarely helps: the disk, not the CPU, becomes the limit.</summary>
+    private static int ZipReaders => Math.Clamp(Environment.ProcessorCount / 2, 1, 4);
+
+    /// <summary>
+    /// Copies a zip's planned entries a few at a time, largest first so a big $MFT or event log
+    /// does not run alone at the end. Each reader opens the zip itself: one ZipArchive cannot be
+    /// read from two threads. Returns each job's result, as <see cref="CopyEntryAsync"/> does.
+    /// </summary>
+    private static async Task<string?[]> CopyZipEntriesAsync(
+        string zipPath, IReadOnlyList<CopyJob> jobs, CancellationToken cancellationToken, Action<int> reportBytes)
+    {
+        var results = new string?[jobs.Count];
+        var order = Enumerable.Range(0, jobs.Count).OrderByDescending(i => jobs[i].Item.Entry.Length).ToArray();
+        var next = -1;
+        var readers = Math.Min(ZipReaders, jobs.Count);
+
+        await Task.WhenAll(Enumerable.Range(0, readers).Select(_ => Task.Run(async () =>
+        {
+            using var zip = ZipFile.OpenRead(zipPath);
+            var buffer = new byte[1 << 20];
+            int n;
+            while ((n = Interlocked.Increment(ref next)) < order.Length)
+            {
+                var job = jobs[order[n]];
+                var planned = job.Item.Entry;
+                if (job.Index >= zip.Entries.Count)
+                {
+                    results[order[n]] = "the zip changed while it was being extracted";
+                    continue;
+                }
+                var entry = new SourceEntry
+                {
+                    FullName = planned.FullName, Length = planned.Length, Crc32 = planned.Crc32,
+                    LastWriteUtc = planned.LastWriteUtc, Open = zip.Entries[job.Index].Open
+                };
+                results[order[n]] = job.Expand
+                    ? await CopySparseEntryAsync(entry, job.Target, job.Item.Sparse!, buffer, cancellationToken, reportBytes)
+                    : await CopyEntryAsync(entry, job.Target, buffer, cancellationToken, reportBytes);
+            }
+        }, cancellationToken)));
+        return results;
     }
 
     /// <summary>One source entry and what to do with it.</summary>
