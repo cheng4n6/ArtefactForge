@@ -15,6 +15,9 @@ OutputName: ChainsawSrum
 # including the table of SRUM extensions and their retention, are listed below. That table stays
 # in the run's .err.log, which is worth reading for the timeframe each table covers.
 #
+# Memory-heavy: it peaked at 5.3 GB on a 2 GB Velociraptor collection (2026-10-21), the most of
+# any module measured.
+#
 # Opt-in (2026-10-10). One thread re-reading a ~100 MB SRUDB.dat for 2-5 minutes alone, slower
 # still beside other tools, and it was the last thing running in every collection of a batch.
 # SrumECmd parses the same database by default.
@@ -25,6 +28,7 @@ Platform: windows
 Priority: 61
 IoWeight: heavy
 MemoryWeight: heavy
+MemoryEstimateMB: 5500
 Timeout: 3600
 Processors:
   -

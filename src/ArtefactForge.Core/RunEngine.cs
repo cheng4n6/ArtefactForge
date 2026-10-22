@@ -18,6 +18,9 @@ public sealed class RunReport
     public EvidenceListResult? EvidenceList { get; set; }
     /// <summary>One per zip unpacked during the run.</summary>
     public List<ExtractionRecord> Extractions { get; } = [];
+    /// <summary>The memory memory-heavy modules shared, and the free memory that decided it.</summary>
+    public long? MemoryBudgetBytes { get; set; }
+    public long? FreeMemoryBytesAtStart { get; set; }
 
     public int Count(WorkStatus status) => Results.Count(r => r.Status == status);
 
@@ -75,9 +78,15 @@ public sealed class RunEngine
         var results = new ConcurrentBag<WorkResult>();
         using var workers = new SemaphoreSlim(Math.Max(1, config.MaxWorkers));
         using var heavy = new SemaphoreSlim(Math.Max(1, config.MaxHeavyWorkers));
-        // One memory-heavy tool at a time across the whole run, zips included: three Chainsaw runs
-        // at once took about 18 GB and brought down a 16 GB workstation.
-        using var memoryHeavy = new SemaphoreSlim(1);
+        // Memory-heavy tools share the memory free now across the whole run, zips included: three
+        // Chainsaw runs at once took about 18 GB and brought down a 16 GB workstation, yet MFTECmd,
+        // Hayabusa and Chainsaw hunt fit side by side in 4 GB and finish far sooner together.
+        report.FreeMemoryBytesAtStart = MemoryBudget.Available();
+        report.MemoryBudgetBytes = config.MemoryBudgetBytes ?? report.FreeMemoryBytesAtStart;
+        var memoryHeavy = new MemoryBudget(report.MemoryBudgetBytes);
+        // How long each module took when this case last ran, so the longest memory-heavy one starts
+        // first instead of last: it is the long pole of the batch.
+        var lastDurations = LoadDurations(Path.Combine(logDir, "manifest.json"));
 
         // What the manifest lists as processed: zips appear once extracted, under their real root.
         var collections = config.Targets.Where(t => !t.IsArchive)
@@ -153,7 +162,11 @@ public sealed class RunEngine
             List<WorkItem> pending, done;
             lock (gate)
             {
-                pending = items.Where(i => !completed.Contains(i.Key)).OrderBy(i => i.Module.Priority).ToList();
+                pending = items.Where(i => !completed.Contains(i.Key))
+                    .OrderByDescending(i => i.Module.MemoryWeight == MemoryWeight.Heavy
+                                            ? lastDurations.GetValueOrDefault(i.Module.Name) : 0)
+                    .ThenBy(i => i.Module.Priority)
+                    .ToList();
                 done = items.Where(i => completed.Contains(i.Key)).ToList();
             }
 
@@ -175,15 +188,15 @@ public sealed class RunEngine
             var ran = new ConcurrentBag<WorkResult>();
             var tasks = pending.Select(async item =>
             {
-                // Memory-heavy tools queue only on their own slot, not for a worker or a heavy-IO
-                // slot. Run one at a time they are the long pole of a batch; queued behind
-                // everything else they would all run at the end, one after another. This way the
-                // first starts at once and the rest follow back to back while the pool works
-                // through the other modules beside them, at the cost of one process more than
-                // Workers and Heavy IO allow.
+                // Memory-heavy tools queue only on the memory budget, not for a worker or a heavy-IO
+                // slot. They are the long pole of a batch; queued behind everything else they would
+                // all run at the end. This way they start at once, as many as the memory allows,
+                // while the pool works through the other modules beside them, at the cost of a few
+                // processes more than Workers and Heavy IO allow.
                 var isMemoryHeavy = item.Module.MemoryWeight == MemoryWeight.Heavy;
                 var isHeavy = !isMemoryHeavy && item.Module.IoWeight == IoWeight.Heavy;
-                if (isMemoryHeavy) await memoryHeavy.WaitAsync(cancellationToken);
+                var memoryNeed = isMemoryHeavy ? MemoryBudget.EstimateBytes(item.Module) : 0;
+                if (isMemoryHeavy) await memoryHeavy.WaitAsync(memoryNeed, cancellationToken);
                 else await workers.WaitAsync(cancellationToken);
                 if (isHeavy) await heavy.WaitAsync(cancellationToken);
                 try
@@ -218,7 +231,7 @@ public sealed class RunEngine
                 finally
                 {
                     if (isHeavy) heavy.Release();
-                    if (isMemoryHeavy) memoryHeavy.Release();
+                    if (isMemoryHeavy) memoryHeavy.Release(memoryNeed);
                     else workers.Release();
                 }
             });
@@ -771,6 +784,35 @@ public sealed class RunEngine
         }
     }
 
+    /// <summary>
+    /// Each module's longest run in an earlier manifest of this case, by name. Empty for a new case
+    /// or a manifest that cannot be read: then Priority alone decides the order, as before.
+    /// </summary>
+    public static Dictionary<string, double> LoadDurations(string manifestPath)
+    {
+        var durations = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (!File.Exists(manifestPath)) return durations;
+            using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            if (!doc.RootElement.TryGetProperty("Results", out var results) || results.ValueKind != JsonValueKind.Array)
+                return durations;
+            foreach (var result in results.EnumerateArray())
+            {
+                if (result.ValueKind != JsonValueKind.Object
+                    || !result.TryGetProperty("Module", out var module) || module.ValueKind != JsonValueKind.String
+                    || !result.TryGetProperty("DurationSeconds", out var seconds) || !seconds.TryGetDouble(out var value))
+                    continue;
+                var name = module.GetString()!;
+                if (value > durations.GetValueOrDefault(name)) durations[name] = value;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+        }
+        return durations;
+    }
+
     private static void SaveState(string path, HashSet<string> existing, IEnumerable<WorkResult> results)
     {
         // Only genuinely finished work is remembered, so a re-run retries failures and timeouts.
@@ -808,6 +850,8 @@ public sealed class RunEngine
             DurationSeconds = report.DurationSeconds,
             config.MaxWorkers,
             config.MaxHeavyWorkers,
+            report.MemoryBudgetBytes,
+            report.FreeMemoryBytesAtStart,
             Vss = config.Vss,
             Cancelled = report.Cancelled,
             Collections = collections,

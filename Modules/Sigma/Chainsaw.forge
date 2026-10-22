@@ -23,9 +23,10 @@ OutputName: Chainsaw
 Requires: ['%root%\Windows\System32\winevt\Logs\*.evtx']
 Platform: windows
 Elevation: live              # locked or admin-only on a live system; collections read fine
-Priority: 26
+Priority: 24                   # before Hayabusa: the longer of the two, so it starts first
 IoWeight: heavy
 MemoryWeight: heavy
+MemoryEstimateMB: 300          # 0.24 GB over 269 logs (419 MB), 2026-10-21
 Timeout: 7200
 
 Options:

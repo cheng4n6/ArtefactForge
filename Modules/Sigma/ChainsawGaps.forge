@@ -5,6 +5,7 @@ Version: '1.0'
 ExportFormat: txt
 OutputName: ChainsawGaps
 # Verified against Chainsaw 2.16.3 (2026-09-24).
+# Not memory-heavy: it peaked at 30 MB over 269 logs (419 MB) on 2026-10-21.
 # Slow over a full Logs folder, so it is excluded from "select all" and must be ticked
 # deliberately.
 #
@@ -21,7 +22,6 @@ Platform: windows
 Elevation: live              # locked or admin-only on a live system; collections read fine
 Priority: 27
 IoWeight: heavy
-MemoryWeight: heavy
 Timeout: 7200
 
 Options:
