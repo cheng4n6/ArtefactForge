@@ -13,6 +13,17 @@ internal sealed class IocSection : ICaseReportSection
     // Enough to read on the page; the full list is in IocHits.csv.
     private const int MaxHitsShown = 200;
 
+    private static void KeepFirst(List<IocHit> shown)
+    {
+        shown.Sort((a, b) =>
+        {
+            var c = StringComparer.OrdinalIgnoreCase.Compare(a.Host, b.Host);
+            if (c == 0) c = StringComparer.OrdinalIgnoreCase.Compare(a.OutputFile, b.OutputFile);
+            return c != 0 ? c : a.LineNumber.CompareTo(b.LineNumber);
+        });
+        if (shown.Count > MaxHitsShown) shown.RemoveRange(MaxHitsShown, shown.Count - MaxHitsShown);
+    }
+
     private sealed class Found
     {
         public readonly List<IocHit> Shown = [];
@@ -39,8 +50,12 @@ internal sealed class IocSection : ICaseReportSection
             if (!found.TryGetValue(key, out var f)) found[key] = f = new Found();
             f.Hits++;
             f.Hosts.Add(hit.Host);
-            if (f.Shown.Count < MaxHitsShown) f.Shown.Add(hit);
+            // The first hits by host, file and line, not by their place in IocHits.csv: hosts swept
+            // as their modules finish are written in the order they finished, which varies by run.
+            f.Shown.Add(hit);
+            if (f.Shown.Count >= 2 * MaxHitsShown) KeepFirst(f.Shown);
         }
+        foreach (var f in found.Values) KeepFirst(f.Shown);
 
         var body = new StringBuilder();
         if (IocSweep.LastResult(caseDirectory) is { } last) body.Append($"<p class=\"muted\">Last sweep: {E(last)}</p>");

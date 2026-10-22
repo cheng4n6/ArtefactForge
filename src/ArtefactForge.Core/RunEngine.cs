@@ -107,6 +107,7 @@ public sealed class RunEngine
         // the IOC sweep writes one hits file for the case. The case-wide steps still run at the end.
         var hostSteps = new List<Task>();
         var hostsDone = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sweptEarly = new List<Ioc.IocSweepResult>();
         using var hostGate = new SemaphoreSlim(1);
 
         try
@@ -156,7 +157,7 @@ public sealed class RunEngine
         report.MemoryFloorWaits = memoryFloor.Waits;
         SaveState(statePath, completed, results);
         WriteManifests(report, logDir, config, collections, started);
-        await Ioc.IocSweep.AfterRunAsync(report, hostsDone);   // the case's IOC hits for the hosts just processed
+        await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 
         // Rolls the per-collection system summaries into one inventory for the case. Runs after
         // everything else because it reads what the modules produced, and does nothing when no
@@ -181,12 +182,13 @@ public sealed class RunEngine
                 if (Windows.IpHistory.BuildCollection(collectionDir, cancellationToken) is { } ip) built.Add(ip);
                 if (Windows.RemoteAccess.BuildCollection(collectionDir, cancellationToken) is { } rdp) built.Add(rdp);
                 if (Windows.Ransomware.BuildHost(collectionDir, cancellationToken) is { } ransom) built.Add(ransom);
-                await Ioc.IocSweep.AfterHostAsync(caseDir, host,
+                var swept = await Ioc.IocSweep.AfterHostAsync(caseDir, host,
                     results.Where(r => string.Equals(r.Collection, host, StringComparison.OrdinalIgnoreCase)).ToList());
                 lock (gate)
                 {
                     report.Results.AddRange(built);
                     hostsDone.Add(host);
+                    if (swept is not null) sweptEarly.Add(swept);
                 }
             }
             catch (OperationCanceledException)

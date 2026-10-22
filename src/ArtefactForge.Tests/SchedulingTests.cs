@@ -342,6 +342,46 @@ public class SchedulingTests
     }
 
     [Fact]
+    public async Task Hosts_swept_one_by_one_end_the_sweep_log_with_one_line_for_the_run()
+    {
+        // The case report shows the log's last line as the last sweep: it must describe the run,
+        // not whichever host happened to finish last.
+        using var dir = new TempDirectory();
+        var module = new ModuleDefinition
+        {
+            Description = "Writer", Category = "EventLogs", SourcePath = Path.Combine(dir.Path, "Writer.forge"),
+            Processors =
+            [
+                new ProcessorDefinition
+                {
+                    Executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"),
+                    CommandLine = @"/c (echo Name& echo ABC.exe) > ""%destinationDirectory%\found.csv"""
+                }
+            ]
+        };
+        var config = Config(dir, [module]);
+        ResolvedTarget Target(string name) => new()
+        {
+            SelectionPath = dir.Dir("evidence-" + name), Root = dir.Dir("evidence-" + name),
+            CollectionName = name, Layout = config.Targets[0].Layout
+        };
+        var caseDir = dir.Dir(Path.Combine("out", "CASE"));
+        IocList.Add(caseDir, [IocEntry.Create(IocType.FileName, "ABC.exe")]);
+
+        await new RunEngine().RunAsync(new RunConfiguration
+        {
+            CaseName = config.CaseName, OutputRoot = config.OutputRoot, ToolRoots = config.ToolRoots,
+            Targets = [Target("HOST01"), Target("HOST02")], Modules = config.Modules,
+            MaxWorkers = 2, MaxHeavyWorkers = 1, MemoryBudgetBytes = 1, KeepFreeMemoryBytes = 0
+        });
+
+        Assert.Equal(2, IocSweep.ReadHits(IocSweep.HitsPathFor(caseDir)).Count());
+        var last = IocSweep.LastResult(caseDir);
+        Assert.Contains("across 2 hosts", last);
+        Assert.Contains("2 hits on 2 hosts", last);
+    }
+
+    [Fact]
     public async Task A_hosts_post_run_steps_start_when_its_own_modules_finish()
     {
         using var dir = new TempDirectory();
