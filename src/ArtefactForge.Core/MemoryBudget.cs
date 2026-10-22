@@ -6,8 +6,9 @@ namespace ArtefactForge.Core;
 /// Memory-heavy modules share the memory free when the run starts, less a reserve for everything
 /// else. Each asks for its estimate (MemoryEstimateMB in its .forge, measured peaks) and starts
 /// once that fits beside the ones already running, so a workstation with 5 GB free runs MFTECmd,
-/// Hayabusa and Chainsaw side by side but never two of Chainsaw's SRUM analysis (5.3 GB). One always runs, even when it needs
-/// more than the whole budget, so a small machine still gets through the batch one at a time.
+/// Hayabusa and Chainsaw side by side but never two of Chainsaw's SRUM analysis (5.3 GB). One
+/// always runs, even when it needs more than the whole budget, so a small machine still gets
+/// through the batch one at a time.
 /// </summary>
 public sealed class MemoryBudget
 {
