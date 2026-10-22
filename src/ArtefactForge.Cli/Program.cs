@@ -29,6 +29,7 @@ switch (verb)
     case "release": return Release(options);
     case "ip": return IpLookup(options);
     case "rdp": return RdpCommand(options);
+    case "ransomware": return RansomwareCommand(options);
     default:
         Console.WriteLine(BuildInfo.Describe() + " - forensic artefact processing");
         Console.WriteLine();
@@ -53,6 +54,8 @@ switch (verb)
         Console.WriteLine("  rdp <case> [--host <name>] [--at <utc>] [--window <hours>] [--ip <address>] [--account <name>]");
         Console.WriteLine("      [--trace <n>] [--lookback <hours>]");
         Console.WriteLine("                                    list RDP sessions, or trace session n back across the case's hosts");
+        Console.WriteLine("  ransomware <case>                 check each Windows host for ransomware, from its MFT and USN journal output,");
+        Console.WriteLine("                                    and show the case's Ransomware.csv (hosts with nothing new are not read again)");
         Console.WriteLine("  update [--check] [--yes]          check for, download and install a newer ArtefactForge");
         Console.WriteLine("         [--source <folder>]        ...from a folder (share, USB) instead of GitHub");
         Console.WriteLine();
@@ -459,6 +462,35 @@ int BuildCaseReport(CommandLine options)
     Console.WriteLine(result.Describe());
     if (result.Written && result.Path is not null) Console.WriteLine($"Report: {result.Path}");
     return result.Written ? 0 : 1;
+}
+
+// Brings each host's ransomware result up to date with its MFTECmd output and the case's
+// Ransomware-Overrides.csv, then prints one line per host and rebuilds the case report.
+int RansomwareCommand(CommandLine options)
+{
+    var caseDir = options.Positional.ElementAtOrDefault(0);
+    if (caseDir is null || !Directory.Exists(caseDir))
+    {
+        Console.Error.WriteLine("usage: ransomware <case folder>");
+        return 2;
+    }
+
+    caseDir = Path.GetFullPath(caseDir);
+    var results = Ransomware.Build(caseDir);
+    foreach (var r in results.Where(r => r.Status == WorkStatus.Failed))
+        Console.Error.WriteLine($"{r.Collection}: {r.Reason}");
+    var rows = Ransomware.Load(caseDir);
+    if (rows.Count == 0)
+    {
+        Console.WriteLine("No host has MFTECmd output to check: run MFTECmd_MFT and MFTECmd_USNJournal first.");
+        return results.Any(r => r.Status == WorkStatus.Failed) ? 1 : 0;
+    }
+    foreach (var row in rows) Console.WriteLine($"{row.Host,-20} {row.Describe()}");
+    Console.WriteLine($"\nCase file: {Ransomware.PathFor(caseDir)}");
+    Console.WriteLine($"Overrides: {Ransomware.OverridesPathFor(caseDir)}"
+                      + (File.Exists(Ransomware.OverridesPathFor(caseDir)) ? "" : " (none yet)"));
+    CaseReport.Rebuild(caseDir);
+    return results.Any(r => r.Status == WorkStatus.Failed) ? 1 : 0;
 }
 
 // Lists the RDP sessions in a case, then with --trace follows one back host by host and saves the
