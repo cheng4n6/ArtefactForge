@@ -176,7 +176,8 @@ public static class CollectionExtractor
             // a plain copy, so both stay one entry at a time.
             var copies = source.IsZip ? new List<CopyJob>() : null;
             var zipIndex = copies is null ? null
-                : source.Entries.Select((e, i) => (e, i)).ToDictionary(p => p.e, p => p.i, ReferenceEqualityComparer.Instance);
+                : source.Entries.Select((e, i) => (e, i))
+                    .ToDictionary<(SourceEntry e, int i), SourceEntry, int>(p => p.e, p => p.i, ReferenceEqualityComparer.Instance);
             // Claimed when planned, since a parallel copy has not written its file yet.
             var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             // A collection of 100,000 files asks for the same few thousand folders over and over.
