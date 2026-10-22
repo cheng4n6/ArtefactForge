@@ -267,17 +267,26 @@ public static class IpHistory
         if (timeCol < 0 || idCol < 0 || channelCol < 0 || payloadCol < 0)
             throw new InvalidDataException($"{Path.GetFileName(path)} is not EvtxECmd output: TimeCreated, EventId, Channel or Payload column missing");
 
+        // The Payload is read only for Security and DNS audit events; most rows need nothing.
+        var last = new[] { timeCol, idCol, channelCol, providerCol }.Max();
+        var wantPayload = payloadCol > last
+            ? fields => IsSecurity(fields) || IsDnsAudit(fields)
+            : (Func<List<string>, bool>?)null;
+
+        bool IsSecurity(List<string> f) => f[channelCol].Equals("Security", StringComparison.OrdinalIgnoreCase);
+        bool IsDnsAudit(List<string> f) =>
+            f[channelCol].Contains("DNSServer/Audit", StringComparison.OrdinalIgnoreCase)
+            || (providerCol >= 0 && f[providerCol].Contains("DNSServer", StringComparison.OrdinalIgnoreCase)
+                && f[channelCol].Contains("Audit", StringComparison.OrdinalIgnoreCase));
+
         var rows = 0;
-        while (reader.ReadRecord() is { } fields)
+        while (reader.ReadRecord(last, wantPayload) is { } fields)
         {
             if ((++rows & 0xFFFF) == 0) cancellationToken.ThrowIfCancellationRequested();
-            if (fields.Count <= Math.Max(Math.Max(timeCol, idCol), Math.Max(channelCol, payloadCol))) continue;
+            if (fields.Count <= Math.Max(last, payloadCol)) continue;
 
-            var channel = fields[channelCol];
-            var isSecurity = channel.Equals("Security", StringComparison.OrdinalIgnoreCase);
-            var isDnsAudit = channel.Contains("DNSServer/Audit", StringComparison.OrdinalIgnoreCase)
-                             || (providerCol >= 0 && fields[providerCol].Contains("DNSServer", StringComparison.OrdinalIgnoreCase)
-                                 && channel.Contains("Audit", StringComparison.OrdinalIgnoreCase));
+            var isSecurity = IsSecurity(fields);
+            var isDnsAudit = IsDnsAudit(fields);
             if (!isSecurity && !isDnsAudit) continue;
             if (isSecurity) found.SecuritySeen = true;
             if (isDnsAudit) found.DnsAuditSeen = true;
