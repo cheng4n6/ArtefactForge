@@ -58,6 +58,8 @@ public sealed class RunRequest
     public List<string> ToolRoots { get; set; } = [];
     public int? Workers { get; set; }
     public int? HeavyWorkers { get; set; }
+    /// <summary>GB of memory kept free: no new module starts below it. Null means the default, 1; 0 turns it off.</summary>
+    public double? KeepFreeGB { get; set; }
     public bool Vss { get; set; }
     public bool SkipCompleted { get; set; } = true;
 

@@ -19,9 +19,14 @@ public sealed class RunConfiguration
     public int MaxHeavyWorkers { get; init; } = 2;
     /// <summary>
     /// Memory the memory-heavy modules may share. Null takes the memory free when the run starts,
-    /// less a 1 GB reserve (<see cref="MemoryBudget"/>); set it to pin the budget.
+    /// less <see cref="KeepFreeMemoryBytes"/> (<see cref="MemoryBudget"/>); set it to pin the budget.
     /// </summary>
     public long? MemoryBudgetBytes { get; init; }
+    /// <summary>
+    /// No new module starts while free memory is under this, unless nothing else is running
+    /// (<see cref="MemoryFloor"/>). Also kept out of the memory-heavy budget. Zero turns it off.
+    /// </summary>
+    public long KeepFreeMemoryBytes { get; init; } = 1L << 30;
     public bool Vss { get; init; }
     /// <summary>Skip work already recorded complete, so a failed batch resumes where it stopped.</summary>
     public bool SkipCompleted { get; init; } = true;

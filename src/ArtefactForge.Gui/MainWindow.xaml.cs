@@ -1167,6 +1167,7 @@ public partial class MainWindow : Window
         Workers.Text = saved.Workers.ToString();
         HeavyWorkers.Text = saved.HeavyWorkers.ToString();
         ZipsAtOnce.Text = saved.ZipsAtOnce.ToString();
+        KeepFreeGB.Text = saved.KeepFreeGB.ToString();
         UseVss.IsChecked = saved.Vss;
         SkipCompleted.IsChecked = saved.SkipCompleted;
         CleanupExtracted.IsChecked = saved.CleanupExtracted;
@@ -1184,6 +1185,7 @@ public partial class MainWindow : Window
             Workers = int.TryParse(Workers.Text, out var w) ? w : previous.Workers,
             HeavyWorkers = int.TryParse(HeavyWorkers.Text, out var h) ? h : previous.HeavyWorkers,
             ZipsAtOnce = int.TryParse(ZipsAtOnce.Text, out var z) ? z : previous.ZipsAtOnce,
+            KeepFreeGB = double.TryParse(KeepFreeGB.Text, out var k) ? k : previous.KeepFreeGB,
             Vss = UseVss.IsChecked == true,
             SkipCompleted = SkipCompleted.IsChecked == true,
             CleanupExtracted = CleanupExtracted.IsChecked == true
@@ -1261,6 +1263,8 @@ public partial class MainWindow : Window
             Modules = modules,
             MaxWorkers = int.TryParse(Workers.Text, out var w) ? w : Environment.ProcessorCount,
             MaxHeavyWorkers = int.TryParse(HeavyWorkers.Text, out var h) ? h : 2,
+            KeepFreeMemoryBytes = SavedRunOptions.ToBytes(double.TryParse(KeepFreeGB.Text, out var k) && k >= 0
+                ? k : Preferences.Current.RunOptions.Clamped().KeepFreeGB),
             Vss = UseVss.IsChecked == true,
             SkipCompleted = SkipCompleted.IsChecked == true,
             Layouts = _layouts,

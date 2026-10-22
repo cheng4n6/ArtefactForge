@@ -15,14 +15,12 @@ public sealed class MemoryBudget
     public const int DefaultEstimateMB = 6000;
 
     /// <summary>
-    /// Kept back for the modules the budget does not count: RECmd and WindowsSystemInfo each took
-    /// about 0.8 GB beside MFTECmd, leaving 0.02 GB free and the whole PC paging.
+    /// The budget for this much free memory, less what the analyst keeps free (Keep free) for the
+    /// modules the budget does not count: RECmd and WindowsSystemInfo each took about 0.8 GB beside
+    /// MFTECmd, leaving 0.02 GB free and the whole PC paging. Null stays null (one at a time).
     /// </summary>
-    public const long ReserveBytes = 1L << 30;
-
-    /// <summary>The budget for this much free memory: null stays null (one at a time).</summary>
-    public static long? FromFree(long? freeBytes) =>
-        freeBytes is { } free ? Math.Max(0, free - ReserveBytes) : null;
+    public static long? FromFree(long? freeBytes, long keepFreeBytes) =>
+        freeBytes is { } free ? Math.Max(0, free - Math.Max(0, keepFreeBytes)) : null;
 
     private readonly object _gate = new();
     private readonly LinkedList<(long Need, TaskCompletionSource Ready)> _waiting = new();
