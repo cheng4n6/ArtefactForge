@@ -144,7 +144,7 @@ public static class IocSweep
     /// case without an IOC list. Never throws: a sweep that fails is logged, and the run's own
     /// result stands.
     /// </summary>
-    public static async Task AfterRunAsync(RunReport report)
+    public static async Task AfterRunAsync(RunReport report, IReadOnlySet<string>? alreadySwept = null)
     {
         var caseDirectory = report.CaseDirectory;
         try
@@ -154,6 +154,7 @@ public static class IocSweep
                 .Where(r => r.Status != WorkStatus.Skipped && r.Module != "Extract")
                 .Select(r => r.Collection)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(h => alreadySwept?.Contains(h) != true)
                 .ToList();
             if (hosts.Count == 0) return;
 
@@ -171,6 +172,24 @@ public static class IocSweep
         {
             try { Log(caseDirectory, "The IOC sweep after the run failed: " + ex.Message, []); }
             catch { /* the run is over and reported; a lost log line cannot be reported anywhere */ }
+        }
+    }
+
+    /// <summary>
+    /// The same step for one host whose modules have all finished, while the run carries on with
+    /// the others. Never throws, as <see cref="AfterRunAsync"/>.
+    /// </summary>
+    public static async Task AfterHostAsync(string caseDirectory, string host)
+    {
+        try
+        {
+            if (!IocList.Exists(caseDirectory)) return;
+            await SweepHostsAsync(caseDirectory, [host], null, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            try { Log(caseDirectory, $"The IOC sweep of {host} after its modules finished failed: " + ex.Message, []); }
+            catch { /* as in AfterRunAsync: nowhere left to report it */ }
         }
     }
 

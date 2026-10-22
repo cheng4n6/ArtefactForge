@@ -1,4 +1,5 @@
 using ArtefactForge.Core;
+using ArtefactForge.Core.Windows;
 using Xunit;
 
 namespace ArtefactForge.Tests;
@@ -307,5 +308,52 @@ public class SchedulingTests
         var modules = ModuleLoader.LoadDirectory(Path.Combine(root!, "Modules", folder));
         Assert.Empty(modules.Errors);
         return modules.Items.Single(m => m.Name == name);
+    }
+
+    [Fact]
+    public async Task A_hosts_post_run_steps_start_when_its_own_modules_finish()
+    {
+        using var dir = new TempDirectory();
+        // SLOW's module takes a few seconds, FAST's returns at once.
+        var (exe, args) = OperatingSystem.IsWindows()
+            ? (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"),
+               "/c if \"%collectionName%\"==\"SLOW\" ping -n 5 127.0.0.1 >nul")
+            : ("/bin/sh", "-c \"if [ '%collectionName%' = SLOW ]; then sleep 4; fi\"");
+        var module = new ModuleDefinition
+        {
+            Description = "Wait", Category = "Test", SourcePath = Path.Combine(dir.Path, "Wait.forge"),
+            Processors = [new ProcessorDefinition { Executable = exe, CommandLine = args }]
+        };
+
+        var config = Config(dir, [module]);
+        ResolvedTarget Target(string name) => new()
+        {
+            SelectionPath = dir.Dir("evidence-" + name), Root = dir.Dir("evidence-" + name),
+            CollectionName = name, Layout = config.Targets[0].Layout
+        };
+        // A domain controller summary with no event log gives each host one IP history result to time.
+        foreach (var host in new[] { "FAST", "SLOW" })
+        {
+            var folder = dir.Dir(Path.Combine("out", "CASE", host, "SystemInfo"));
+            File.WriteAllLines(Path.Combine(folder, "SystemInfo.csv"),
+            [
+                "\"Category\",\"Item\",\"Value\",\"Source\"",
+                $"\"Identity\",\"Hostname\",\"{host}\",\"SYSTEM\"",
+                "\"Identity\",\"ComputerRole\",\"Domain controller\",\"SYSTEM\""
+            ]);
+        }
+
+        var report = await new RunEngine().RunAsync(new RunConfiguration
+        {
+            CaseName = config.CaseName, OutputRoot = config.OutputRoot, ToolRoots = config.ToolRoots,
+            Targets = [Target("FAST"), Target("SLOW")], Modules = config.Modules,
+            MaxWorkers = 2, MaxHeavyWorkers = 1, MemoryBudgetBytes = 1, KeepFreeMemoryBytes = 0
+        });
+
+        var slow = report.Results.Single(r => r.Module == "Wait" && r.Collection == "SLOW");
+        var fastIp = report.Results.Single(r => r.Module == IpHistory.ModuleName && r.Collection == "FAST");
+        Assert.Single(report.Results, r => r.Module == IpHistory.ModuleName && r.Collection == "SLOW");
+        Assert.True(fastIp.Started < slow.Started.AddSeconds(slow.DurationSeconds - 1),
+            $"FAST's IP history started at {fastIp.Started}, after SLOW's module ended at {slow.Started.AddSeconds(slow.DurationSeconds)}");
     }
 }
