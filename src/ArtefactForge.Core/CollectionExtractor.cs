@@ -294,7 +294,7 @@ public static class CollectionExtractor
             if (copies is { Count: > 0 })
             {
                 var results = await CopyZipEntriesAsync(sourcePath, copies, cancellationToken, report);
-                // Recorded in plan order, so the log and the counts read as a one-at-a-time run's.
+                // Recorded in plan order, after the entries the plan left out or could not place.
                 for (var i = 0; i < copies.Count; i++)
                     Copied(copies[i].Item, copies[i].Target, copies[i].Renamed, copies[i].Expand, results[i]);
             }
