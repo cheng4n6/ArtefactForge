@@ -181,7 +181,8 @@ public sealed class RunEngine
                 if (Windows.IpHistory.BuildCollection(collectionDir, cancellationToken) is { } ip) built.Add(ip);
                 if (Windows.RemoteAccess.BuildCollection(collectionDir, cancellationToken) is { } rdp) built.Add(rdp);
                 if (Windows.Ransomware.BuildHost(collectionDir, cancellationToken) is { } ransom) built.Add(ransom);
-                await Ioc.IocSweep.AfterHostAsync(caseDir, host);
+                await Ioc.IocSweep.AfterHostAsync(caseDir, host,
+                    results.Where(r => string.Equals(r.Collection, host, StringComparison.OrdinalIgnoreCase)).ToList());
                 lock (gate)
                 {
                     report.Results.AddRange(built);

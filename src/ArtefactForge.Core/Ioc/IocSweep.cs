@@ -102,13 +102,18 @@ public static class IocSweep
         IProgress<string>? progress = null, CancellationToken cancellationToken = default) =>
         await ThenReport(caseDirectory, SweepHostsAsync(caseDirectory, hosts, progress, cancellationToken));
 
+    /// <param name="ran">
+    /// Results of the run still in progress, which the manifest does not list yet: without them
+    /// every file would be named by its category folder rather than the module that wrote it.
+    /// </param>
     private static async Task<IocSweepResult> SweepHostsAsync(
-        string caseDirectory, IEnumerable<string> hosts, IProgress<string>? progress, CancellationToken cancellationToken)
+        string caseDirectory, IEnumerable<string> hosts, IProgress<string>? progress, CancellationToken cancellationToken,
+        IEnumerable<WorkResult>? ran = null)
     {
         var set = hosts.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var present = Hosts(caseDirectory).Where(set.Contains).ToList();
         return await RunAsync(caseDirectory, IocList.Load(caseDirectory), present,
-            hit => set.Contains(hit.Host), progress, cancellationToken);
+            hit => set.Contains(hit.Host), progress, cancellationToken, ran);
     }
 
     /// <summary>Rebuilds the whole hits file: every IOC on the list against every host.</summary>
@@ -177,14 +182,15 @@ public static class IocSweep
 
     /// <summary>
     /// The same step for one host whose modules have all finished, while the run carries on with
-    /// the others. Never throws, as <see cref="AfterRunAsync"/>.
+    /// the others. <paramref name="ran"/> is that host's results, which name the module behind each
+    /// file before the manifest is written. Never throws, as <see cref="AfterRunAsync"/>.
     /// </summary>
-    public static async Task AfterHostAsync(string caseDirectory, string host)
+    public static async Task AfterHostAsync(string caseDirectory, string host, IEnumerable<WorkResult> ran)
     {
         try
         {
             if (!IocList.Exists(caseDirectory)) return;
-            await SweepHostsAsync(caseDirectory, [host], null, CancellationToken.None);
+            await SweepHostsAsync(caseDirectory, [host], null, CancellationToken.None, ran);
         }
         catch (Exception ex)
         {
@@ -245,7 +251,8 @@ public static class IocSweep
 
     private static async Task<IocSweepResult> RunAsync(
         string caseDirectory, IReadOnlyCollection<IocEntry> iocs, IReadOnlyList<string> hosts,
-        Func<IocHit, bool> replaced, IProgress<string>? progress, CancellationToken cancellationToken)
+        Func<IocHit, bool> replaced, IProgress<string>? progress, CancellationToken cancellationToken,
+        IEnumerable<WorkResult>? ran = null)
     {
         await Gate.WaitAsync(cancellationToken);
         try
@@ -260,6 +267,9 @@ public static class IocSweep
             if (!matcher.IsEmpty)
             {
                 var modules = ModuleMap(caseDirectory);
+                foreach (var finished in ran ?? [])
+                    foreach (var processor in finished.Processors)
+                        AddOutputs(modules, finished.Module, finished.Collection, finished.Destination, processor.OutputFiles);
                 var work = new List<(string Host, string File, long Size)>();
                 foreach (var host in hosts)
                 {
@@ -381,25 +391,12 @@ public static class IocSweep
                 var module = result.GetProperty("Module").GetString() ?? "";
                 var collection = result.GetProperty("Collection").GetString() ?? "";
                 var destination = result.GetProperty("Destination").GetString() ?? "";
-                if (destination.Length == 0 || !result.TryGetProperty("Processors", out var processors)) continue;
-
-                // Keyed from the collection folder down, not by full path, so a case that has been
-                // moved or copied since (to a share, say) still finds its modules.
-                var parts = destination.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                var from = Array.FindLastIndex(parts, p => p.Equals(collection, StringComparison.OrdinalIgnoreCase));
-                if (from < 0) continue;
-                var folder = Path.Combine(parts[from..]);
+                if (!result.TryGetProperty("Processors", out var processors)) continue;
                 foreach (var processor in processors.EnumerateArray())
                 {
                     if (!processor.TryGetProperty("OutputFiles", out var outputs)) continue;
-                    foreach (var output in outputs.EnumerateArray())
-                    {
-                        var text = output.GetString() ?? "";
-                        if (text.Contains("=> FAILED", StringComparison.Ordinal)) continue;
-                        var arrow = text.IndexOf(" => ", StringComparison.Ordinal);
-                        var delivered = arrow < 0 ? text : text[(arrow + 4)..];
-                        map[Path.Combine(folder, delivered)] = module;
-                    }
+                    AddOutputs(map, module, collection, destination,
+                               outputs.EnumerateArray().Select(o => o.GetString() ?? "").ToList());
                 }
             }
         }
@@ -409,6 +406,27 @@ public static class IocSweep
             // Without the manifest every file is named by its category folder; the hits stand.
         }
         return map;
+    }
+
+    /// <summary>Names <paramref name="module"/> as the writer of each file a processor delivered.</summary>
+    private static void AddOutputs(
+        Dictionary<string, string> map, string module, string collection, string destination,
+        IEnumerable<string> outputs)
+    {
+        // Keyed from the collection folder down, not by full path, so a case that has been
+        // moved or copied since (to a share, say) still finds its modules.
+        if (destination.Length == 0) return;
+        var parts = destination.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var from = Array.FindLastIndex(parts, p => p.Equals(collection, StringComparison.OrdinalIgnoreCase));
+        if (from < 0) return;
+        var folder = Path.Combine(parts[from..]);
+        foreach (var text in outputs)
+        {
+            if (text.Contains("=> FAILED", StringComparison.Ordinal)) continue;
+            var arrow = text.IndexOf(" => ", StringComparison.Ordinal);
+            var delivered = arrow < 0 ? text : text[(arrow + 4)..];
+            map[Path.Combine(folder, delivered)] = module;
+        }
     }
 
     /// <summary>host\Category\...\file.csv gives Category.</summary>

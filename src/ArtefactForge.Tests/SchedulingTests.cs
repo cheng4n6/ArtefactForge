@@ -1,4 +1,5 @@
 using ArtefactForge.Core;
+using ArtefactForge.Core.Ioc;
 using ArtefactForge.Core.Windows;
 using Xunit;
 
@@ -308,6 +309,36 @@ public class SchedulingTests
         var modules = ModuleLoader.LoadDirectory(Path.Combine(root!, "Modules", folder));
         Assert.Empty(modules.Errors);
         return modules.Items.Single(m => m.Name == name);
+    }
+
+    [Fact]
+    public async Task A_hosts_early_IOC_sweep_names_the_module_that_wrote_each_hit()
+    {
+        // The sweep runs before the run's manifest is written; without the run's own results it
+        // could name a hit only by its category folder, and Hayabusa's and EvtxECmd's hits, both in
+        // EventLogs, would no longer be told apart.
+        using var dir = new TempDirectory();
+        var module = new ModuleDefinition
+        {
+            Description = "Writer", Category = "EventLogs", SourcePath = Path.Combine(dir.Path, "Writer.forge"),
+            Processors =
+            [
+                new ProcessorDefinition
+                {
+                    Executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"),
+                    CommandLine = @"/c (echo Name& echo ABC.exe) > ""%destinationDirectory%\found.csv"""
+                }
+            ]
+        };
+        var config = Config(dir, [module]);
+        var caseDir = dir.Dir(Path.Combine("out", "CASE"));
+        IocList.Add(caseDir, [IocEntry.Create(IocType.FileName, "ABC.exe")]);
+
+        await new RunEngine().RunAsync(config);
+
+        var hit = Assert.Single(IocSweep.ReadHits(IocSweep.HitsPathFor(caseDir)));
+        Assert.Equal("TESTCOL", hit.Host);
+        Assert.Equal("Writer", hit.Module);
     }
 
     [Fact]
