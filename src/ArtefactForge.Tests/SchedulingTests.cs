@@ -183,6 +183,25 @@ public class SchedulingTests
         Assert.True(budget.WaitAsync(1, CancellationToken.None).IsCompletedSuccessfully);
     }
 
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(512L << 20, 0L)]
+    [InlineData(2560L << 20, 1536L << 20)]
+    [InlineData(4L << 30, 3L << 30)]
+    public void The_budget_keeps_1_GB_back_for_the_other_modules(long? free, long? budget) =>
+        Assert.Equal(budget, MemoryBudget.FromFree(free));
+
+    [Fact]
+    public async Task A_budget_of_nothing_still_runs_one_at_a_time()
+    {
+        var budget = new MemoryBudget(MemoryBudget.FromFree(512L << 20));
+        await budget.WaitAsync(1, CancellationToken.None);
+        var next = budget.WaitAsync(1, CancellationToken.None);
+        Assert.False(next.IsCompleted);
+        budget.Release(1);
+        await next.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     [Fact]
     public void Free_memory_is_read_on_this_machine() =>
         Assert.True(MemoryBudget.Available() > 0);

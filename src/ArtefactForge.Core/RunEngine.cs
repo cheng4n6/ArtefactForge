@@ -82,7 +82,7 @@ public sealed class RunEngine
         // Chainsaw runs at once took about 18 GB and brought down a 16 GB workstation, yet MFTECmd,
         // Hayabusa and Chainsaw hunt fit side by side in 4 GB and finish far sooner together.
         report.FreeMemoryBytesAtStart = MemoryBudget.Available();
-        report.MemoryBudgetBytes = config.MemoryBudgetBytes ?? report.FreeMemoryBytesAtStart;
+        report.MemoryBudgetBytes = config.MemoryBudgetBytes ?? MemoryBudget.FromFree(report.FreeMemoryBytesAtStart);
         var memoryHeavy = new MemoryBudget(report.MemoryBudgetBytes);
         // How long each module took when this case last ran, so the longest memory-heavy one starts
         // first instead of last: it is the long pole of the batch.

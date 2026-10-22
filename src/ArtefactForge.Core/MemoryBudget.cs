@@ -3,16 +3,26 @@ using System.Runtime.InteropServices;
 namespace ArtefactForge.Core;
 
 /// <summary>
-/// Memory-heavy modules share the memory free when the run starts. Each asks for its estimate
-/// (MemoryEstimateMB in its .forge, measured peaks) and starts once that fits beside the ones
-/// already running, so a workstation with 4 GB free runs MFTECmd, Hayabusa and Chainsaw side by
-/// side but never two of Chainsaw's SRUM analysis (5.3 GB). One always runs, even when it needs
+/// Memory-heavy modules share the memory free when the run starts, less a reserve for everything
+/// else. Each asks for its estimate (MemoryEstimateMB in its .forge, measured peaks) and starts
+/// once that fits beside the ones already running, so a workstation with 5 GB free runs MFTECmd,
+/// Hayabusa and Chainsaw side by side but never two of Chainsaw's SRUM analysis (5.3 GB). One always runs, even when it needs
 /// more than the whole budget, so a small machine still gets through the batch one at a time.
 /// </summary>
 public sealed class MemoryBudget
 {
     /// <summary>For a memory-heavy module with no estimate: the heaviest tool measured, rounded up.</summary>
     public const int DefaultEstimateMB = 6000;
+
+    /// <summary>
+    /// Kept back for the modules the budget does not count: RECmd and WindowsSystemInfo each took
+    /// about 0.8 GB beside MFTECmd, leaving 0.02 GB free and the whole PC paging.
+    /// </summary>
+    public const long ReserveBytes = 1L << 30;
+
+    /// <summary>The budget for this much free memory: null stays null (one at a time).</summary>
+    public static long? FromFree(long? freeBytes) =>
+        freeBytes is { } free ? Math.Max(0, free - ReserveBytes) : null;
 
     private readonly object _gate = new();
     private readonly LinkedList<(long Need, TaskCompletionSource Ready)> _waiting = new();

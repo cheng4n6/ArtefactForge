@@ -18,8 +18,8 @@ public sealed class RunConfiguration
     /// <summary>Concurrent IoWeight=heavy modules. Disk, not CPU, is the real ceiling.</summary>
     public int MaxHeavyWorkers { get; init; } = 2;
     /// <summary>
-    /// Memory the memory-heavy modules may share. Null takes the memory free when the run starts
-    /// (<see cref="MemoryBudget"/>); set it to pin the budget.
+    /// Memory the memory-heavy modules may share. Null takes the memory free when the run starts,
+    /// less a 1 GB reserve (<see cref="MemoryBudget"/>); set it to pin the budget.
     /// </summary>
     public long? MemoryBudgetBytes { get; init; }
     public bool Vss { get; init; }
