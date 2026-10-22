@@ -1,13 +1,18 @@
-# Simplest case: one processor, no iteration. Also valid as a stock .mkape.
 Description: Windows Event Logs (EvtxECmd)
 Category: EventLogs
 Author: ArtefactForge
-Version: '1.0'
+Version: '1.1'
 Id: 8f3c1b90-4a2e-4d15-9c77-1d5a0e6b2f41
 ExportFormat: csv
 OutputName: EvtxECmd
 
 # ArtefactForge extensions
+#
+# EvtxECmd reads the logs one after another on one core: 265 logs (414 MB) took 159 s. Split
+# runs it as several processes over a share of the logs each (54 s in four parts) and joins
+# their CSVs into the one EvtxECmd_EventLogs.csv, with the same rows; only their order differs.
+# The parts read hard links in _Staging, so the logs must be on the case folder's volume, as an
+# extracted zip is; otherwise, and with VSS or on a live system, it runs as one process.
 Requires:
   - '%root%\Windows\System32\winevt\Logs\*.evtx'
 Iterate: none
@@ -18,9 +23,22 @@ IoWeight: heavy
 Scope: any
 SupportsVss: true
 
+Options:
+  -
+    Name: Parts
+    Description: Processes to share the logs between. auto is 4, or 1 under 50 MB of logs; 1 on a spinning disk or a share.
+    Kind: choice
+    Choices: [auto, '1', '2', '4', '8']
+    Default: auto
+
 Processors:
   -
     Executable: eztools\EvtxeCmd\EvtxECmd.exe
-    CommandLine: -d "%root%\Windows\System32\winevt\Logs" --csv "%destinationDirectory%" --csvf EvtxECmd_EventLogs.csv %vss%
+    CommandLine: -d "%splitDir%" --csv "%destinationDirectory%" --csvf EvtxECmd_EventLogs%splitPart%.csv %vss%
     ExportFormat: csv
     ExportFile: EvtxECmd_EventLogs.csv
+    Split:
+      Folder: '%root%\Windows\System32\winevt\Logs'
+      Pattern: '*.evtx'
+      MergeInto: EvtxECmd_EventLogs.csv
+      Option: Parts

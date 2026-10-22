@@ -205,7 +205,7 @@ public sealed class RunEngine
                     WorkResult result;
                     try
                     {
-                        result = await ExecuteAsync(item, config, consoleDir, stagingRoot, cancellationToken);
+                        result = await ExecuteAsync(item, config, consoleDir, stagingRoot, workers, cancellationToken);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
@@ -404,9 +404,10 @@ public sealed class RunEngine
         public void Report(T value) => report(value);
     }
 
+    /// <param name="workers">The pool's slots, which a Split step's extra parts each take one of.</param>
     private async Task<WorkResult> ExecuteAsync(
         WorkItem item, RunConfiguration config, string consoleDir, string stagingRoot,
-        CancellationToken cancellationToken)
+        SemaphoreSlim workers, CancellationToken cancellationToken)
     {
         var started = DateTimeOffset.Now;
         var result = new WorkResult
@@ -438,6 +439,8 @@ public sealed class RunEngine
         var notMoved = new List<string>();
         // Set when a tool's log said it skipped a dirty hive with no logs; the reason for the review flag.
         string? dirtyHiveNote = null;
+        // How a Split step ran - in parts, or as one process and why - for the module's reason.
+        string? splitNote = null;
 
         var baseStem = Sanitise(item.Target.CollectionName + "_" + item.Module.Name
                                 + (item.IterationKey is null ? "" : "_" + item.IterationKey));
@@ -517,59 +520,135 @@ public sealed class RunEngine
                 VssEnabled = vss
             };
 
-            var arguments = Placeholders.Resolve(processor.CommandLine, context);
-            var workingDirectory = string.IsNullOrWhiteSpace(processor.WorkingDirectory)
-                ? null
-                : Placeholders.Resolve(processor.WorkingDirectory, context);
-
-            var stdout = Path.Combine(consoleDir, stem + ".log");
-            var stderr = Path.Combine(consoleDir, stem + ".err.log");
-
-            var outcome = await RunToolAsync();
-
-            // A dirty hive whose .LOG1/.LOG2 were not collected: the EZ Tools hive readers skip it,
-            // say so on stdout and exit 0, sometimes leaving header-only CSVs that would pass for a
-            // clean run. Read it again without the logs where the tool can, keeping the first
-            // attempt's log beside the second; either way the module goes for review.
-            if (outcome is { ExitCode: 0, TimedOut: false, LogError: null }
-                && !cancellationToken.IsCancellationRequested
-                && ReportsDirtyHiveWithoutLogs(stdout))
+            // A Split step reads %splitDir%: its whole input folder, unless it runs in parts.
+            List<string>? partFolders = null;
+            if (harvest && processor.Split is { } split)
             {
-                if (processor.NoLogsArgument is { } noLogs)
-                {
-                    var firstStdout = Path.Combine(consoleDir, stem + "_first.log");
-                    File.Move(stdout, firstStdout, overwrite: true);
-                    File.Move(stderr, Path.Combine(consoleDir, stem + "_first.err.log"), overwrite: true);
-                    if (staging is not null)
-                    {
-                        TryDeleteDirectory(staging);
-                        Directory.CreateDirectory(staging);
-                    }
-                    arguments += " " + noLogs;
-                    outcome = await RunToolAsync();
-                    dirtyHiveNote ??= "a registry hive was dirty and its transaction logs (.LOG1/.LOG2) were "
-                                    + $"not collected, so it was read again with {noLogs}, as last written to "
-                                    + "disk - recent entries may be missing; see " + Path.GetFileName(firstStdout);
-                }
-                else
-                {
-                    dirtyHiveNote ??= "a registry hive was dirty and its transaction logs (.LOG1/.LOG2) were "
-                                    + "not collected, so the tool skipped it and its entries are missing; see "
-                                    + Path.GetFileName(stdout);
-                }
+                var folder = Placeholders.Resolve(split.Folder, context);
+                context = context with { SplitDir = folder };
+                (partFolders, splitNote) = PlanSplit(
+                    split, folder, Path.Combine(workDir, "split" + (index + 1)),
+                    split.Option is null ? null : ModuleOptions.Effective(item.Module, overrides).GetValueOrDefault(split.Option),
+                    vss, item.Target.IsLive);
             }
 
-            Task<ProcessOutcome> RunToolAsync() => Builtins.IsBuiltin(tool.FullPath)
-                ? Builtins.RunAsync(tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken)
-                : ProcessRunner.RunAsync(
-                    tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken, workingDirectory);
+            var runs = new List<ToolRun>();
+            if (partFolders is null)
+            {
+                var arguments = Placeholders.Resolve(processor.CommandLine, context);
+                var workingDirectory = string.IsNullOrWhiteSpace(processor.WorkingDirectory)
+                    ? null
+                    : Placeholders.Resolve(processor.WorkingDirectory, context);
+
+                var stdout = Path.Combine(consoleDir, stem + ".log");
+                var stderr = Path.Combine(consoleDir, stem + ".err.log");
+
+                var outcome = await RunToolAsync(arguments, stdout, stderr, workingDirectory);
+
+                // A dirty hive whose .LOG1/.LOG2 were not collected: the EZ Tools hive readers skip it,
+                // say so on stdout and exit 0, sometimes leaving header-only CSVs that would pass for a
+                // clean run. Read it again without the logs where the tool can, keeping the first
+                // attempt's log beside the second; either way the module goes for review.
+                if (outcome is { ExitCode: 0, TimedOut: false, LogError: null }
+                    && !cancellationToken.IsCancellationRequested
+                    && ReportsDirtyHiveWithoutLogs(stdout))
+                {
+                    if (processor.NoLogsArgument is { } noLogs)
+                    {
+                        var firstStdout = Path.Combine(consoleDir, stem + "_first.log");
+                        File.Move(stdout, firstStdout, overwrite: true);
+                        File.Move(stderr, Path.Combine(consoleDir, stem + "_first.err.log"), overwrite: true);
+                        if (staging is not null)
+                        {
+                            TryDeleteDirectory(staging);
+                            Directory.CreateDirectory(staging);
+                        }
+                        arguments += " " + noLogs;
+                        outcome = await RunToolAsync(arguments, stdout, stderr, workingDirectory);
+                        dirtyHiveNote ??= "a registry hive was dirty and its transaction logs (.LOG1/.LOG2) were "
+                                        + $"not collected, so it was read again with {noLogs}, as last written to "
+                                        + "disk - recent entries may be missing; see " + Path.GetFileName(firstStdout);
+                    }
+                    else
+                    {
+                        dirtyHiveNote ??= "a registry hive was dirty and its transaction logs (.LOG1/.LOG2) were "
+                                        + "not collected, so the tool skipped it and its entries are missing; see "
+                                        + Path.GetFileName(stdout);
+                    }
+                }
+                runs.Add(new ToolRun(arguments, workingDirectory, stdout, stderr, outcome));
+            }
+            else
+            {
+                // The module's own slot works through the parts one after another; each worker
+                // that comes free takes a part beside it, so Workers still bounds how many tools
+                // run at once. A part never waits for a worker while holding one: with every
+                // worker busy - one, or a batch of hosts all in this step - waiting would never end.
+                var queue = new ConcurrentQueue<int>(Enumerable.Range(0, partFolders.Count));
+                var partRuns = new ToolRun[partFolders.Count];
+                using var drained = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+                async Task Lane(bool ownSlot)
+                {
+                    if (!ownSlot)
+                    {
+                        try { await workers.WaitAsync(drained.Token); }
+                        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return; }
+                    }
+                    try
+                    {
+                        while (queue.TryDequeue(out var part)) partRuns[part] = await RunPartAsync(part);
+                    }
+                    finally
+                    {
+                        if (!ownSlot) workers.Release();
+                    }
+                }
+
+                async Task<ToolRun> RunPartAsync(int part)
+                {
+                    var partContext = context with { SplitDir = partFolders[part], SplitPart = "_part" + (part + 1) };
+                    var arguments = Placeholders.Resolve(processor.CommandLine, partContext);
+                    var workingDirectory = string.IsNullOrWhiteSpace(processor.WorkingDirectory)
+                        ? null
+                        : Placeholders.Resolve(processor.WorkingDirectory, partContext);
+                    var stdout = Path.Combine(consoleDir, stem + "_part" + (part + 1) + ".log");
+                    var stderr = Path.Combine(consoleDir, stem + "_part" + (part + 1) + ".err.log");
+                    var outcome = await RunToolAsync(arguments, stdout, stderr, workingDirectory);
+                    return new ToolRun(arguments, workingDirectory, stdout, stderr, outcome);
+                }
+
+                var extra = Enumerable.Range(1, partFolders.Count - 1).Select(_ => Lane(ownSlot: false)).ToList();
+                await Lane(ownSlot: true);
+                // Every part has started; workers still being waited for are no longer needed.
+                await drained.CancelAsync();
+                await Task.WhenAll(extra);
+                runs.AddRange(partRuns);
+            }
+
+            Task<ProcessOutcome> RunToolAsync(string arguments, string stdout, string stderr, string? workingDirectory) =>
+                Builtins.IsBuiltin(tool.FullPath)
+                    ? Builtins.RunAsync(tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken)
+                    : ProcessRunner.RunAsync(
+                        tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken, workingDirectory);
+
+            // The parts are joined only when every one of them finished cleanly. Otherwise the
+            // joined file would pass for the whole input while missing a part's events.
+            var ranClean = !cancellationToken.IsCancellationRequested
+                           && runs.All(r => r.Outcome is { TimedOut: false, LogError: null }
+                                            && (r.Outcome.ExitCode == 0 || processor.ContinueOnError));
+            string? joinError = null;
+            if (partFolders is not null && ranClean)
+                joinError = await JoinPartsAsync(staging!, processor.Split!.MergeInto, partFolders, context.SplitDir, cancellationToken);
+            var unjoined = partFolders is not null && (!ranClean || joinError is not null);
 
             // A process killed part-way - timed out or cancelled - may have left files half written.
             // They are kept, because a partial CSV can still be evidence of what the tool reached,
             // but never beside finished output where they would pass for complete: they go to
-            // <collection>\_Incomplete\<category>\ instead, and the reason says so.
-            var killed = outcome.TimedOut || cancellationToken.IsCancellationRequested;
-            var harvestTo = killed ? IncompleteDestination(item.Destination, item.UserFolder) : item.Destination;
+            // <collection>\_Incomplete\<category>\ instead, and the reason says so. So do a Split
+            // step's parts when they were not joined: each holds only some of the input.
+            var killed = runs.Any(r => r.Outcome.TimedOut) || cancellationToken.IsCancellationRequested;
+            var harvestTo = killed || unjoined ? IncompleteDestination(item.Destination, item.UserFolder) : item.Destination;
             var harvested = staging is null
                 ? new HarvestResult([], 0, 0, 0)
                 : Harvest(staging, harvestTo, outputName, item.IterationKey);
@@ -586,42 +665,55 @@ public sealed class RunEngine
             // A 0-byte file is not output: EvtxECmd and Hayabusa both leave one behind when they
             // cannot open a single log, then exit 0. A header-only CSV still counts - the tool ran
             // and found nothing - but a file with no bytes at all says the tool never got going.
-            if (!killed)
+            if (!killed && !unjoined)
             {
                 delivered += harvested.Files.Count - harvested.Empty - harvested.Failed;
                 emptyFiles += harvested.Empty;
             }
-            var partialNote = killed && harvested.Files.Count > 0
-                ? $"; {harvested.Files.Count} partial file(s) kept in {Path.Combine("_Incomplete", item.UserFolder is null ? Path.GetFileName(item.Destination) : Path.Combine(Path.GetFileName(Path.GetDirectoryName(item.Destination) ?? ""), item.UserFolder))}"
+            var incomplete = Path.Combine("_Incomplete", item.UserFolder is null ? Path.GetFileName(item.Destination) : Path.Combine(Path.GetFileName(Path.GetDirectoryName(item.Destination) ?? ""), item.UserFolder));
+            var partialNote = harvested.Files.Count == 0 ? ""
+                : killed ? $"; {harvested.Files.Count} partial file(s) kept in {incomplete}"
+                : unjoined ? $"; the parts' {harvested.Files.Count} file(s) were not joined and are kept in {incomplete}"
                 : "";
 
-            result.Processors.Add(new ProcessorRecord
+            // One record per process. The output is the step's, delivered once, so it is listed
+            // on the first.
+            for (var r = 0; r < runs.Count; r++)
             {
-                Phase = phase,
-                Executable = tool.FullPath,
-                Arguments = arguments,
-                ToolVersion = tool.Version,
-                ToolSha256 = tool.Sha256,
-                WorkingDirectory = Builtins.IsBuiltin(tool.FullPath)
-                    ? ""
-                    : workingDirectory ?? Path.GetDirectoryName(tool.FullPath) ?? "",
-                ExitCode = outcome.ExitCode,
-                WroteToStderr = outcome.WroteToStderr,
-                StderrExpected = outcome.WroteToStderr && OnlyExpectedStderr(stderr, processor.ExpectedStderr),
-                DurationSeconds = outcome.DurationSeconds,
-                PeakMemoryBytes = outcome.PeakMemoryBytes,
-                StdoutLog = stdout,
-                StderrLog = stderr,
-                OutputFilesCreated = harvested.Files.Count,
-                OutputBytes = harvested.Bytes,
-                OutputFiles = harvested.Files,
-                Error = outcome.Error ?? outcome.LogError
-            });
+                var run = runs[r];
+                result.Processors.Add(new ProcessorRecord
+                {
+                    Phase = phase,
+                    Executable = tool.FullPath,
+                    Arguments = run.Arguments,
+                    ToolVersion = tool.Version,
+                    ToolSha256 = tool.Sha256,
+                    WorkingDirectory = Builtins.IsBuiltin(tool.FullPath)
+                        ? ""
+                        : run.WorkingDirectory ?? Path.GetDirectoryName(tool.FullPath) ?? "",
+                    ExitCode = run.Outcome.ExitCode,
+                    WroteToStderr = run.Outcome.WroteToStderr,
+                    StderrExpected = run.Outcome.WroteToStderr && OnlyExpectedStderr(run.Stderr, processor.ExpectedStderr),
+                    DurationSeconds = run.Outcome.DurationSeconds,
+                    PeakMemoryBytes = run.Outcome.PeakMemoryBytes,
+                    StdoutLog = run.Stdout,
+                    StderrLog = run.Stderr,
+                    OutputFilesCreated = r == 0 ? harvested.Files.Count : 0,
+                    OutputBytes = r == 0 ? harvested.Bytes : 0,
+                    OutputFiles = r == 0 ? harvested.Files : [],
+                    Error = run.Outcome.Error ?? run.Outcome.LogError
+                });
+            }
 
-            if (outcome.TimedOut)
+            // "part 2: " when the step ran in parts, so the reason names the log to read.
+            string Part(ToolRun run) => runs.Count > 1 ? "part " + (runs.IndexOf(run) + 1) + ": " : "";
+
+            if (runs.FirstOrDefault(r => r.Outcome.TimedOut) is { } timedOut)
             {
                 result.Status = WorkStatus.TimedOut;
-                result.Reason = partialNote.Length == 0 ? outcome.Error : outcome.Error?.TrimEnd('.') + partialNote;
+                result.Reason = Part(timedOut) + (partialNote.Length == 0
+                    ? timedOut.Outcome.Error
+                    : timedOut.Outcome.Error?.TrimEnd('.') + partialNote);
                 return false;
             }
 
@@ -634,22 +726,29 @@ public sealed class RunEngine
 
             // The tool may well have finished, but its log is cut short, so neither its stderr nor
             // (on a full disk) its output can be trusted. Never passed, even for ContinueOnError.
-            if (outcome.LogError is not null)
+            if (runs.FirstOrDefault(r => r.Outcome.LogError is not null) is { } cutShort)
             {
                 result.Status = WorkStatus.Failed;
                 result.Reason = (phase == "prepare" ? "preparation step " + (index + 1) + ": " : "")
-                                + outcome.LogError + " - is the output disk full?";
+                                + Part(cutShort) + cutShort.Outcome.LogError + " - is the output disk full?"
+                                + partialNote;
                 return false;
             }
 
-            if (outcome.ExitCode != 0)
+            // Some staging tools report failure for conditions that still leave a usable copy.
+            if (!processor.ContinueOnError && runs.FirstOrDefault(r => r.Outcome.ExitCode != 0) is { } failed)
             {
-                // Some staging tools report failure for conditions that still leave a usable copy.
-                if (processor.ContinueOnError) return true;
-
                 result.Status = WorkStatus.Failed;
                 result.Reason = (phase == "prepare" ? "preparation step " + (index + 1) + " failed: " : "")
-                                + "exit code " + outcome.ExitCode + "; see " + Path.GetFileName(stderr);
+                                + Part(failed) + "exit code " + failed.Outcome.ExitCode + "; see "
+                                + Path.GetFileName(failed.Stderr) + partialNote;
+                return false;
+            }
+
+            if (joinError is not null)
+            {
+                result.Status = WorkStatus.Failed;
+                result.Reason = "the parts ran but were not joined: " + joinError + partialNote;
                 return false;
             }
 
@@ -692,8 +791,106 @@ public sealed class RunEngine
             }
         }
 
+        if (splitNote is not null)
+            result.Reason = result.Reason is null ? splitNote : result.Reason + "; " + splitNote;
         result.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
         return result;
+    }
+
+    /// <summary>One process a step ran: the whole step, or one part of a Split step.</summary>
+    private sealed record ToolRun(
+        string Arguments, string? WorkingDirectory, string Stdout, string Stderr, ProcessOutcome Outcome);
+
+    /// <summary>
+    /// The folders a Split step's parts read, or null to run it as one process, with what the
+    /// module's reason should say: how it was split, or why it was not when parts were asked for
+    /// or could not be made. Nothing when one process was simply the right choice.
+    /// </summary>
+    private static (List<string>? Folders, string? Note) PlanSplit(
+        SplitDefinition split, string folder, string linkRoot, string? setting, bool vss, bool live)
+    {
+        var asked = setting is not null && InputSplit.TryParseParts(setting, out var n) && n > 1;
+        // Shadow copies are read by the tool itself, through the volume, not from the folder; a
+        // live system's logs are locked and in use.
+        if (vss) return (null, asked ? "run as one process: shadow copies are read by the tool itself" : null);
+        if (live) return (null, asked ? "run as one process: the live system's files cannot be linked" : null);
+
+        List<FileInfo> files;
+        try
+        {
+            // Not there, or unreadable: the tool runs over the folder as it would unsplit, and
+            // reports the problem itself.
+            if (!Directory.Exists(folder)) return (null, null);
+            var top = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar);
+            var all = new DirectoryInfo(top).EnumerateFiles(split.Pattern, SearchOption.AllDirectories).ToList();
+            files = all.Where(f => string.Equals(f.DirectoryName, top, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (files.Count < all.Count)
+                return (null, "run as one process: some of its input is in subfolders, which the parts would not see");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (null, null);
+        }
+
+        var parts = InputSplit.Parts(setting, files.Count, files.Sum(f => f.Length));
+        if (parts == 1) return (null, null);
+
+        var groups = InputSplit.Group(files.Select(f => (f.FullName, f.Length)).ToList(), parts);
+        var error = InputSplit.Link(groups, linkRoot, out var folders);
+        return error is null
+            ? (folders, $"ran as {folders.Count} processes over {files.Count} files, joined into {split.MergeInto}")
+            : (null, "run as one process: " + error);
+    }
+
+    /// <summary>
+    /// Joins a Split step's CSVs, named &lt;MergeInto&gt;_partN, into MergeInto in staging and
+    /// removes them, with each part's folder written as <paramref name="folder"/>, the one it
+    /// stands for. Returns why not, leaving the parts as they are: a file that is not one of the
+    /// parts (a CommandLine that names its CSV some other way), headers that differ, or a part
+    /// that cannot be read.
+    /// </summary>
+    private static async Task<string?> JoinPartsAsync(
+        string staging, string mergeInto, IReadOnlyList<string> partFolders, string folder,
+        CancellationToken cancellationToken)
+    {
+        var stem = Path.GetFileNameWithoutExtension(mergeInto);
+        var extension = Path.GetExtension(mergeInto);
+        var partFiles = Enumerable.Range(1, partFolders.Count)
+            .Select(p => Path.Combine(staging, stem + "_part" + p + extension))
+            .ToList();
+        var unexpected = Directory.EnumerateFiles(staging, "*", SearchOption.AllDirectories)
+            .FirstOrDefault(f => !partFiles.Contains(f, StringComparer.OrdinalIgnoreCase));
+        if (unexpected is not null)
+            return $"{Path.GetRelativePath(staging, unexpected)} is not one of the parts' files ({stem}_partN{extension})";
+
+        var merged = Path.Combine(staging, mergeInto);
+        string? error;
+        try
+        {
+            error = await InputSplit.MergeAsync(partFiles, merged, cancellationToken,
+                                                partFolders.Select(p => (p, folder)).ToList());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = "could not join them: " + ex.Message;
+        }
+        if (error is not null)
+        {
+            try { File.Delete(merged); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            return error;
+        }
+
+        // Joined: a part left beside the joined file would deliver its rows twice.
+        foreach (var part in partFiles)
+        {
+            try { File.Delete(part); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return $"joined, but {Path.GetFileName(part)} could not be removed: {ex.Message}";
+            }
+        }
+        return null;
     }
 
     /// <param name="Failed">Files that could not be moved out of staging; listed in Files as "=> FAILED".</param>
