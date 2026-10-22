@@ -10,6 +10,7 @@ public sealed class SavedRunOptions
     /// <summary>Upper bounds for values read back. Well past any sensible setting.</summary>
     public const int MaxWorkersLimit = 64;
     public const int MaxZipsAtOnce = 16;
+    public const double MaxKeepFreeGB = 64;
 
     public int Workers { get; set; } = 8;
     public int HeavyWorkers { get; set; } = 2;
@@ -17,6 +18,11 @@ public sealed class SavedRunOptions
     public bool Vss { get; set; }
     public bool SkipCompleted { get; set; } = true;
     public bool CleanupExtracted { get; set; }
+    /// <summary>No new module starts while free memory is under this; 0 turns it off.</summary>
+    public double KeepFreeGB { get; set; } = 1;
+
+    /// <summary>Keep free in bytes, as the engine takes it.</summary>
+    public static long ToBytes(double gb) => (long)(gb * (1L << 30));
 
     /// <summary>A copy with every number in range. Heavy IO never exceeds the worker count.</summary>
     public SavedRunOptions Clamped()
@@ -29,7 +35,8 @@ public sealed class SavedRunOptions
             ZipsAtOnce = Math.Clamp(ZipsAtOnce, 1, MaxZipsAtOnce),
             Vss = Vss,
             SkipCompleted = SkipCompleted,
-            CleanupExtracted = CleanupExtracted
+            CleanupExtracted = CleanupExtracted,
+            KeepFreeGB = double.IsFinite(KeepFreeGB) ? Math.Clamp(KeepFreeGB, 0, MaxKeepFreeGB) : 1
         };
     }
 }

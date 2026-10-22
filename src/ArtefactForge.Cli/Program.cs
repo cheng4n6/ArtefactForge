@@ -67,6 +67,7 @@ switch (verb)
         Console.WriteLine("  --tools <path>       extra tool root, repeatable");
         Console.WriteLine("  --workers <n>        worker pool size (default: logical cores)");
         Console.WriteLine("  --heavy <n>          concurrent heavy-IO modules (default: 2)");
+        Console.WriteLine("  --keep-free <GB>     start no new module while free memory is under this (default: 1, 0 = off)");
         Console.WriteLine("  --batch              treat each subfolder, .zip and .tar.gz in <evidence> as a collection");
         Console.WriteLine("  --extract-to <path>  where archived collections are extracted (default: <case>\\_Extracted)");
         Console.WriteLine("  --cleanup-extracted  delete each zip's extracted data once its modules have finished");
@@ -805,6 +806,9 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
     if (options.List("tools").Count > 0) request.ToolRoots.AddRange(options.List("tools"));
     if (int.TryParse(options.Value("workers"), out var workers)) request.Workers = workers;
     if (int.TryParse(options.Value("heavy"), out var heavy)) request.HeavyWorkers = heavy;
+    if (double.TryParse(options.Value("keep-free"), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var keepFree))
+        request.KeepFreeGB = keepFree;
 
     if (options.Value("save-config") is { } savePath)
     {
@@ -957,6 +961,7 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
         Modules = modules,
         MaxWorkers = request.Workers ?? Environment.ProcessorCount,
         MaxHeavyWorkers = request.HeavyWorkers ?? 2,
+        KeepFreeMemoryBytes = SavedRunOptions.ToBytes(Math.Max(0, request.KeepFreeGB ?? 1)),
         Vss = request.Vss,
         SkipCompleted = request.SkipCompleted,
         OptionOverrides = overrides,

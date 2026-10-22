@@ -21,6 +21,8 @@ public sealed class RunReport
     /// <summary>The memory memory-heavy modules shared, and the free memory that decided it.</summary>
     public long? MemoryBudgetBytes { get; set; }
     public long? FreeMemoryBytesAtStart { get; set; }
+    /// <summary>Modules held back because free memory was under Keep free.</summary>
+    public int MemoryFloorWaits { get; set; }
 
     public int Count(WorkStatus status) => Results.Count(r => r.Status == status);
 
@@ -82,8 +84,11 @@ public sealed class RunEngine
         // Chainsaw runs at once took about 18 GB and brought down a 16 GB workstation, yet MFTECmd,
         // Hayabusa and Chainsaw hunt fit side by side in 4 GB and finish far sooner together.
         report.FreeMemoryBytesAtStart = MemoryBudget.Available();
-        report.MemoryBudgetBytes = config.MemoryBudgetBytes ?? report.FreeMemoryBytesAtStart;
+        report.MemoryBudgetBytes = config.MemoryBudgetBytes
+                                   ?? MemoryBudget.FromFree(report.FreeMemoryBytesAtStart, config.KeepFreeMemoryBytes);
         var memoryHeavy = new MemoryBudget(report.MemoryBudgetBytes);
+        // The budget counts only the memory-heavy modules; this watches what is actually free.
+        var memoryFloor = new MemoryFloor(config.KeepFreeMemoryBytes);
         // How long each module took when this case last ran, so the longest memory-heavy one starts
         // first instead of last: it is the long pole of the batch.
         var lastDurations = LoadDurations(Path.Combine(logDir, "manifest.json"));
@@ -138,6 +143,7 @@ public sealed class RunEngine
         report.Results.AddRange(Windows.RemoteAccess.Build(caseDir, cancellationToken));   // for the RDP trace
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
+        report.MemoryFloorWaits = memoryFloor.Waits;
         SaveState(statePath, completed, results);
         WriteManifests(report, logDir, config, collections, started);
         await Ioc.IocSweep.AfterRunAsync(report);   // the case's IOC hits for the hosts just processed
@@ -199,6 +205,7 @@ public sealed class RunEngine
                 if (isMemoryHeavy) await memoryHeavy.WaitAsync(memoryNeed, cancellationToken);
                 else await workers.WaitAsync(cancellationToken);
                 if (isHeavy) await heavy.WaitAsync(cancellationToken);
+                await memoryFloor.WaitAsync(cancellationToken);
                 try
                 {
                     Progress?.Invoke(new ProgressEvent(item, WorkStatus.Running));
@@ -230,6 +237,7 @@ public sealed class RunEngine
                 }
                 finally
                 {
+                    memoryFloor.Release();
                     if (isHeavy) heavy.Release();
                     if (isMemoryHeavy) memoryHeavy.Release(memoryNeed);
                     else workers.Release();
@@ -1049,6 +1057,8 @@ public sealed class RunEngine
             config.MaxHeavyWorkers,
             report.MemoryBudgetBytes,
             report.FreeMemoryBytesAtStart,
+            config.KeepFreeMemoryBytes,
+            report.MemoryFloorWaits,
             Vss = config.Vss,
             Cancelled = report.Cancelled,
             Collections = collections,

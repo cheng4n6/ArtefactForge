@@ -62,4 +62,17 @@ public class SavedRunOptionsTests
         Assert.False(options.Vss);
         Assert.False(options.CleanupExtracted);
     }
+
+    [Theory]
+    [InlineData(1.0, 1.0)]
+    [InlineData(0.0, 0.0)]
+    [InlineData(-3.0, 0.0)]
+    [InlineData(500.0, SavedRunOptions.MaxKeepFreeGB)]
+    [InlineData(double.NaN, 1.0)]
+    public void Keep_free_is_put_in_range(double saved, double expected) =>
+        Assert.Equal(expected, new SavedRunOptions { KeepFreeGB = saved }.Clamped().KeepFreeGB);
+
+    [Fact]
+    public void Keep_free_defaults_to_1_GB() =>
+        Assert.Equal(1L << 30, SavedRunOptions.ToBytes(new SavedRunOptions().Clamped().KeepFreeGB));
 }

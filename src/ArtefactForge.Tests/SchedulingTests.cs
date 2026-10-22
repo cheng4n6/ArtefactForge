@@ -57,7 +57,9 @@ public class SchedulingTests
         MaxWorkers = 1,
         MaxHeavyWorkers = 1,
         // One byte: no two memory-heavy modules fit, so they run one at a time.
-        MemoryBudgetBytes = budgetBytes
+        MemoryBudgetBytes = budgetBytes,
+        // Timing assertions must not depend on how much memory the test machine has free.
+        KeepFreeMemoryBytes = 0
     };
 
     private static (DateTimeOffset Start, DateTimeOffset End) Span(RunReport report, string module)
@@ -181,6 +183,80 @@ public class SchedulingTests
         budget.Release(1);
         // Nothing is running or held for the cancelled wait, so the next starts at once.
         Assert.True(budget.WaitAsync(1, CancellationToken.None).IsCompletedSuccessfully);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(512L << 20, 0L)]
+    [InlineData(2560L << 20, 1536L << 20)]
+    [InlineData(4L << 30, 3L << 30)]
+    public void The_budget_keeps_1_GB_back_for_the_other_modules(long? free, long? budget) =>
+        Assert.Equal(budget, MemoryBudget.FromFree(free, 1L << 30));
+
+    [Fact]
+    public void Keep_free_of_zero_leaves_the_whole_free_memory_to_the_budget() =>
+        Assert.Equal(4L << 30, MemoryBudget.FromFree(4L << 30, 0));
+
+    [Fact]
+    public async Task The_floor_holds_a_module_back_until_memory_is_free_again()
+    {
+        long free = 500L << 20;
+        var floor = new MemoryFloor(1L << 30, () => Interlocked.Read(ref free), TimeSpan.FromMilliseconds(20));
+
+        // Nothing running: the first starts however little is free.
+        await floor.WaitAsync(CancellationToken.None);
+        var second = floor.WaitAsync(CancellationToken.None);
+        await Task.Delay(100);
+        Assert.False(second.IsCompleted);
+        Assert.Equal(1, floor.Waits);
+
+        Interlocked.Exchange(ref free, 2L << 30);
+        await second.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task The_floor_lets_the_next_start_once_the_running_one_finishes()
+    {
+        var floor = new MemoryFloor(1L << 30, () => 0, TimeSpan.FromMinutes(1));
+        await floor.WaitAsync(CancellationToken.None);
+        var next = floor.WaitAsync(CancellationToken.None);
+        Assert.False(next.IsCompleted);
+
+        floor.Release();
+        await next.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Theory]
+    [InlineData(0L, 0L)]          // turned off
+    [InlineData(1L << 30, null)]  // free memory unreadable
+    public async Task The_floor_holds_nothing_back_when_off_or_unreadable(long floorBytes, long? free)
+    {
+        var floor = new MemoryFloor(floorBytes, () => free, TimeSpan.FromMinutes(1));
+        await floor.WaitAsync(CancellationToken.None);
+        Assert.True(floor.WaitAsync(CancellationToken.None).IsCompletedSuccessfully);
+        Assert.Equal(0, floor.Waits);
+    }
+
+    [Fact]
+    public async Task A_wait_on_the_floor_can_be_cancelled()
+    {
+        var floor = new MemoryFloor(1L << 30, () => 0, TimeSpan.FromMinutes(1));
+        await floor.WaitAsync(CancellationToken.None);
+        using var cancel = new CancellationTokenSource();
+        var waiting = floor.WaitAsync(cancel.Token);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+    }
+
+    [Fact]
+    public async Task A_budget_of_nothing_still_runs_one_at_a_time()
+    {
+        var budget = new MemoryBudget(MemoryBudget.FromFree(512L << 20, 1L << 30));
+        await budget.WaitAsync(1, CancellationToken.None);
+        var next = budget.WaitAsync(1, CancellationToken.None);
+        Assert.False(next.IsCompleted);
+        budget.Release(1);
+        await next.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
