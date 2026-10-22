@@ -51,6 +51,8 @@ internal sealed class CollectionSource : IDisposable
     public string Path { get; }
     public bool IsFolder => _zip is null && _tar is null;
     public bool IsTar => _tar is not null;
+    /// <summary>A zip, whose entries can be read by several readers at once, each its own opening of the file.</summary>
+    public bool IsZip => _zip is not null;
     public IReadOnlyList<SourceEntry> Entries { get; }
 
     /// <summary>
