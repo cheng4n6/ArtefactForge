@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Net;
 using System.Text;
@@ -177,12 +178,18 @@ public static class IpHistoryLookup
 
 /// <summary>
 /// Streams RFC 4180 records, including quoted cells that run over several lines. EvtxECmd output
-/// runs to gigabytes, so nothing is read whole.
+/// runs to gigabytes, so nothing is read whole: text is scanned a buffer at a time, a run of
+/// ordinary characters copied in one go, and a caller can skip the rest of a record it does not want.
 /// </summary>
-internal sealed class CsvRecordReader : IDisposable
+public sealed class CsvRecordReader : IDisposable
 {
+    private static readonly SearchValues<char> Unquoted = SearchValues.Create(",\"\r\n");
+
     private readonly StreamReader _reader;
     private readonly StringBuilder _cell = new();
+    private readonly char[] _buffer = new char[1 << 16];
+    private int _pos;
+    private int _len;
 
     public CsvRecordReader(string path)
     {
@@ -193,35 +200,84 @@ internal sealed class CsvRecordReader : IDisposable
     }
 
     /// <summary>The next record, or null at the end of the file.</summary>
-    public List<string>? ReadRecord()
+    public List<string>? ReadRecord() => ReadRecord(int.MaxValue, null);
+
+    /// <summary>
+    /// The next record, or null at the end of the file. Once cells 0 to <paramref name="decideAfter"/>
+    /// are read, <paramref name="wantRest"/> sees them; when it says no, the rest of the record is
+    /// passed over without being copied and only those cells come back. EvtxECmd's Payload, the
+    /// last and much the largest cell, is wanted for a few event IDs out of every log.
+    /// </summary>
+    public List<string>? ReadRecord(int decideAfter, Func<List<string>, bool>? wantRest)
     {
-        var c = _reader.Read();
-        if (c < 0) return null;
+        if (!Fill()) return null;
 
         var fields = new List<string>();
         var quoted = false;
         _cell.Clear();
-        while (c >= 0)
+        while (Fill())
         {
-            var ch = (char)c;
+            var span = _buffer.AsSpan(_pos, _len - _pos);
             if (quoted)
             {
-                if (ch == '"')
-                {
-                    if (_reader.Peek() == '"') { _cell.Append('"'); _reader.Read(); }
-                    else quoted = false;
-                }
-                else _cell.Append(ch);
+                var at = span.IndexOf('"');
+                if (at < 0) { _cell.Append(span); _pos = _len; continue; }
+                _cell.Append(span[..at]);
+                _pos += at + 1;
+                if (Peek() == '"') { _cell.Append('"'); _pos++; }
+                else quoted = false;
+                continue;
             }
-            else if (ch == '"') quoted = true;
-            else if (ch == ',') { fields.Add(_cell.ToString()); _cell.Clear(); }
+
+            var stop = span.IndexOfAny(Unquoted);
+            if (stop < 0) { _cell.Append(span); _pos = _len; continue; }
+            _cell.Append(span[..stop]);
+            var ch = span[stop];
+            _pos += stop + 1;
+            if (ch == '"') quoted = true;
             else if (ch == '\n') break;
-            else if (ch != '\r') _cell.Append(ch);
-            c = _reader.Read();
+            else if (ch == ',')
+            {
+                fields.Add(_cell.ToString());
+                _cell.Clear();
+                if (fields.Count == decideAfter + 1 && wantRest is not null && !wantRest(fields))
+                {
+                    SkipRecord();
+                    return fields;
+                }
+            }
+            // '\r' outside quotes is dropped, as a line ending.
         }
         fields.Add(_cell.ToString());
         return fields;
     }
+
+    /// <summary>Passes over the rest of a record, quoted line breaks included.</summary>
+    private void SkipRecord()
+    {
+        var quoted = false;
+        while (Fill())
+        {
+            var span = _buffer.AsSpan(_pos, _len - _pos);
+            var at = quoted ? span.IndexOf('"') : span.IndexOfAny('"', '\n');
+            if (at < 0) { _pos = _len; continue; }
+            _pos += at + 1;
+            if (span[at] == '\n') return;
+            // An escaped quote is two in a row: leaving the cell and coming straight back in.
+            quoted = !quoted;
+        }
+    }
+
+    /// <summary>True when there is a character to read, refilling the buffer as needed.</summary>
+    private bool Fill()
+    {
+        if (_pos < _len) return true;
+        _len = _reader.Read(_buffer, 0, _buffer.Length);
+        _pos = 0;
+        return _len > 0;
+    }
+
+    private int Peek() => Fill() ? _buffer[_pos] : -1;
 
     public void Dispose() => _reader.Dispose();
 }

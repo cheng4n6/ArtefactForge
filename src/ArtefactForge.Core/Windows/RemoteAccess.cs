@@ -231,13 +231,18 @@ public static class RemoteAccess
         var payloadCol = Column("Payload");
         if (timeCol < 0 || idCol < 0 || channelCol < 0 || payloadCol < 0)
             throw new InvalidDataException($"{Path.GetFileName(path)} is not EvtxECmd output: TimeCreated, EventId, Channel or Payload column missing");
-        var last = new[] { timeCol, idCol, channelCol, payloadCol, computerCol }.Max();
+        var last = new[] { timeCol, idCol, channelCol, computerCol }.Max();
+        // The Payload is read only for the events below; every other row needs just its time.
+        var wantPayload = payloadCol > last
+            ? fields => LogName(fields[channelCol]) is { } l && WantsPayload(l, fields[idCol].Trim())
+            : (Func<List<string>, bool>?)null;
 
         var rows = 0;
-        while (reader.ReadRecord() is { } fields)
+        while (reader.ReadRecord(last, wantPayload) is { } fields)
         {
             if ((++rows & 0xFFFF) == 0) cancellationToken.ThrowIfCancellationRequested();
             if (fields.Count <= last) continue;
+            var hasPayload = fields.Count > payloadCol;
 
             var log = LogName(fields[channelCol]);
             if (log is null) continue;
@@ -251,6 +256,8 @@ public static class RemoteAccess
             {
                 case (SecurityLog, "1102"):
                     if (time is { } cleared) c.Cleared.Add(cleared);
+                    break;
+                case (_, _) when !hasPayload:
                     break;
                 case (SystemLog, "104"):
                     // The System log records the clearing of any log; the cleared log is named in it.
@@ -273,6 +280,18 @@ public static class RemoteAccess
         }
         return new EventLogRead(events, coverage);
     }
+
+    /// <summary>The events <see cref="ReadEventLog"/> reads a Payload for.</summary>
+    private static bool WantsPayload(string log, string id) => (log, id) switch
+    {
+        (SystemLog, "104") => true,
+        (SecurityLog, "4624" or "4778" or "4779" or "4634") => true,
+        (RcmLog, "1149") => true,
+        (LsmLog, "21" or "23" or "24" or "25") => true,
+        (RdpCoreLog, "131") => true,
+        (ClientLog, "1024" or "1102") => true,
+        _ => false
+    };
 
     private static string? LogName(string channel) => channel.Trim() switch
     {
