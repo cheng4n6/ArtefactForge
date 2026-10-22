@@ -1097,19 +1097,23 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="IOCs" FontWeight="SemiBold" Margin="0,6"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" x:Name="OverviewIocText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
                                 <Button Grid.Row="0" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="IocTab" Margin="0,3"/>
-                                <TextBlock Grid.Row="1" Text="RDP trace" FontWeight="SemiBold" Margin="0,6"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="OverviewRdpText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
-                                <Button Grid.Row="1" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="RdpTab" Margin="0,3"/>
-                                <TextBlock Grid.Row="2" Text="IP history" FontWeight="SemiBold" Margin="0,6"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="OverviewIpText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
-                                <Button Grid.Row="2" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="IpHistoryTab" Margin="0,3"/>
-                                <TextBlock Grid.Row="3" Text="Evidence list" FontWeight="SemiBold" Margin="0,6"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="OverviewEvidenceText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
-                                <Button Grid.Row="3" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="EvidenceListTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="1" Text="Ransomware" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="OverviewRansomwareText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="1" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="RansomwareTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="2" Text="RDP trace" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="OverviewRdpText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="2" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="RdpTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="3" Text="IP history" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="OverviewIpText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="3" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="IpHistoryTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="4" Text="Evidence list" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="OverviewEvidenceText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="4" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="EvidenceListTab" Margin="0,3"/>
                             </Grid>
                         </Border>
                     </TabItem>
@@ -1203,6 +1207,39 @@
                                             </Style>
                                         </DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+
+                    <!-- One line per host: the extension, note and encryption window found in its MFTECmd
+                         output. The evidence is in each host's Ransomware folder and the case report. -->
+                    <TabItem x:Name="RansomwareTab" Header="Ransomware" Padding="12,5">
+                        <DockPanel Margin="0,10,0,0">
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"
+                                       Text="Each Windows host is checked for an extension added to many files, a ransom note and when encryption ran, from its MFT and USN journal output. Confirm or correct a host in Ransomware-Overrides.csv, then Check again: a confirmed extension or note is also looked for on every other host."/>
+                            <!-- A finding is in the warning colour: the analyst has to look at it. -->
+                            <TextBlock DockPanel.Dock="Top" x:Name="RansomwareStatus" TextWrapping="Wrap" Margin="2,0,0,10"/>
+
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" Margin="0,10,0,0">
+                                <Button x:Name="RansomwareCheckButton" Content="Check again" Click="OnRansomwareCheck" MinWidth="110"
+                                        ToolTip="Check hosts whose MFTECmd output or overrides changed since they were last checked"/>
+                                <Button x:Name="RansomwareOverridesButton" Content="Edit overrides" Click="OnRansomwareOverrides" MinWidth="120"
+                                        ToolTip="Open Ransomware-Overrides.csv, made with its header if the case has none. ArtefactForge never changes it."/>
+                                <Button x:Name="RansomwareOpenButton" Content="Open Ransomware.csv" Click="OnRansomwareOpen" MinWidth="150"
+                                        ToolTip="The case's result, one row per host"/>
+                                <Button x:Name="RansomwareHostButton" Content="Open host folder" Click="OnRansomwareHost" MinWidth="130"
+                                        ToolTip="The selected host's evidence rows and note copy"/>
+                            </StackPanel>
+
+                            <DataGrid x:Name="RansomwareGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                      CanUserSortColumns="True" SelectionMode="Single"
+                                      SelectionChanged="OnRansomwareSelected">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="160"/>
+                                    <DataGridTextColumn Header="Result" Binding="{Binding Result}" Width="*"/>
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>

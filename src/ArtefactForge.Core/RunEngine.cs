@@ -141,6 +141,7 @@ public sealed class RunEngine
         // lists which IP history sources each domain controller had.
         report.Results.AddRange(Windows.IpHistory.Build(caseDir, cancellationToken));
         report.Results.AddRange(Windows.RemoteAccess.Build(caseDir, cancellationToken));   // for the RDP trace
+        report.Results.AddRange(Windows.Ransomware.Build(caseDir, cancellationToken));
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
         report.MemoryFloorWaits = memoryFloor.Waits;
