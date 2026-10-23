@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -1182,15 +1183,49 @@ public partial class MainWindow : Window
         var previous = Preferences.Current.RunOptions;
         Preferences.Current.RunOptions = new SavedRunOptions
         {
-            Workers = int.TryParse(Workers.Text, out var w) ? w : previous.Workers,
-            HeavyWorkers = int.TryParse(HeavyWorkers.Text, out var h) ? h : previous.HeavyWorkers,
-            ZipsAtOnce = int.TryParse(ZipsAtOnce.Text, out var z) ? z : previous.ZipsAtOnce,
-            KeepFreeGB = double.TryParse(KeepFreeGB.Text, out var k) ? k : previous.KeepFreeGB,
+            Workers = SavedRunOptions.TryParseCount(Workers.Text, out var w) ? w : previous.Workers,
+            HeavyWorkers = SavedRunOptions.TryParseCount(HeavyWorkers.Text, out var h) ? h : previous.HeavyWorkers,
+            ZipsAtOnce = SavedRunOptions.TryParseCount(ZipsAtOnce.Text, out var z) ? z : previous.ZipsAtOnce,
+            KeepFreeGB = SavedRunOptions.TryParseGB(KeepFreeGB.Text, CultureInfo.CurrentCulture, out var k) ? k : previous.KeepFreeGB,
             Vss = UseVss.IsChecked == true,
             SkipCompleted = SkipCompleted.IsChecked == true,
             CleanupExtracted = CleanupExtracted.IsChecked == true
         }.Clamped();
         Preferences.Save();
+    }
+
+    /// <summary>
+    /// The run options as typed, put in range the same way the saved ones are. A box that is not a
+    /// number, or a number that had to change, stops the run with a message: the boxes are set to
+    /// what would be used, so the analyst sees it before pressing Run again.
+    /// </summary>
+    private SavedRunOptions? ReadRunOptions()
+    {
+        var typed = new SavedRunOptions();
+        var bad = new List<string>();
+        if (SavedRunOptions.TryParseCount(Workers.Text, out var w)) typed.Workers = w; else bad.Add("Workers");
+        if (SavedRunOptions.TryParseCount(HeavyWorkers.Text, out var h)) typed.HeavyWorkers = h; else bad.Add("Heavy IO");
+        if (SavedRunOptions.TryParseCount(ZipsAtOnce.Text, out var z)) typed.ZipsAtOnce = z; else bad.Add("Zips at once");
+        if (SavedRunOptions.TryParseGB(KeepFreeGB.Text, CultureInfo.CurrentCulture, out var k)) typed.KeepFreeGB = k; else bad.Add("Keep free (GB)");
+        if (bad.Count > 0)
+        {
+            MessageBox.Show(this, $"Run options: {string.Join(", ", bad)} must be a number.",
+                            "ArtefactForge", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return null;
+        }
+
+        var used = typed.Clamped();
+        var changed = typed.Adjustments(used);
+        if (changed.Count == 0) return used;
+
+        Workers.Text = used.Workers.ToString();
+        HeavyWorkers.Text = used.HeavyWorkers.ToString();
+        ZipsAtOnce.Text = used.ZipsAtOnce.ToString();
+        KeepFreeGB.Text = used.KeepFreeGB.ToString();
+        MessageBox.Show(this, "Run options changed to fit their limits:\n\n" + string.Join("\n", changed)
+                              + "\n\nCheck them, then try again.",
+                        "ArtefactForge", MessageBoxButton.OK, MessageBoxImage.Warning);
+        return null;
     }
 
     /// <summary>The folder or zip a collection was found as, which is what a rename is remembered by.</summary>
@@ -1251,6 +1286,8 @@ public partial class MainWindow : Window
             return null;
         }
 
+        if (ReadRunOptions() is not { } runOptions) return null;
+
         var toolRoots = ToolRoots();
 
         return new RunConfiguration
@@ -1261,15 +1298,14 @@ public partial class MainWindow : Window
             ScriptsDirectory = Path.Combine(_repoRoot, "Scripts"),
             Targets = targets,
             Modules = modules,
-            MaxWorkers = int.TryParse(Workers.Text, out var w) ? w : Environment.ProcessorCount,
-            MaxHeavyWorkers = int.TryParse(HeavyWorkers.Text, out var h) ? h : 2,
-            KeepFreeMemoryBytes = SavedRunOptions.ToBytes(double.TryParse(KeepFreeGB.Text, out var k) && k >= 0
-                ? k : Preferences.Current.RunOptions.Clamped().KeepFreeGB),
+            MaxWorkers = runOptions.Workers,
+            MaxHeavyWorkers = runOptions.HeavyWorkers,
+            KeepFreeMemoryBytes = SavedRunOptions.ToBytes(runOptions.KeepFreeGB),
             Vss = UseVss.IsChecked == true,
             SkipCompleted = SkipCompleted.IsChecked == true,
             Layouts = _layouts,
             CleanupExtracted = CleanupExtracted.IsChecked == true,
-            ArchivesAtOnce = int.TryParse(ZipsAtOnce.Text, out var z) && z > 0 ? z : 2
+            ArchivesAtOnce = runOptions.ZipsAtOnce
         };
     }
 

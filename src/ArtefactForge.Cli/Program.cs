@@ -832,15 +832,24 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
     if (options.Has("rerun-all")) request.SkipCompleted = false;
     if (options.Has("cleanup-extracted")) request.CleanupExtracted = true;
     request.ExtractTo = options.Value("extract-to") ?? request.ExtractTo;
-    if (int.TryParse(options.Value("zips-at-once"), out var zipsAtOnce)) request.ZipsAtOnce = zipsAtOnce;
     if (options.List("modules").Count > 0) request.Modules = options.List("modules");
     if (options.List("categories").Count > 0) request.Categories = options.List("categories");
     if (options.List("tools").Count > 0) request.ToolRoots.AddRange(options.List("tools"));
-    if (int.TryParse(options.Value("workers"), out var workers)) request.Workers = workers;
-    if (int.TryParse(options.Value("heavy"), out var heavy)) request.HeavyWorkers = heavy;
-    if (double.TryParse(options.Value("keep-free"), System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture, out var keepFree))
+    // A number flag that does not read is refused, not dropped for the default.
+    if (!CountFlag("workers", n => request.Workers = n)
+        || !CountFlag("heavy", n => request.HeavyWorkers = n)
+        || !CountFlag("zips-at-once", n => request.ZipsAtOnce = n))
+        return null;
+    if (options.Has("keep-free") || options.Value("keep-free") is not null)
+    {
+        var keepFreeText = options.Value("keep-free");
+        if (!SavedRunOptions.TryParseGB(keepFreeText, System.Globalization.CultureInfo.InvariantCulture, out var keepFree))
+        {
+            Console.Error.WriteLine($"--keep-free expects a number of GB, got '{keepFreeText}'.");
+            return null;
+        }
         request.KeepFreeGB = keepFree;
+    }
 
     if (options.Value("save-config") is { } savePath)
     {
@@ -982,6 +991,17 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
 
     var toolRoots = ToolInventory.Roots(repoRoot, request.ToolRoots);
 
+    // Put in range the same way the app's saved options are, saying what changed.
+    var typed = new SavedRunOptions
+    {
+        Workers = request.Workers ?? Math.Min(Environment.ProcessorCount, SavedRunOptions.MaxWorkersLimit),
+        HeavyWorkers = request.HeavyWorkers ?? 2,
+        ZipsAtOnce = request.ZipsAtOnce ?? 2,
+        KeepFreeGB = request.KeepFreeGB ?? 1
+    };
+    var runOptions = typed.Clamped();
+    foreach (var change in typed.Adjustments(runOptions)) Console.Error.WriteLine($"  note: {change}");
+
     return new RunConfiguration
     {
         CaseName = string.IsNullOrWhiteSpace(request.CaseName) ? targets[0].CollectionName : request.CaseName.Trim(),
@@ -991,17 +1011,27 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
         ScriptsDirectory = Path.Combine(repoRoot, "Scripts"),
         Targets = targets,
         Modules = modules,
-        MaxWorkers = request.Workers ?? Environment.ProcessorCount,
-        MaxHeavyWorkers = request.HeavyWorkers ?? 2,
-        KeepFreeMemoryBytes = SavedRunOptions.ToBytes(Math.Max(0, request.KeepFreeGB ?? 1)),
+        MaxWorkers = runOptions.Workers,
+        MaxHeavyWorkers = runOptions.HeavyWorkers,
+        KeepFreeMemoryBytes = SavedRunOptions.ToBytes(runOptions.KeepFreeGB),
         Vss = request.Vss,
         SkipCompleted = request.SkipCompleted,
         OptionOverrides = overrides,
         Layouts = layouts,
         ExtractionRoot = string.IsNullOrWhiteSpace(request.ExtractTo) ? null : Path.GetFullPath(request.ExtractTo),
         CleanupExtracted = request.CleanupExtracted,
-        ArchivesAtOnce = request.ZipsAtOnce ?? 2
+        ArchivesAtOnce = runOptions.ZipsAtOnce
     };
+
+    // False, having said why, when the flag is given without a whole number after it.
+    bool CountFlag(string name, Action<int> set)
+    {
+        var text = options.Value(name);
+        if (text is null && !options.Has(name)) return true;
+        if (SavedRunOptions.TryParseCount(text, out var value)) { set(value); return true; }
+        Console.Error.WriteLine($"--{name} expects a whole number, got '{text}'.");
+        return false;
+    }
 }
 
 static string? FindRepoRoot(string start)

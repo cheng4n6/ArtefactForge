@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace ArtefactForge.Core;
 
 /// <summary>
@@ -39,4 +41,35 @@ public sealed class SavedRunOptions
             KeepFreeGB = double.IsFinite(KeepFreeGB) ? Math.Clamp(KeepFreeGB, 0, MaxKeepFreeGB) : 1
         };
     }
+
+    /// <summary>
+    /// One line for each number <see cref="Clamped"/> changed, so a front end says so instead of
+    /// running with a value the analyst did not type.
+    /// </summary>
+    public List<string> Adjustments(SavedRunOptions clamped)
+    {
+        var lines = new List<string>();
+        Check("Workers", Workers, clamped.Workers);
+        Check("Heavy IO", HeavyWorkers, clamped.HeavyWorkers);
+        Check("Zips at once", ZipsAtOnce, clamped.ZipsAtOnce);
+        Check("Keep free (GB)", KeepFreeGB, clamped.KeepFreeGB);
+        return lines;
+
+        void Check(string name, double typed, double used)
+        {
+            if (typed.Equals(used)) return;
+            var why = name == "Heavy IO" && used == clamped.Workers && typed > used ? "more than the workers" : "out of range";
+            lines.Add($"{name} {Format(typed)} is {why}; using {Format(used)}.");
+        }
+
+        static string Format(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>A whole number typed into a box or after a flag. Anything else is refused, not defaulted.</summary>
+    public static bool TryParseCount(string? text, out int value) =>
+        int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+
+    /// <summary>A size in GB, in the given culture (the GUI's, or invariant on the command line). NaN and infinity are refused.</summary>
+    public static bool TryParseGB(string? text, IFormatProvider culture, out double value) =>
+        double.TryParse(text?.Trim(), NumberStyles.Float, culture, out value) && double.IsFinite(value);
 }
