@@ -186,6 +186,26 @@ public class CaseReportTests
     }
 
     [Fact]
+    public async Task IOC_hits_are_shown_by_host_whatever_order_the_hosts_were_swept_in()
+    {
+        // Hosts swept as their modules finish are written to IocHits.csv in the order they
+        // finished, which varies by run; the report must not.
+        using var dir = Case();
+        Write(dir, Path.Combine("APP01", "Linux", "Auth.csv"), "Time,Line", "2026-03-01 08:30:00,Failed password for admin from 203.0.113.7");
+        IocList.Add(dir.Path, [IocEntry.Create(IocType.IP, "203.0.113.7")]);
+
+        await IocSweep.RebuildHostsAsync(dir.Path, ["WEB01"]);
+        await IocSweep.RebuildHostsAsync(dir.Path, ["APP01"]);
+
+        var report = Report(dir);
+        var html = report[report.IndexOf("id=\"iocs\"", StringComparison.Ordinal)..];   // the hosts table lists them too
+        var app = html.IndexOf("<td><b>APP01</b>", StringComparison.Ordinal);
+        var web = html.IndexOf("<td><b>WEB01</b>", StringComparison.Ordinal);
+        Assert.True(app >= 0 && web >= 0, "both hosts' hits are shown");
+        Assert.True(app < web, "APP01's hit comes before WEB01's");
+    }
+
+    [Fact]
     public void A_saved_RDP_trace_is_drawn_and_an_external_end_is_raised()
     {
         using var dir = Case();

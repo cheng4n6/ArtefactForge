@@ -1,4 +1,6 @@
 using ArtefactForge.Core;
+using ArtefactForge.Core.Ioc;
+using ArtefactForge.Core.Windows;
 using Xunit;
 
 namespace ArtefactForge.Tests;
@@ -307,5 +309,122 @@ public class SchedulingTests
         var modules = ModuleLoader.LoadDirectory(Path.Combine(root!, "Modules", folder));
         Assert.Empty(modules.Errors);
         return modules.Items.Single(m => m.Name == name);
+    }
+
+    [Fact]
+    public async Task A_hosts_early_IOC_sweep_names_the_module_that_wrote_each_hit()
+    {
+        // The sweep runs before the run's manifest is written; without the run's own results it
+        // could name a hit only by its category folder, and Hayabusa's and EvtxECmd's hits, both in
+        // EventLogs, would no longer be told apart.
+        using var dir = new TempDirectory();
+        var module = new ModuleDefinition
+        {
+            Description = "Writer", Category = "EventLogs", SourcePath = Path.Combine(dir.Path, "Writer.forge"),
+            Processors =
+            [
+                new ProcessorDefinition
+                {
+                    Executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"),
+                    CommandLine = @"/c (echo Name& echo ABC.exe) > ""%destinationDirectory%\found.csv"""
+                }
+            ]
+        };
+        var config = Config(dir, [module]);
+        var caseDir = dir.Dir(Path.Combine("out", "CASE"));
+        IocList.Add(caseDir, [IocEntry.Create(IocType.FileName, "ABC.exe")]);
+
+        await new RunEngine().RunAsync(config);
+
+        var hit = Assert.Single(IocSweep.ReadHits(IocSweep.HitsPathFor(caseDir)));
+        Assert.Equal("TESTCOL", hit.Host);
+        Assert.Equal("Writer", hit.Module);
+    }
+
+    [Fact]
+    public async Task Hosts_swept_one_by_one_end_the_sweep_log_with_one_line_for_the_run()
+    {
+        // The case report shows the log's last line as the last sweep: it must describe the run,
+        // not whichever host happened to finish last.
+        using var dir = new TempDirectory();
+        var module = new ModuleDefinition
+        {
+            Description = "Writer", Category = "EventLogs", SourcePath = Path.Combine(dir.Path, "Writer.forge"),
+            Processors =
+            [
+                new ProcessorDefinition
+                {
+                    Executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"),
+                    CommandLine = @"/c (echo Name& echo ABC.exe) > ""%destinationDirectory%\found.csv"""
+                }
+            ]
+        };
+        var config = Config(dir, [module]);
+        ResolvedTarget Target(string name) => new()
+        {
+            SelectionPath = dir.Dir("evidence-" + name), Root = dir.Dir("evidence-" + name),
+            CollectionName = name, Layout = config.Targets[0].Layout
+        };
+        var caseDir = dir.Dir(Path.Combine("out", "CASE"));
+        IocList.Add(caseDir, [IocEntry.Create(IocType.FileName, "ABC.exe")]);
+
+        await new RunEngine().RunAsync(new RunConfiguration
+        {
+            CaseName = config.CaseName, OutputRoot = config.OutputRoot, ToolRoots = config.ToolRoots,
+            Targets = [Target("HOST01"), Target("HOST02")], Modules = config.Modules,
+            MaxWorkers = 2, MaxHeavyWorkers = 1, MemoryBudgetBytes = 1, KeepFreeMemoryBytes = 0
+        });
+
+        Assert.Equal(2, IocSweep.ReadHits(IocSweep.HitsPathFor(caseDir)).Count());
+        var last = IocSweep.LastResult(caseDir);
+        Assert.Contains("across 2 hosts", last);
+        Assert.Contains("2 hits on 2 hosts", last);
+    }
+
+    [Fact]
+    public async Task A_hosts_post_run_steps_start_when_its_own_modules_finish()
+    {
+        using var dir = new TempDirectory();
+        // SLOW's module takes a few seconds, FAST's returns at once.
+        var (exe, args) = OperatingSystem.IsWindows()
+            ? (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"),
+               "/c if \"%collectionName%\"==\"SLOW\" ping -n 5 127.0.0.1 >nul")
+            : ("/bin/sh", "-c \"if [ '%collectionName%' = SLOW ]; then sleep 4; fi\"");
+        var module = new ModuleDefinition
+        {
+            Description = "Wait", Category = "Test", SourcePath = Path.Combine(dir.Path, "Wait.forge"),
+            Processors = [new ProcessorDefinition { Executable = exe, CommandLine = args }]
+        };
+
+        var config = Config(dir, [module]);
+        ResolvedTarget Target(string name) => new()
+        {
+            SelectionPath = dir.Dir("evidence-" + name), Root = dir.Dir("evidence-" + name),
+            CollectionName = name, Layout = config.Targets[0].Layout
+        };
+        // A domain controller summary with no event log gives each host one IP history result to time.
+        foreach (var host in new[] { "FAST", "SLOW" })
+        {
+            var folder = dir.Dir(Path.Combine("out", "CASE", host, "SystemInfo"));
+            File.WriteAllLines(Path.Combine(folder, "SystemInfo.csv"),
+            [
+                "\"Category\",\"Item\",\"Value\",\"Source\"",
+                $"\"Identity\",\"Hostname\",\"{host}\",\"SYSTEM\"",
+                "\"Identity\",\"ComputerRole\",\"Domain controller\",\"SYSTEM\""
+            ]);
+        }
+
+        var report = await new RunEngine().RunAsync(new RunConfiguration
+        {
+            CaseName = config.CaseName, OutputRoot = config.OutputRoot, ToolRoots = config.ToolRoots,
+            Targets = [Target("FAST"), Target("SLOW")], Modules = config.Modules,
+            MaxWorkers = 2, MaxHeavyWorkers = 1, MemoryBudgetBytes = 1, KeepFreeMemoryBytes = 0
+        });
+
+        var slow = report.Results.Single(r => r.Module == "Wait" && r.Collection == "SLOW");
+        var fastIp = report.Results.Single(r => r.Module == IpHistory.ModuleName && r.Collection == "FAST");
+        Assert.Single(report.Results, r => r.Module == IpHistory.ModuleName && r.Collection == "SLOW");
+        Assert.True(fastIp.Started < slow.Started.AddSeconds(slow.DurationSeconds - 1),
+            $"FAST's IP history started at {fastIp.Started}, after SLOW's module ended at {slow.Started.AddSeconds(slow.DurationSeconds)}");
     }
 }

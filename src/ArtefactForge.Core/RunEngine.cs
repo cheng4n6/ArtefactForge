@@ -102,6 +102,14 @@ public sealed class RunEngine
         // the manifest's collection list and the resume state are shared and locked.
         var gate = new object();
 
+        // A host's own post-run steps start as soon as its last module finishes, beside the other
+        // hosts' modules, instead of every host waiting for the whole batch. One host at a time:
+        // the IOC sweep writes one hits file for the case. The case-wide steps still run at the end.
+        var hostSteps = new List<Task>();
+        var hostsDone = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sweptEarly = new List<Ioc.IocSweepResult>();
+        using var hostGate = new SemaphoreSlim(1);
+
         try
         {
             // Collections already on disk all run at once through the shared pool, as before.
@@ -136,18 +144,20 @@ public sealed class RunEngine
         // Kept when a module's output could not be moved out of it: that output exists nowhere else.
         if (!_keepStaging) TryDeleteDirectory(stagingRoot);
 
+        await Task.WhenAll(hostSteps);
         report.Results.AddRange(results);
         // Reads the modules' output, so it runs once they are done; before the manifest, which
-        // lists which IP history sources each domain controller had.
-        report.Results.AddRange(Windows.IpHistory.Build(caseDir, cancellationToken));
-        report.Results.AddRange(Windows.RemoteAccess.Build(caseDir, cancellationToken));   // for the RDP trace
-        report.Results.AddRange(Windows.Ransomware.Build(caseDir, cancellationToken));
+        // lists which IP history sources each domain controller had. Hosts already done above
+        // come back unchanged and are left out; the rest, and the case files, are built here.
+        report.Results.AddRange(NotDone(Windows.IpHistory.Build(caseDir, cancellationToken)));
+        report.Results.AddRange(NotDone(Windows.RemoteAccess.Build(caseDir, cancellationToken)));   // for the RDP trace
+        report.Results.AddRange(NotDone(Windows.Ransomware.Build(caseDir, cancellationToken)));
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
         report.MemoryFloorWaits = memoryFloor.Waits;
         SaveState(statePath, completed, results);
         WriteManifests(report, logDir, config, collections, started);
-        await Ioc.IocSweep.AfterRunAsync(report);   // the case's IOC hits for the hosts just processed
+        await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 
         // Rolls the per-collection system summaries into one inventory for the case. Runs after
         // everything else because it reads what the modules produced, and does nothing when no
@@ -156,6 +166,40 @@ public sealed class RunEngine
         report.EvidenceList = EvidenceList.Rebuild(caseDir);
         Report.CaseReport.AfterRun(report);   // last: the case report reads everything above
         return report;
+
+        IEnumerable<WorkResult> NotDone(IEnumerable<WorkResult> built) =>
+            built.Where(r => !hostsDone.Contains(r.Collection));
+
+        // The post-run steps that read only this host's own output.
+        async Task AfterHostAsync(string host)
+        {
+            await hostGate.WaitAsync(CancellationToken.None);
+            try
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                var collectionDir = Path.Combine(caseDir, host);
+                var built = new List<WorkResult>();
+                if (Windows.IpHistory.BuildCollection(collectionDir, cancellationToken) is { } ip) built.Add(ip);
+                if (Windows.RemoteAccess.BuildCollection(collectionDir, cancellationToken) is { } rdp) built.Add(rdp);
+                if (Windows.Ransomware.BuildHost(collectionDir, cancellationToken) is { } ransom) built.Add(ransom);
+                var swept = await Ioc.IocSweep.AfterHostAsync(caseDir, host,
+                    results.Where(r => string.Equals(r.Collection, host, StringComparison.OrdinalIgnoreCase)).ToList());
+                lock (gate)
+                {
+                    report.Results.AddRange(built);
+                    hostsDone.Add(host);
+                    if (swept is not null) sweptEarly.Add(swept);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Stopped: the end of the run says which hosts were left out.
+            }
+            finally
+            {
+                hostGate.Release();
+            }
+        }
 
         void AddResult(WorkResult result)
         {
@@ -191,6 +235,10 @@ public sealed class RunEngine
                     Started = DateTimeOffset.Now
                 });
             }
+
+            // How many of each host's modules are still to finish, for its post-run steps.
+            var left = pending.GroupBy(i => i.Target.CollectionName, StringComparer.OrdinalIgnoreCase)
+                              .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
 
             var ran = new ConcurrentBag<WorkResult>();
             var tasks = pending.Select(async item =>
@@ -234,6 +282,12 @@ public sealed class RunEngine
                     }
                     results.Add(result);
                     ran.Add(result);
+                    lock (gate)
+                    {
+                        var host = item.Target.CollectionName;
+                        if (--left[host] == 0 && !cancellationToken.IsCancellationRequested)
+                            hostSteps.Add(Task.Run(() => AfterHostAsync(host)));
+                    }
                     Progress?.Invoke(new ProgressEvent(item, result.Status, result.Reason));
                 }
                 finally

@@ -82,6 +82,21 @@ public static class Ransomware
     }
 
     /// <summary>
+    /// One host, as soon as its modules finish during a run. Null when the overrides cannot be
+    /// read: the end of run Build then reports that and leaves the host alone.
+    /// </summary>
+    public static WorkResult? BuildHost(string collectionDir, CancellationToken cancellationToken = default)
+    {
+        List<RansomwareOverride> overrides;
+        try { overrides = ReadOverrides(Path.GetDirectoryName(collectionDir)!); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return null;
+        }
+        return BuildCollection(collectionDir, HintsFor(overrides, Path.GetFileName(collectionDir), HostName(collectionDir)), cancellationToken);
+    }
+
+    /// <summary>
     /// One host. Null when it has no MFTECmd output, or nothing changed since it was built, so
     /// hosts with nothing new add nothing to the run's results.
     /// </summary>
