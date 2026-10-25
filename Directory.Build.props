@@ -5,7 +5,7 @@
     (1.0.0+<sha>), which is what lets a manifest be traced back to the exact source that produced it.
   -->
   <PropertyGroup>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <Product>ArtefactForge</Product>
     <Description>Forensic artefact processing</Description>
   </PropertyGroup>
