@@ -2,6 +2,83 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-10-25
+
+### Features
+
+- **Ransomware:** each Windows host is checked for ransomware from its MFT and USN journal
+  output: the extension added to encrypted files, the ransom note (a copy is saved in the case
+  when the collection holds one, with its hash), and when encryption started and finished, with
+  files per minute. When the journal does not reach back far enough the start is marked
+  "earliest seen". `Ransomware.csv` in the case folder has one row per host and flags hosts that
+  differ from the rest. A new Ransomware page under Analysis shows one line per host, the
+  Overview has a Ransomware row, and the case report has a section with each host's encryption
+  window on one time line. `ArtefactForgeCli ransomware <case>` does the same from the command line.
+- **Ransomware:** confirm or correct a host's extension or note in `Ransomware-Overrides.csv`
+  (Edit overrides creates it). ArtefactForge never changes that file. A confirmed extension or
+  note is looked for on every other host in the case, and only hosts whose output or overrides
+  changed are checked again.
+- With the window a quarter wider than its default size or more (1475 pixels, or maximised),
+  the Setup page uses the extra width. In the List view each category row shows a chip per
+  module that switches it on or off without opening the category (off modules are struck
+  through, heavy ones carry an amber dot), with Runs on and a Heavy badge for the category. In
+  the Rail view the chosen category's modules are cards with their options edited in place:
+  options changed from their defaults are highlighted with the default and a Reset link, the
+  rail marks categories with changed options, and above the list a count of changed options sits
+  beside Reset all options and an Only show changed filter. The Profile box reads "(current
+  selection, modified)" while options are changed. The default window size keeps the layout it
+  had.
+- Each tool's peak memory use is recorded in the run manifest (a PeakMemoryMB column in
+  manifest.csv, PeakMemoryBytes in manifest.json), and the end of a run names the three tools
+  that used the most. It is measured on the PC that ran the case, so it reflects that PC's cores
+  and RAM. Builtins and processes a tool starts are not counted.
+- EvtxECmd shares the event logs between four processes and joins their output into the same
+  EvtxECmd_EventLogs.csv, so a large set of logs is parsed faster on a multi-core PC. The rows are
+  the same as before; only their order differs.
+- A Parts option on EvtxECmd sets how many processes (auto, 1, 2, 4 or 8). It runs as one with
+  VSS, on a live system, for under 50 MB of logs, or when the logs are not on the case folder's
+  volume, and the manifest says how it ran.
+- a Keep free setting (1 GB by default, 0 turns it off, --keep-free on the command line).
+  No new module starts while free memory is under it, unless nothing else is running, so a PC
+  that is short of memory works through the batch instead of paging.
+
+### Changes
+
+- memory-heavy modules no longer always run one at a time. They share the memory free
+  when the run starts, each counted at its measured peak, so MFTECmd, Hayabusa and Chainsaw run
+  side by side on a typical workstation while two of Chainsaw's SRUM analysis never do. The
+  budget used is in the manifest.
+- the memory-heavy module that took longest when the case last ran starts first, and
+  Chainsaw now starts before Hayabusa on a first run.
+- MFTECmd_MFT is now memory-heavy (about twice the $MFT in memory, 2.4 GB for a 1.2 GB
+  $MFT) and ChainsawGaps no longer is (30 MB), from measurements on a 2 GB collection.
+- the memory-heavy modules also leave that much free memory for everything else.
+- Faster zip extraction: the zip's SHA-256 is now read alongside the extraction instead of in a
+  full pass before it starts, and each entry's CRC-32 check is many times quicker. Folders are
+  made once per extraction rather than once per file.
+- The IOC sweep starts with the largest output files, so a big MFT or event log CSV no longer
+  runs alone at the end of a sweep.
+- Tools now run at below normal priority, so the app and the rest of the PC stay responsive
+  during a long run. An otherwise idle PC runs them as fast as before.
+- The run log and progress tree no longer slow the window down as a large batch goes on, and the
+  IOCs tab loads its hit counts without freezing the window.
+- Zips are extracted a few files at a time on a multi-core PC, largest first, so unpacking a
+  large collection takes less time. Tar files and folders are still copied one file at a time.
+- The RDP trace and IP history read EvtxECmd's CSV about a third faster: the file is scanned in
+  blocks, and the large Payload column is read only for the events they use.
+- In a run over several hosts, each host's IP history, RDP trace, ransomware check and IOC sweep
+  start as soon as that host's modules finish, beside the other hosts' modules, instead of waiting
+  for the whole run.
+
+### Bug fixes
+
+- the app now puts Workers, Heavy IO, Keep free and Zips at once in range when a run
+  starts, as it already did for the saved settings. A box that is not a number, or a value that
+  had to change, stops the run with a message and the box shows the value that will be used.
+- `--workers`, `--heavy`, `--zips-at-once` and `--keep-free` stop with an error when the
+  value is not a number, instead of quietly using the default, and a value out of range is
+  brought into range with a note saying so.
+
 ## 0.2.1 - 2026-10-21
 
 ### Bug fixes
