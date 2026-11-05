@@ -107,6 +107,8 @@ public partial class MainWindow
             var missing = summary.Sources.Where(s => s.Hosts == 0).Select(s => s.Source).ToList();
             if (used.Count > 0) sources = "Read from: " + string.Join(", ", used) + ".";
             if (missing.Count > 0) sources += (sources.Length > 0 ? " " : "") + "Not in this case's output: " + string.Join(", ", missing) + ".";
+            if (summary.Sources.Count == 0 && summary.Written is not null)
+                sources = "No host has output the report reads: LNK files, jump lists, ShellBags, RECmd NTUSER, EvtxECmd or LinuxUserFiles.";
         }
         return (rows, status, sources, false);
     }
