@@ -9,6 +9,16 @@ public sealed record UserAccount(string System, string Username, string Sid, str
 /// <summary>One row of CompromisedUsers.csv: a username, a SID, or both.</summary>
 public sealed record CompromisedUser(string Username, string Sid);
 
+/// <summary>One account across the case: every host it was seen on, under one SID or one name.</summary>
+public sealed record AccountGroup(string Username, string Sid, IReadOnlyList<UserAccount> Accounts)
+{
+    public CompromisedUser AsCompromised => new(Username, Sid);
+    public bool IsListed(IEnumerable<CompromisedUser> compromised) =>
+        compromised.Any(u => Accounts.Count == 0 ? Same(u) : Accounts.Any(a => CaseUsers.Matches(u, a.Username, a.Sid)));
+    private bool Same(CompromisedUser u) =>
+        u.Username.Equals(Username, StringComparison.OrdinalIgnoreCase) && u.Sid.Equals(Sid, StringComparison.OrdinalIgnoreCase);
+}
+
 /// <summary>
 /// The case's accounts and the analyst's list of compromised ones.
 ///
@@ -264,6 +274,54 @@ public static class CaseUsers
 
     private static bool Same(CompromisedUser a, CompromisedUser b) =>
         a.Username.Equals(b.Username, StringComparison.OrdinalIgnoreCase) && a.Sid.Equals(b.Sid, StringComparison.OrdinalIgnoreCase);
+
+    // --- grouping ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The accounts as one entry per account rather than per host. Accounts with a SID group by
+    /// it, so a domain account is one entry and two hosts' local Administrators stay two. An
+    /// account without a SID (a profile folder, a Linux user) joins the one SID entry of that
+    /// name (the one on its own host, when several hosts have a local account of that name), or
+    /// else the entry for that name, with profile folder suffixes (user.000, user.CORP) ignored
+    /// the way <see cref="Matches"/> ignores them.
+    /// </summary>
+    public static List<AccountGroup> Group(IEnumerable<UserAccount> accounts)
+    {
+        var all = accounts.ToList();
+        var bySid = all.Where(a => a.Sid.Length > 0)
+                       .GroupBy(a => a.Sid, StringComparer.OrdinalIgnoreCase)
+                       .Select(g => (Name: g.GroupBy(a => a.Username, StringComparer.OrdinalIgnoreCase)
+                                            .OrderByDescending(n => n.Count()).ThenBy(n => n.Key.Length).First().Key,
+                                     Sid: g.Key, Members: g.ToList()))
+                       .ToList();
+        var byName = new List<(string Name, List<UserAccount> Members)>();
+
+        // Shorter names first, so jsmith is the entry jsmith.CORP joins rather than the other way round.
+        foreach (var a in all.Where(a => a.Sid.Length == 0).OrderBy(a => a.Username.Length))
+        {
+            var bare = new CompromisedUser("", "");
+            var sidMatches = bySid.Where(g => Matches(bare with { Username = g.Name }, a.Username, "")).ToList();
+            // Two hosts' local accounts of that name: the one on this account's own host.
+            if (sidMatches.Count > 1)
+                sidMatches = sidMatches.Where(g => g.Members.Any(m => m.System.Equals(a.System, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (sidMatches.Count == 1)
+            {
+                sidMatches[0].Members.Add(a);
+                continue;
+            }
+            var named = byName.FindIndex(g => Matches(bare with { Username = g.Name }, a.Username, ""));
+            if (named >= 0) byName[named].Members.Add(a);
+            else byName.Add((a.Username, [a]));
+        }
+
+        return bySid.Select(g => new AccountGroup(g.Name, g.Sid, Ordered(g.Members)))
+                    .Concat(byName.Select(g => new AccountGroup(g.Name, "", Ordered(g.Members))))
+                    .OrderBy(g => g.Username, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+        static List<UserAccount> Ordered(List<UserAccount> members) =>
+            members.OrderBy(m => m.System, StringComparer.OrdinalIgnoreCase).ThenBy(m => m.Username, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     // --- matching ---------------------------------------------------------------------------------
 

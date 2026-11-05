@@ -160,6 +160,45 @@ public class DataAccessTests
     public void Compromised_users_match_by_sid_when_both_have_one_else_by_name(string user, string sid, string name, string rowSid, bool expected) =>
         Assert.Equal(expected, CaseUsers.Matches(new CompromisedUser(user, sid), name, rowSid));
 
+    // --- grouping ---------------------------------------------------------------------------------
+
+    [Fact]
+    public void Accounts_group_into_one_entry_each_by_sid_or_else_by_name()
+    {
+        const string Admin1 = "S-1-5-21-1-1-1-500", Admin2 = "S-1-5-21-2-2-2-500";
+        var groups = CaseUsers.Group(
+        [
+            new UserAccount("WS01", "alice", AliceSid, @"C:\Users\alice", "ProfileList"),
+            new UserAccount("WS02", "alice", AliceSid, @"C:\Users\alice", "ProfileList"),
+            new UserAccount("FS01", "alice.CORP", "", "", "Output folders"),
+            new UserAccount("WS01", "Administrator", Admin1, "", "SAM"),
+            new UserAccount("WS02", "Administrator", Admin2, "", "SAM"),
+            new UserAccount("WS02", "Administrator.000", "", "", "Output folders"),
+            new UserAccount("LNX01", "dave", "", "/home/dave", "LinuxUsers"),
+            new UserAccount("LNX02", "dave", "", "/home/dave", "LinuxUsers"),
+        ]);
+
+        Assert.Equal(
+            [("Administrator", Admin1, "WS01"), ("Administrator", Admin2, "WS02, WS02"), ("alice", AliceSid, "FS01, WS01, WS02"), ("dave", "", "LNX01, LNX02")],
+            groups.OrderBy(g => g.Username, StringComparer.OrdinalIgnoreCase).ThenBy(g => g.Sid)
+                  .Select(g => (g.Username, g.Sid, string.Join(", ", g.Accounts.Select(a => a.System)))));
+    }
+
+    [Fact]
+    public void A_group_is_listed_when_any_of_its_accounts_matches()
+    {
+        var group = CaseUsers.Group(
+        [
+            new UserAccount("WS01", "alice", AliceSid, "", "ProfileList"),
+            new UserAccount("FS01", "alice.CORP", "", "", "Output folders"),
+        ]).Single();
+
+        Assert.True(group.IsListed([new CompromisedUser("alice", "")]));
+        Assert.True(group.IsListed([new CompromisedUser("", AliceSid)]));
+        Assert.False(group.IsListed([new CompromisedUser("", BobSid)]));
+        Assert.True(new AccountGroup("eve", "", []).IsListed([new CompromisedUser("EVE", "")]));
+    }
+
     [Fact]
     public void Ticking_and_unticking_users_keeps_every_other_row_and_column_as_it_was()
     {
