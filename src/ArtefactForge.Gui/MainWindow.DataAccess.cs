@@ -8,7 +8,7 @@ using ArtefactForge.Core.Report;
 namespace ArtefactForge.Gui;
 
 /// <summary>
-/// The Data access sub-tab of Analysis: the case's accounts with a tick for the compromised ones,
+/// The Data access sub-tab of Analysis: the case's accounts, one row each, with a tick for the compromised ones,
 /// and the button that writes DataAccess.csv. The account list, the matching and the report live
 /// in Core; this shows them and edits CompromisedUsers.csv through Core.
 /// </summary>
@@ -17,10 +17,40 @@ public partial class MainWindow
     private bool _dataAccessBusy;
     private int _dataAccessVersion;
 
-    /// <summary>One account in the grid. Compromised when any row of CompromisedUsers.csv matches it.</summary>
-    private sealed record DataAccessUserRow(string System, string Username, string Sid, string ProfilePath, string Source, bool Compromised);
+    /// <summary>
+    /// One account in the grid, across every host it was seen on. Compromised when any row of
+    /// CompromisedUsers.csv matches it; a row listed there that no host has (a domain account
+    /// seen only in share events) has no hosts.
+    /// </summary>
+    private sealed class DataAccessUserRow(AccountGroup group, bool compromised) : Observable
+    {
+        private bool _compromised = compromised;
+        private bool _isExpanded;
 
-    private async void RefreshDataAccess(string? message = null)
+        public AccountGroup Group { get; } = group;
+        public string Username => Group.Username;
+        public string Sid => Group.Sid;
+        public IReadOnlyList<UserAccount> Accounts => Group.Accounts;
+        public int Hosts { get; } = group.Accounts.Select(a => a.System).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        public string Source { get; } = group.Accounts.Count == 0
+            ? CaseUsers.CompromisedFileName
+            : string.Join("; ", group.Accounts.SelectMany(a => a.Source.Split("; ")).Distinct(StringComparer.OrdinalIgnoreCase));
+        public bool CanExpand => Accounts.Count > 0;
+
+        public bool Compromised { get => _compromised; set => Set(ref _compromised, value); }
+        public bool IsExpanded { get => _isExpanded; set => Set(ref _isExpanded, value); }
+    }
+
+    /// <summary>What the page shows for a case: the accounts, the list, and the status and sources lines.</summary>
+    private sealed record DataAccessState(List<AccountGroup> Groups, List<CompromisedUser> Compromised,
+                                          string Status, string Sources, bool Attention);
+
+    /// <param name="message">Said before the status, such as what a build did.</param>
+    /// <param name="keepRows">
+    /// Only re-tick the rows already shown and update the status, so a tick does not reload the
+    /// list or lose the analyst's sort and expanded rows.
+    /// </param>
+    private async void RefreshDataAccess(string? message = null, bool keepRows = false)
     {
         var caseDir = AnalysisCaseDirectory();
         var version = ++_dataAccessVersion;
@@ -33,19 +63,31 @@ public partial class MainWindow
             return;
         }
 
+        var shown = keepRows ? DataAccessGrid.ItemsSource as List<DataAccessUserRow> : null;
         try
         {
             // Built from output already in the case, so a case processed before this page existed needs no re-run.
-            var (rows, status, sources, attention) = await Task.Run(() =>
+            var state = await Task.Run(() =>
             {
-                DataAccessReport.BuildUserList(caseDir);
+                if (shown is null) DataAccessReport.BuildUserList(caseDir);
                 return Describe(caseDir);
             });
             if (version != _dataAccessVersion) return;
-            DataAccessGrid.ItemsSource = rows;
-            ShowDataAccessStatus(message is null ? status : message + " " + status,
-                                 attention || message?.Contains("could not", StringComparison.OrdinalIgnoreCase) == true);
-            DataAccessSources.Text = sources;
+            if (shown is not null)
+            {
+                foreach (var row in shown) row.Compromised = row.Group.IsListed(state.Compromised);
+            }
+            else
+            {
+                var rows = state.Groups.Select(g => new DataAccessUserRow(g, g.IsListed(state.Compromised)))
+                                       .OrderByDescending(r => r.Compromised)
+                                       .ThenBy(r => r.Username, StringComparer.OrdinalIgnoreCase)
+                                       .ToList();
+                ShowDataAccessRows(rows);
+            }
+            ShowDataAccessStatus(message is null ? state.Status : message + " " + state.Status,
+                                 state.Attention || message?.Contains("could not", StringComparison.OrdinalIgnoreCase) == true);
+            DataAccessSources.Text = state.Sources;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -55,10 +97,26 @@ public partial class MainWindow
         SetDataAccessEnabled();
     }
 
-    /// <summary>The grid's rows, the status line and the sources line for a case.</summary>
-    private static (List<DataAccessUserRow> Rows, string Status, string Sources, bool Attention) Describe(string caseDir)
+    /// <summary>New rows in the grid, sorted the way the analyst last sorted it and with the same accounts expanded.</summary>
+    private void ShowDataAccessRows(List<DataAccessUserRow> rows)
+    {
+        if (DataAccessGrid.ItemsSource is List<DataAccessUserRow> old)
+        {
+            var expanded = old.Where(r => r.IsExpanded).Select(r => (r.Username.ToUpperInvariant(), r.Sid.ToUpperInvariant())).ToHashSet();
+            foreach (var row in rows) row.IsExpanded = expanded.Contains((row.Username.ToUpperInvariant(), row.Sid.ToUpperInvariant()));
+        }
+        var sorts = DataAccessGrid.Items.SortDescriptions.ToList();
+        var directions = DataAccessGrid.Columns.Select(c => c.SortDirection).ToList();
+        DataAccessGrid.ItemsSource = rows;
+        foreach (var sort in sorts) DataAccessGrid.Items.SortDescriptions.Add(sort);
+        for (var i = 0; i < directions.Count; i++) DataAccessGrid.Columns[i].SortDirection = directions[i];
+    }
+
+    /// <summary>The case's accounts grouped into one entry each, its compromised list, and the status and sources lines.</summary>
+    private static DataAccessState Describe(string caseDir)
     {
         var accounts = CaseUsers.LoadUserList(caseDir);
+        var groups = CaseUsers.Group(accounts);
         List<CompromisedUser> compromised;
         string? listProblem = null;
         try { compromised = CaseUsers.ReadCompromised(caseDir); }
@@ -68,23 +126,17 @@ public partial class MainWindow
             listProblem = ex.Message;
         }
 
-        var rows = accounts.Select(a => new DataAccessUserRow(a.System, a.Username, a.Sid, a.ProfilePath, a.Source,
-                                                              compromised.Any(u => CaseUsers.Matches(u, a.Username, a.Sid))))
-                           .ToList();
         // Listed accounts no host has a profile for (a domain account seen only in share events) still show, ticked.
         foreach (var u in compromised.Where(u => !accounts.Any(a => CaseUsers.Matches(u, a.Username, a.Sid))))
-            rows.Add(new DataAccessUserRow("", u.Username, u.Sid, "", "CompromisedUsers.csv", true));
-        rows = rows.OrderByDescending(r => r.Compromised)
-                   .ThenBy(r => r.System, StringComparer.OrdinalIgnoreCase)
-                   .ThenBy(r => r.Username, StringComparer.OrdinalIgnoreCase)
-                   .ToList();
+            groups.Add(new AccountGroup(u.Username, u.Sid, []));
 
-        if (listProblem is not null) return (rows, listProblem, "", true);
+        if (listProblem is not null) return new DataAccessState(groups, compromised, listProblem, "", true);
 
         var hosts = accounts.Select(a => a.System).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var found = groups.Count(g => g.Accounts.Count > 0);
         var status = accounts.Count == 0
             ? "No accounts found yet: they come from RECmd's system hive output (ProfileList, SAM), the per-user output folders and LinuxUsers."
-            : $"{accounts.Count} account{(accounts.Count == 1 ? "" : "s")} on {hosts} host{(hosts == 1 ? "" : "s")}.";
+            : $"{found} account{(found == 1 ? "" : "s")} on {hosts} host{(hosts == 1 ? "" : "s")}.";
         var noSid = accounts.Where(a => a.Sid.Length == 0 && a.Source.Contains("Output folders"))
                             .Select(a => a.System).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (noSid.Count > 0)
@@ -110,7 +162,7 @@ public partial class MainWindow
             if (summary.Sources.Count == 0 && summary.Written is not null)
                 sources = "No host has output the report reads: LNK files, jump lists, ShellBags, RECmd NTUSER, EvtxECmd or LinuxUserFiles.";
         }
-        return (rows, status, sources, false);
+        return new DataAccessState(groups, compromised, status, sources, false);
     }
 
     private static OverviewLine OverviewDataAccess(string caseDir)
@@ -150,7 +202,10 @@ public partial class MainWindow
         DataAccessGrid.IsEnabled = exists && !_dataAccessBusy;
     }
 
-    /// <summary>A tick adds the account to CompromisedUsers.csv; clearing it removes every row that matches the account.</summary>
+    /// <summary>
+    /// A tick adds the account to CompromisedUsers.csv; clearing it removes every row that matches
+    /// the account. The list stays as it is: only the ticks and the status change.
+    /// </summary>
     private void OnDataAccessTicked(object sender, RoutedEventArgs e)
     {
         if (AnalysisCaseDirectory() is not { } caseDir || sender is not CheckBox { DataContext: DataAccessUserRow row } box) return;
@@ -158,15 +213,22 @@ public partial class MainWindow
         {
             if (box.IsChecked == true)
             {
-                CaseUsers.AddCompromised(caseDir, new CompromisedUser(row.Username, row.Sid),
-                                         row.System.Length > 0 ? "seen on " + row.System : "");
+                var hosts = row.Accounts.Select(a => a.System).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                CaseUsers.AddCompromised(caseDir, row.Group.AsCompromised,
+                                         hosts.Count switch
+                                         {
+                                             0 => "",
+                                             <= 3 => "seen on " + string.Join(", ", hosts),
+                                             _ => $"seen on {hosts.Count} hosts"
+                                         });
             }
             else
             {
-                foreach (var u in CaseUsers.ReadCompromised(caseDir).Where(u => CaseUsers.Matches(u, row.Username, row.Sid)))
+                foreach (var u in CaseUsers.ReadCompromised(caseDir).Where(u => row.Group.IsListed([u])))
                     CaseUsers.RemoveCompromised(caseDir, u);
             }
-            RefreshDataAccess("Saved. Build report to bring DataAccess.csv up to date.");
+            row.Compromised = box.IsChecked == true;
+            RefreshDataAccess("Saved. Build report to bring DataAccess.csv up to date.", keepRows: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {

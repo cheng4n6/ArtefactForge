@@ -1270,10 +1270,28 @@
                                         ToolTip="Every account on every host, with its SID where the registry gives one"/>
                             </StackPanel>
 
+                            <!-- One row per account; the hosts it was seen on are folded away under its chevron. -->
                             <DataGrid x:Name="DataAccessGrid" AutoGenerateColumns="False" IsReadOnly="True"
                                       HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                                      CanUserSortColumns="True" SelectionMode="Single">
+                                      CanUserSortColumns="True" SelectionMode="Single"
+                                      RowDetailsVisibilityMode="Collapsed">
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow">
+                                        <Setter Property="DetailsVisibility"
+                                                Value="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}"/>
+                                    </Style>
+                                </DataGrid.RowStyle>
                                 <DataGrid.Columns>
+                                    <DataGridTemplateColumn Width="30" CanUserSort="False" CanUserResize="False">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ToggleButton Style="{StaticResource ExpanderHeader}" Width="18" Height="18" Focusable="False"
+                                                              IsChecked="{Binding IsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                              Visibility="{Binding CanExpand, Converter={StaticResource BoolToVisibility}}"
+                                                              ToolTip="Show the hosts this account was seen on"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
                                     <DataGridTemplateColumn Header="Compromised" Width="100" SortMemberPath="Compromised">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
@@ -1283,12 +1301,35 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="System" Binding="{Binding System}" Width="130"/>
-                                    <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="160"/>
+                                    <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="180"/>
                                     <DataGridTextColumn Header="SID" Binding="{Binding Sid}" Width="*"/>
-                                    <DataGridTextColumn Header="Profile path" Binding="{Binding ProfilePath}" Width="*"/>
-                                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="170"/>
+                                    <DataGridTextColumn Header="Hosts" Binding="{Binding Hosts}" Width="70" SortMemberPath="Hosts"/>
+                                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="*"/>
                                 </DataGrid.Columns>
+                                <DataGrid.RowDetailsTemplate>
+                                    <DataTemplate>
+                                        <ItemsControl ItemsSource="{Binding Accounts}" Margin="40,2,8,8">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,2">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="150"/>
+                                                            <ColumnDefinition Width="170"/>
+                                                            <ColumnDefinition Width="2*"/>
+                                                            <ColumnDefinition Width="3*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding System}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Username}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding ProfilePath}" Style="{StaticResource Muted}"
+                                                                   TextTrimming="CharacterEllipsis" Margin="0,0,10,0" ToolTip="{Binding ProfilePath}"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding Source}" Style="{StaticResource Muted}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DataTemplate>
+                                </DataGrid.RowDetailsTemplate>
                             </DataGrid>
                         </DockPanel>
                     </TabItem>
