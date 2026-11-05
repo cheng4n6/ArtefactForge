@@ -272,6 +272,74 @@ public class IocSweepTests
         Assert.Equal(written, File.GetLastWriteTimeUtc(path));
     }
 
+    [Fact]
+    public async Task Sweeps_running_at_once_each_keep_their_hits()
+    {
+        using var dir = Case();
+        var abc = IocList.Add(dir.Path, [IocEntry.Create(IocType.FileName, "ABC.exe")]);
+        var ip = IocList.Add(dir.Path, [IocEntry.Create(IocType.IP, "203.0.113.7")]);
+
+        await Task.WhenAll(IocSweep.SweepAsync(dir.Path, abc), IocSweep.SweepAsync(dir.Path, ip),
+                           IocSweep.RebuildHostsAsync(dir.Path, ["DC01"]), IocSweep.RebuildHostsAsync(dir.Path, ["WS02"]));
+
+        var hits = Hits(dir);
+        Assert.Equal(["DC01", "WS02"], hits.Where(h => h.Ioc == "ABC.exe").Select(h => h.Host).Order());
+        Assert.Equal("DC01", Assert.Single(hits, h => h.Ioc == "203.0.113.7").Host);
+        Assert.Equal(4, File.ReadLines(Path.Combine(dir.Path, "_Logs", "IocSweep.log")).Count(l => l.Contains("Swept")));
+    }
+
+    [Fact]
+    public async Task A_host_rebuild_that_began_before_an_IOC_was_added_keeps_that_IOCs_hits()
+    {
+        using var dir = Case();
+        IocList.Add(dir.Path, [IocEntry.Create(IocType.FileName, "ABC.exe")]);
+        // Enough output that the rebuild is still scanning when the new IOC's sweep finishes.
+        Output(dir, "DC01", Path.Combine("FileSystem", "MFTECmd_Output.csv"),
+            ["FileName,ParentPath", .. Enumerable.Repeat("file.txt,.\\Users\\carol", 200_000)]);
+
+        // The rebuild reads the list as it starts: ABC.exe alone.
+        var rebuild = IocSweep.RebuildHostsAsync(dir.Path, ["DC01"]);
+        var ip = IocList.Add(dir.Path, [IocEntry.Create(IocType.IP, "203.0.113.7")]);
+        await IocSweep.SweepAsync(dir.Path, ip);
+        await rebuild;
+
+        // Whichever wrote last, DC01 keeps the IP's hit: the rebuild replaces only ABC.exe's.
+        var hits = Hits(dir);
+        Assert.Equal("DC01", Assert.Single(hits, h => h.Ioc == "203.0.113.7").Host);
+        Assert.Equal("DC01", Assert.Single(hits, h => h.Ioc == "ABC.exe").Host);
+    }
+
+    [Fact]
+    public async Task An_IOC_taken_off_the_list_while_it_was_swept_gets_no_hits()
+    {
+        using var dir = Case();
+        var ioc = IocList.Add(dir.Path, [IocEntry.Create(IocType.FileName, "ABC.exe")]);
+        IocList.Remove(dir.Path, ioc);   // as if removed while its sweep was scanning
+
+        var result = await IocSweep.SweepAsync(dir.Path, ioc);
+
+        Assert.Equal(0, result.Hits);
+        Assert.Empty(Hits(dir));
+    }
+
+    [Fact]
+    public async Task IOCs_queued_as_they_are_added_end_up_with_their_hits()
+    {
+        using var dir = Case();
+        var queue = new IocSweepQueue(dir.Path, TimeSpan.FromMilliseconds(10));
+        var batches = new List<IocSweepBatch>();
+        queue.BatchFinished += b => { lock (batches) batches.Add(b); };
+
+        queue.Add(IocList.Add(dir.Path, [IocEntry.Create(IocType.FileName, "ABC.exe")]));
+        queue.Add(IocList.Add(dir.Path, [IocEntry.Create(IocType.IP, "203.0.113.7")]));
+        await queue.WhenIdleAsync();
+
+        Assert.All(batches, b => Assert.Null(b.Error));
+        Assert.Equal(2, batches.Sum(b => b.Iocs.Count));
+        Assert.Equal(3, Hits(dir).Count);
+        Assert.False(queue.IsBusy);
+    }
+
     private static WorkResult Result(string collection, WorkStatus status) => new()
     {
         Collection = collection,

@@ -64,7 +64,11 @@ public static class IocSweep
     private const int MaxLineChars = 32000;
 
     // One sweep writes the hits file at a time; a second waits rather than losing the first's rows.
+    // Only the write: scanning, the long part, runs beside other sweeps (SweepSlots).
     private static readonly SemaphoreSlim Gate = new(1, 1);
+
+    // Sweeps that finish together each append their line to the log.
+    private static readonly object LogGate = new();
 
     public static string HitsPathFor(string caseDirectory) => Path.Combine(caseDirectory, HitsFileName);
 
@@ -88,9 +92,8 @@ public static class IocSweep
         string caseDirectory, IReadOnlyCollection<IocEntry> iocs,
         IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
-        var keys = iocs.Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
         return await ThenReport(caseDirectory, RunAsync(caseDirectory, iocs, Hosts(caseDirectory),
-            hit => keys.Contains(IocList.KeyFor(hit.IocType, hit.Ioc)), progress, cancellationToken));
+            null, progress, cancellationToken));
     }
 
     /// <summary>
@@ -113,14 +116,14 @@ public static class IocSweep
         var set = hosts.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var present = Hosts(caseDirectory).Where(set.Contains).ToList();
         return await RunAsync(caseDirectory, IocList.Load(caseDirectory), present,
-            hit => set.Contains(hit.Host), progress, cancellationToken, ran);
+            set, progress, cancellationToken, ran);
     }
 
     /// <summary>Rebuilds the whole hits file: every IOC on the list against every host.</summary>
     public static async Task<IocSweepResult> RebuildAllAsync(
         string caseDirectory, IProgress<string>? progress = null, CancellationToken cancellationToken = default) =>
         await ThenReport(caseDirectory, RunAsync(caseDirectory, IocList.Load(caseDirectory), Hosts(caseDirectory),
-            _ => true, progress, cancellationToken));
+            null, progress, cancellationToken));
 
     /// <summary>Drops the hits of IOCs taken off the list.</summary>
     public static async Task RemoveHitsAsync(string caseDirectory, IEnumerable<IocEntry> removed)
@@ -249,7 +252,13 @@ public static class IocSweep
         try
         {
             if (!File.Exists(path)) return null;
-            return File.ReadLines(path).LastOrDefault(l => l.Length > 0 && !l.StartsWith(' '));
+            // A shared read: File.ReadLines would block another sweep, finishing now, from
+            // appending its line (the case report reads this while sweeps run).
+            using var reader = CsvText.OpenRead(path);
+            string? last = null;
+            while (reader.ReadLine() is { } line)
+                if (line.Length > 0 && !line.StartsWith(' ')) last = line;
+            return last;
         }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
@@ -277,55 +286,57 @@ public static class IocSweep
         }
     }
 
+    /// <param name="hostScope">
+    /// The hosts whose hits for these IOCs this sweep replaces; null for every host, which also
+    /// drops the hits of a host folder no longer in the case.
+    /// </param>
     private static async Task<IocSweepResult> RunAsync(
         string caseDirectory, IReadOnlyCollection<IocEntry> iocs, IReadOnlyList<string> hosts,
-        Func<IocHit, bool> replaced, IProgress<string>? progress, CancellationToken cancellationToken,
+        IReadOnlySet<string>? hostScope, IProgress<string>? progress, CancellationToken cancellationToken,
         IEnumerable<WorkResult>? ran = null)
     {
-        await Gate.WaitAsync(cancellationToken);
-        try
+        var watch = Stopwatch.StartNew();
+        var matcher = new IocMatcher(iocs);
+        var problems = new ConcurrentBag<string>();
+        var hits = new ConcurrentBag<IocHit>();
+        var files = 0;
+        long bytes = 0;
+
+        if (!matcher.IsEmpty)
         {
-            var watch = Stopwatch.StartNew();
-            var matcher = new IocMatcher(iocs);
-            var problems = new ConcurrentBag<string>();
-            var hits = new ConcurrentBag<IocHit>();
-            var files = 0;
-            long bytes = 0;
-
-            if (!matcher.IsEmpty)
+            var modules = ModuleMap(caseDirectory);
+            foreach (var finished in ran ?? [])
+                foreach (var processor in finished.Processors)
+                    AddOutputs(modules, finished.Module, finished.Collection, finished.Destination, processor.OutputFiles);
+            var work = new List<(string Host, string File, long Size)>();
+            foreach (var host in hosts)
             {
-                var modules = ModuleMap(caseDirectory);
-                foreach (var finished in ran ?? [])
-                    foreach (var processor in finished.Processors)
-                        AddOutputs(modules, finished.Module, finished.Collection, finished.Destination, processor.OutputFiles);
-                var work = new List<(string Host, string File, long Size)>();
-                foreach (var host in hosts)
+                try
                 {
-                    try
-                    {
-                        work.AddRange(new DirectoryInfo(Path.Combine(caseDirectory, host))
-                                          .EnumerateFiles("*.csv", SearchOption.AllDirectories)
-                                          .Select(f => (host, f.FullName, f.Length)));
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
-                        problems.Add($"{host}: could not list its output: {ex.Message}");
-                    }
+                    work.AddRange(new DirectoryInfo(Path.Combine(caseDirectory, host))
+                                      .EnumerateFiles("*.csv", SearchOption.AllDirectories)
+                                      .Select(f => (host, f.FullName, f.Length)));
                 }
-
-                // Largest first: a multi-GB MFT or event log CSV met last would be swept alone at
-                // the end while the other workers sat idle.
-                work.Sort((a, b) => b.Size.CompareTo(a.Size));
-
-                var done = 0;
-                // A few files at once: the disk, not the CPU, sets the pace of a plain scan.
-                var options = new ParallelOptions
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    CancellationToken = cancellationToken,
-                    MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 1, 4)
-                };
-                await Task.Run(() => Parallel.ForEach(work, options, item =>
+                    problems.Add($"{host}: could not list its output: {ex.Message}");
+                }
+            }
+
+            // Largest first: a multi-GB MFT or event log CSV met last would be swept alone at
+            // the end while the other workers sat idle.
+            work.Sort((a, b) => b.Size.CompareTo(a.Size));
+            var queue = new ConcurrentQueue<(string Host, string File, long Size)>(work);
+
+            // Every sweep in the process shares the slots, so two hosts swept at once take turns
+            // with the files instead of each taking a full share of the CPU and memory.
+            var slots = SweepSlots.Shared;
+            var done = 0;
+            var workers = Enumerable.Range(0, Math.Clamp(work.Count, 1, slots.MaxScans)).Select(_ => Task.Run(async () =>
+            {
+                while (queue.TryDequeue(out var item))
                 {
+                    await slots.WaitAsync(cancellationToken);
                     try
                     {
                         foreach (var hit in ScanFile(caseDirectory, item.Host, item.File, matcher, modules, cancellationToken))
@@ -337,20 +348,40 @@ public static class IocSweep
                     {
                         problems.Add($"{Path.GetRelativePath(caseDirectory, item.File)}: {ex.Message}");
                     }
+                    finally
+                    {
+                        slots.Release();
+                    }
                     var count = Interlocked.Increment(ref done);
                     progress?.Report($"Sweeping {item.Host}: {count:N0} of {work.Count:N0} files");
-                }), cancellationToken);
-            }
+                }
+            }, cancellationToken)).ToList();
+            await Task.WhenAll(workers);
+        }
 
-            // Stopped part-way, nothing is written: a partial search must not pass for a complete one.
-            cancellationToken.ThrowIfCancellationRequested();
+        // Stopped part-way, nothing is written: a partial search must not pass for a complete one.
+        cancellationToken.ThrowIfCancellationRequested();
 
-            var ordered = hits.OrderBy(h => h.Ioc, StringComparer.OrdinalIgnoreCase)
+        await Gate.WaitAsync(cancellationToken);
+        try
+        {
+            // The list as it is now, not as it was when the scan began: IOCs are added and removed
+            // while sweeps run. A sweep replaces hits only for the IOCs it searched for, so a host
+            // rebuild that began before an IOC was added keeps the hits that IOC's own sweep wrote
+            // meanwhile. Hits of an IOC taken off the list are dropped, not written back.
+            var listed = IocList.Load(caseDirectory).Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
+            var swept = iocs.Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
+            var ordered = hits.Where(h => listed.Contains(IocList.KeyFor(h.IocType, h.Ioc)))
+                              .OrderBy(h => h.Ioc, StringComparer.OrdinalIgnoreCase)
                               .ThenBy(h => h.Host, StringComparer.OrdinalIgnoreCase)
                               .ThenBy(h => h.OutputFile, StringComparer.OrdinalIgnoreCase)
                               .ThenBy(h => h.LineNumber)
                               .ToList();
-            Rewrite(caseDirectory, replaced, ordered);
+            Rewrite(caseDirectory, hit =>
+            {
+                var key = IocList.KeyFor(hit.IocType, hit.Ioc);
+                return !listed.Contains(key) || (swept.Contains(key) && hostScope?.Contains(hit.Host) != false);
+            }, ordered);
 
             var result = new IocSweepResult
             {
@@ -493,6 +524,6 @@ public static class IocSweep
         Directory.CreateDirectory(logs);
         var text = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}  {line}{Environment.NewLine}"
                    + string.Concat(problems.Select(p => "    could not read " + p + Environment.NewLine));
-        File.AppendAllText(Path.Combine(logs, IocSweepResult.LogName), text);
+        lock (LogGate) File.AppendAllText(Path.Combine(logs, IocSweepResult.LogName), text);
     }
 }
