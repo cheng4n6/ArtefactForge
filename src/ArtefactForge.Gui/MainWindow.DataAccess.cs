@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using ArtefactForge.Core.DataAccess;
+using ArtefactForge.Core.Report;
 
 namespace ArtefactForge.Gui;
 
@@ -106,6 +107,8 @@ public partial class MainWindow
             var missing = summary.Sources.Where(s => s.Hosts == 0).Select(s => s.Source).ToList();
             if (used.Count > 0) sources = "Read from: " + string.Join(", ", used) + ".";
             if (missing.Count > 0) sources += (sources.Length > 0 ? " " : "") + "Not in this case's output: " + string.Join(", ", missing) + ".";
+            if (summary.Sources.Count == 0 && summary.Written is not null)
+                sources = "No host has output the report reads: LNK files, jump lists, ShellBags, RECmd NTUSER, EvtxECmd or LinuxUserFiles.";
         }
         return (rows, status, sources, false);
     }
@@ -178,11 +181,16 @@ public partial class MainWindow
         if (AnalysisCaseDirectory() is not { } caseDir || !Directory.Exists(caseDir)) return;
         _dataAccessBusy = true;
         SetDataAccessEnabled();
-        ShowDataAccessStatus("Reading each host's LNK, jump list, ShellBags, registry and event log output. "
+        ShowDataAccessStatus("Reading each host's LNK, jump list, ShellBags, registry, Linux recent files and event log output. "
                              + "The event log takes longest, a minute or so a host the first time.", false);
         try
         {
-            var results = await Task.Run(() => DataAccessReport.Build(caseDir));
+            var results = await Task.Run(() =>
+            {
+                var built = DataAccessReport.Build(caseDir);
+                CaseReport.Rebuild(caseDir);
+                return built;
+            });
             var failed = results.Where(r => r.Status == Core.WorkStatus.Failed).Select(r => $"{r.Collection}: {r.Reason}").ToList();
             var message = failed.Count > 0
                 ? "Some hosts could not be read: " + string.Join("; ", failed) + "."

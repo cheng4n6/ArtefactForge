@@ -536,8 +536,11 @@ int DataAccessCommand(CommandLine options)
     var summary = DataAccessReport.Summarise(caseDir);
     Console.WriteLine($"{summary.Rows:N0} rows for {compromised.Count} listed user{(compromised.Count == 1 ? "" : "s")} "
                       + $"in {DataAccessReport.PathFor(caseDir)}");
+    if (summary.Sources.Count == 0)
+        Console.WriteLine("  No host has output the report reads (LNK, jump lists, ShellBags, RECmd NTUSER, EvtxECmd, LinuxUserFiles).");
     foreach (var s in summary.Sources)
-        Console.WriteLine($"  {s.Source,-26} {(s.Hosts == 0 ? "not present" : $"{s.Hosts} host{(s.Hosts == 1 ? "" : "s")}, {s.Rows:N0} rows (all accounts)")}");
+        Console.WriteLine($"  {s.Source,-36} {(s.Hosts == 0 ? "not present" : $"{s.Hosts} host{(s.Hosts == 1 ? "" : "s")}, {s.Rows:N0} rows (all accounts)")}");
+    CaseReport.Rebuild(caseDir);
     return results.Any(r => r.Status == WorkStatus.Failed) ? 1 : 0;
 }
 

@@ -1254,7 +1254,7 @@
                     <TabItem x:Name="DataAccessTab" Header="Data access" Padding="12,5">
                         <DockPanel Margin="0,10,0,0">
                             <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"
-                                       Text="Tick the compromised accounts, or add them to CompromisedUsers.csv by username or SID, then Build report. DataAccess.csv lists the files and folders they opened or browsed on every host (date and time UTC, system, user, path, activity), from LNK files, jump lists, ShellBags, RecentDocs, OpenSavePidlMRU, Office File MRU and file share events. Rows with no time are left out."/>
+                                       Text="Tick the compromised accounts, or add them to CompromisedUsers.csv by username or SID, then Build report. DataAccess.csv lists the files and folders they opened or browsed on every host (date and time UTC, system, user, path, activity), from LNK files, jump lists, ShellBags, RecentDocs, OpenSavePidlMRU, Office File MRU, Linux recent files and vim marks, and Security events 5140, 5145 and 4663. Rows with no time are left out."/>
                             <TextBlock DockPanel.Dock="Top" x:Name="DataAccessStatus" TextWrapping="Wrap" Margin="2,0,0,6"/>
                             <TextBlock DockPanel.Dock="Top" x:Name="DataAccessSources" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"/>
 
