@@ -152,6 +152,8 @@ public sealed class RunEngine
         report.Results.AddRange(NotDone(Windows.IpHistory.Build(caseDir, cancellationToken)));
         report.Results.AddRange(NotDone(Windows.RemoteAccess.Build(caseDir, cancellationToken)));   // for the RDP trace
         report.Results.AddRange(NotDone(Windows.Ransomware.Build(caseDir, cancellationToken)));
+        // The account list for every host; with a list of compromised users, their file and folder activity.
+        report.Results.AddRange(DataAccess.DataAccessReport.Build(caseDir, cancellationToken));
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
         report.MemoryFloorWaits = memoryFloor.Waits;

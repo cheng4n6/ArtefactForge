@@ -1,4 +1,5 @@
 using ArtefactForge.Core;
+using ArtefactForge.Core.DataAccess;
 using ArtefactForge.Core.Ioc;
 using ArtefactForge.Core.Report;
 using ArtefactForge.Core.Update;
@@ -30,6 +31,7 @@ switch (verb)
     case "ip": return IpLookup(options);
     case "rdp": return RdpCommand(options);
     case "ransomware": return RansomwareCommand(options);
+    case "data-access": return DataAccessCommand(options);
     default:
         Console.WriteLine(BuildInfo.Describe() + " - forensic artefact processing");
         Console.WriteLine();
@@ -56,6 +58,9 @@ switch (verb)
         Console.WriteLine("                                    list RDP sessions, or trace session n back across the case's hosts");
         Console.WriteLine("  ransomware <case>                 check each Windows host for ransomware, from its MFT and USN journal output,");
         Console.WriteLine("                                    and show the case's Ransomware.csv (hosts with nothing new are not read again)");
+        Console.WriteLine("  data-access <case> [--add <user or SID>]");
+        Console.WriteLine("                                    list the case's accounts in UserList.csv and, for the users in");
+        Console.WriteLine("                                    CompromisedUsers.csv, the files and folders they opened in DataAccess.csv");
         Console.WriteLine("  update [--check] [--yes]          check for, download and install a newer ArtefactForge");
         Console.WriteLine("         [--source <folder>]        ...from a folder (share, USB) instead of GitHub");
         Console.WriteLine();
@@ -490,6 +495,49 @@ int RansomwareCommand(CommandLine options)
     Console.WriteLine($"Overrides: {Ransomware.OverridesPathFor(caseDir)}"
                       + (File.Exists(Ransomware.OverridesPathFor(caseDir)) ? "" : " (none yet)"));
     CaseReport.Rebuild(caseDir);
+    return results.Any(r => r.Status == WorkStatus.Failed) ? 1 : 0;
+}
+
+// Builds the case's account list and, for the users in CompromisedUsers.csv, the files and
+// folders they opened or browsed. --add (repeatable) puts a username or a SID (S-1-...) on that list first.
+int DataAccessCommand(CommandLine options)
+{
+    var caseDir = options.Positional.ElementAtOrDefault(0);
+    if (caseDir is null || !Directory.Exists(caseDir))
+    {
+        Console.Error.WriteLine("usage: data-access <case folder> [--add <username or SID>]");
+        return 2;
+    }
+
+    caseDir = Path.GetFullPath(caseDir);
+    foreach (var add in options.Repeated("add").Where(a => a.Trim().Length > 0))
+    {
+        var user = add.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase)
+            ? new CompromisedUser("", add.Trim())
+            : new CompromisedUser(add.Trim(), "");
+        CaseUsers.AddCompromised(caseDir, user);
+    }
+
+    var results = DataAccessReport.Build(caseDir);
+    foreach (var r in results.Where(r => r.Status == WorkStatus.Failed))
+        Console.Error.WriteLine($"{r.Collection}: {r.Reason}");
+    foreach (var r in results.Where(r => r.Status != WorkStatus.Failed))
+        Console.WriteLine($"{r.Collection,-20} {r.Reason}");
+
+    var users = CaseUsers.LoadUserList(caseDir);
+    Console.WriteLine($"{users.Count} account{(users.Count == 1 ? "" : "s")} in {CaseUsers.UserListPathFor(caseDir)}");
+    var compromised = CaseUsers.ReadCompromised(caseDir);
+    if (compromised.Count == 0)
+    {
+        Console.WriteLine($"No compromised users listed: add them to {CaseUsers.CompromisedPathFor(caseDir)} or use --add.");
+        return results.Any(r => r.Status == WorkStatus.Failed) ? 1 : 0;
+    }
+
+    var summary = DataAccessReport.Summarise(caseDir);
+    Console.WriteLine($"{summary.Rows:N0} rows for {compromised.Count} listed user{(compromised.Count == 1 ? "" : "s")} "
+                      + $"in {DataAccessReport.PathFor(caseDir)}");
+    foreach (var s in summary.Sources)
+        Console.WriteLine($"  {s.Source,-26} {(s.Hosts == 0 ? "not present" : $"{s.Hosts} host{(s.Hosts == 1 ? "" : "s")}, {s.Rows:N0} rows (all accounts)")}");
     return results.Any(r => r.Status == WorkStatus.Failed) ? 1 : 0;
 }
 
