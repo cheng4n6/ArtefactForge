@@ -13,7 +13,7 @@ namespace ArtefactForge.Gui;
 
 /// <summary>
 /// The Analysis tab: the case bar, the overview and the IP history and evidence list sub-tabs.
-/// The IOCs, ransomware and RDP trace sub-tabs have their own files. Everything shown is read from the case
+/// The IOCs, ransomware, data access and RDP trace sub-tabs have their own files. Everything shown is read from the case
 /// folder by Core; this only shows it.
 /// </summary>
 public partial class MainWindow
@@ -51,6 +51,7 @@ public partial class MainWindow
         if (AnalysisTabs.SelectedItem == OverviewTab) RefreshOverview();
         else if (AnalysisTabs.SelectedItem == IocTab) RefreshIocs();
         else if (AnalysisTabs.SelectedItem == RansomwareTab) RefreshRansomware();
+        else if (AnalysisTabs.SelectedItem == DataAccessTab) RefreshDataAccess();
         else if (AnalysisTabs.SelectedItem == RdpTab) RefreshRdp();
         else if (AnalysisTabs.SelectedItem == IpHistoryTab) RefreshIpHistory();
         else if (AnalysisTabs.SelectedItem == EvidenceListTab) RefreshEvidenceList();
@@ -103,27 +104,30 @@ public partial class MainWindow
         if (caseDir is null || !Directory.Exists(caseDir))
         {
             var none = new OverviewLine(caseDir is null ? "No case chosen." : "Nothing yet: the case has not been run.");
-            ShowOverview(none, none, none, none, none);
+            ShowOverview(none, none, none, none, none, none);
             return;
         }
 
         var cached = _ipHistory;
         var evidence = _evidenceList is { } last && SamePath(last.CaseDirectory, caseDir) ? last.Result : null;
         var lines = await Task.Run(() => (Ioc: OverviewIocs(caseDir), Ransomware: OverviewRansomware(caseDir), Rdp: OverviewRdp(caseDir),
-                                           Ip: OverviewIpHistory(caseDir, cached), Evidence: OverviewEvidence(caseDir, evidence)));
+                                           Ip: OverviewIpHistory(caseDir, cached), Evidence: OverviewEvidence(caseDir, evidence),
+                                           DataAccess: OverviewDataAccess(caseDir)));
         // A slower refresh for an earlier case must not overwrite a newer one.
         if (version != _overviewVersion) return;
         _ipHistory = lines.Ip.Cache;
-        ShowOverview(lines.Ioc, lines.Ransomware, lines.Rdp, lines.Ip.Line, lines.Evidence);
+        ShowOverview(lines.Ioc, lines.Ransomware, lines.Rdp, lines.Ip.Line, lines.Evidence, lines.DataAccess);
     }
 
-    private void ShowOverview(OverviewLine ioc, OverviewLine ransomware, OverviewLine rdp, OverviewLine ip, OverviewLine evidence)
+    private void ShowOverview(OverviewLine ioc, OverviewLine ransomware, OverviewLine rdp, OverviewLine ip, OverviewLine evidence,
+                              OverviewLine dataAccess)
     {
         Show(OverviewIocText, ioc);
         Show(OverviewRansomwareText, ransomware);
         Show(OverviewRdpText, rdp);
         Show(OverviewIpText, ip);
         Show(OverviewEvidenceText, evidence);
+        Show(OverviewDataAccessText, dataAccess);
 
         static void Show(TextBlock block, OverviewLine line)
         {

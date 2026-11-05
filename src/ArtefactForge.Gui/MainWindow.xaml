@@ -1098,6 +1098,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="IOCs" FontWeight="SemiBold" Margin="0,6"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" x:Name="OverviewIocText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
@@ -1114,6 +1115,9 @@
                                 <TextBlock Grid.Row="4" Text="Evidence list" FontWeight="SemiBold" Margin="0,6"/>
                                 <TextBlock Grid.Row="4" Grid.Column="1" x:Name="OverviewEvidenceText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
                                 <Button Grid.Row="4" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="EvidenceListTab" Margin="0,3"/>
+                                <TextBlock Grid.Row="5" Text="Data access" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="OverviewDataAccessText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                <Button Grid.Row="5" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="DataAccessTab" Margin="0,3"/>
                             </Grid>
                         </Border>
                     </TabItem>
@@ -1240,6 +1244,50 @@
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="160"/>
                                     <DataGridTextColumn Header="Result" Binding="{Binding Result}" Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </TabItem>
+
+                    <!-- The compromised users' file and folder activity. Ticking a user here edits
+                         CompromisedUsers.csv; the rows themselves are in DataAccess.csv, for Excel. -->
+                    <TabItem x:Name="DataAccessTab" Header="Data access" Padding="12,5">
+                        <DockPanel Margin="0,10,0,0">
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"
+                                       Text="Tick the compromised accounts, or add them to CompromisedUsers.csv by username or SID, then Build report. DataAccess.csv lists the files and folders they opened or browsed on every host (date and time UTC, system, user, path, activity), from LNK files, jump lists, ShellBags, RecentDocs, OpenSavePidlMRU, Office File MRU and file share events. Rows with no time are left out."/>
+                            <TextBlock DockPanel.Dock="Top" x:Name="DataAccessStatus" TextWrapping="Wrap" Margin="2,0,0,6"/>
+                            <TextBlock DockPanel.Dock="Top" x:Name="DataAccessSources" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,0,0,10"/>
+
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" Margin="0,10,0,0">
+                                <Button x:Name="DataAccessBuildButton" Content="Build report" Click="OnDataAccessBuild" MinWidth="110"
+                                        ToolTip="Read the hosts whose output changed, then write DataAccess.csv for the ticked users"/>
+                                <Button x:Name="DataAccessEditButton" Content="Edit list" Click="OnDataAccessEdit" MinWidth="100"
+                                        ToolTip="Open CompromisedUsers.csv (Username, SID, Comment), made with its header if the case has none. Add accounts that are not in the list below here."/>
+                                <Button x:Name="DataAccessOpenButton" Content="Open DataAccess.csv" Click="OnDataAccessOpen" MinWidth="150"
+                                        ToolTip="The report, sorted by time, for filtering in Excel"/>
+                                <Button x:Name="DataAccessUsersButton" Content="Open UserList.csv" Click="OnDataAccessUsers" MinWidth="140"
+                                        ToolTip="Every account on every host, with its SID where the registry gives one"/>
+                            </StackPanel>
+
+                            <DataGrid x:Name="DataAccessGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                      CanUserSortColumns="True" SelectionMode="Single">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="Compromised" Width="100" SortMemberPath="Compromised">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <CheckBox IsChecked="{Binding Compromised, Mode=OneWay}" Click="OnDataAccessTicked"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                          ToolTip="Adds or removes this account in CompromisedUsers.csv. A name without a SID matches that name on every host."/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="System" Binding="{Binding System}" Width="130"/>
+                                    <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="160"/>
+                                    <DataGridTextColumn Header="SID" Binding="{Binding Sid}" Width="*"/>
+                                    <DataGridTextColumn Header="Profile path" Binding="{Binding ProfilePath}" Width="*"/>
+                                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="170"/>
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>
