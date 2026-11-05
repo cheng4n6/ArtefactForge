@@ -43,6 +43,7 @@ public static class CaseReport
         new HostsSection(),
         new DetectionsSection(),
         new RansomwareSection(),
+        new DataAccessSection(),
         new IocSection(),
         new RdpSection(),
         new IpHistorySection()

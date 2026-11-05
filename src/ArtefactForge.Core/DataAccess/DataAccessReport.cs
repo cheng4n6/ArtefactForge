@@ -17,6 +17,9 @@ namespace ArtefactForge.Core.DataAccess;
 ///   RecentDocs, OpenSavePidlMRU, Office File MRU     opened (or saved): the times RECmd gives,
 ///   (RECmd NTUSER batch)                             which is the newest entry of each key only
 ///   Security 5140 and 5145 (EvtxECmd)                a share, or a file on it, reached over SMB
+///   Security 4663 (EvtxECmd)                         a file read, written or deleted, where
+///                                                    file auditing is on
+///   recently-used.xbel and .viminfo (LinuxUserFiles) opened in a desktop app, or in vim
 ///
 /// A row with no time is left out, and so are the times of a shortcut's or jump list's target
 /// file, which say when the file changed, not when the user opened it.
@@ -45,7 +48,8 @@ public static class DataAccessReport
     public const string RecentDocs = "RecentDocs";
     public const string OpenSave = "OpenSavePidlMRU";
     public const string OfficeMru = "Office File MRU";
-    public const string ShareEvents = "Share access (5140/5145)";
+    public const string SecurityEvents = "Security events (5140, 5145, 4663)";
+    public const string LinuxRecent = "Linux recent files";
 
     public static string PathFor(string caseDirectory) => Path.Combine(caseDirectory, FileName);
 
@@ -297,7 +301,8 @@ public static class DataAccessReport
             new(RecentDocs, "RECmd_NTUSER", "Registry", "_RECmd_NTUSER", Files("Registry", "*_RECmd_NTUSER_RecentDocs*.csv"), ReadRecentDocs),
             new(OpenSave, "RECmd_NTUSER", "Registry", "_RECmd_NTUSER", Files("Registry", "*_RECmd_NTUSER_OpenSavePidlMRU*.csv"), ReadOpenSave),
             new(OfficeMru, "RECmd_NTUSER", "Registry", "_RECmd_NTUSER", Files("Registry", "*_RECmd_NTUSER_OfficeMRU*.csv"), ReadOfficeMru),
-            new(ShareEvents, "EvtxECmd", "EventLogs", "", evtx, ReadShareEvents),
+            new(SecurityEvents, "EvtxECmd", "EventLogs", "", evtx, ReadSecurityEvents),
+            new(LinuxRecent, "LinuxUserFiles", "UserFiles", "_LinuxUserFiles", Files("UserFiles", "*LinuxUserFiles_OtherHistory*.csv"), ReadLinuxRecent),
         ];
     }
 
@@ -396,11 +401,12 @@ public static class DataAccessReport
     }
 
     /// <summary>
-    /// Security 5140 (a share was reached) and 5145 (a file or folder on it was checked for
-    /// access), from EvtxECmd's CSV. Both need file share auditing, so most hosts have neither.
-    /// Failures and computer accounts are left out, and so is IPC$, which is not data.
+    /// From EvtxECmd's CSV: Security 5140 (a share was reached) and 5145 (a file or folder on it
+    /// was checked for access), which need file share auditing, and 4663 (a file was read, written
+    /// or deleted), which needs auditing on the folder. Most hosts have none of them. Failures and
+    /// computer accounts are left out, and so is IPC$, which is not data. One pass over the file.
     /// </summary>
-    public static IEnumerable<AccessRow> ReadShareEvents(string file, CancellationToken cancellationToken)
+    public static IEnumerable<AccessRow> ReadSecurityEvents(string file, CancellationToken cancellationToken)
     {
         using var reader = new CsvRecordReader(file);
         var header = reader.ReadRecord();
@@ -416,7 +422,7 @@ public static class DataAccessReport
             throw new InvalidDataException($"{Path.GetFileName(file)} is not EvtxECmd output: TimeCreated, EventId, Channel or Payload column missing");
 
         bool Wanted(List<string> f) =>
-            f[channelCol].Trim().Equals("Security", StringComparison.OrdinalIgnoreCase) && f[idCol].Trim() is "5140" or "5145";
+            f[channelCol].Trim().Equals("Security", StringComparison.OrdinalIgnoreCase) && f[idCol].Trim() is "5140" or "5145" or "4663";
         var last = new[] { timeCol, idCol, channelCol, computerCol, keywordsCol }.Max();
         Func<List<string>, bool>? wantPayload = payloadCol > last ? Wanted : null;
 
@@ -431,6 +437,19 @@ public static class DataAccessReport
             var data = RemoteAccess.Fields(fields[payloadCol]);
             var account = data.GetValueOrDefault("SubjectUserName", "");
             if (account.Length == 0 || account.EndsWith('$')) continue;
+            var domain = data.GetValueOrDefault("SubjectDomainName", "");
+            var user = domain.Length > 0 ? domain + "\\" + account : account;
+            var sid = data.GetValueOrDefault("SubjectUserSid", "");
+            var id = fields[idCol].Trim();
+
+            if (id == "4663")
+            {
+                if (!data.GetValueOrDefault("ObjectType", "File").Equals("File", StringComparison.OrdinalIgnoreCase)) continue;
+                if (CleanPath(data.GetValueOrDefault("ObjectName", "")) is not { } objectPath) continue;
+                yield return Row(time, objectPath, FileAuditActivity(data.GetValueOrDefault("AccessList", "")), user, sid);
+                continue;
+            }
+
             var share = data.GetValueOrDefault("ShareName", "");
             if (share.Length == 0 || share.EndsWith("IPC$", StringComparison.OrdinalIgnoreCase)) continue;
 
@@ -438,13 +457,42 @@ public static class DataAccessReport
             var computer = computerCol >= 0 ? fields[computerCol].Trim().Split('.')[0] : "";
             if (share.StartsWith(@"\\*\", StringComparison.Ordinal) && computer.Length > 0) share = @"\\" + computer + share[3..];
             var relative = data.GetValueOrDefault("RelativeTargetName", "").Trim().TrimStart('\\');
-            var id = fields[idCol].Trim();
             var path = id == "5145" && relative.Length > 0 ? share.TrimEnd('\\') + "\\" + relative : share;
 
-            var domain = data.GetValueOrDefault("SubjectDomainName", "");
-            yield return Row(time, path, id == "5145" ? AccessRow.AccessedOverShare : AccessRow.ShareAccessed,
-                             domain.Length > 0 ? domain + "\\" + account : account,
-                             data.GetValueOrDefault("SubjectUserSid", ""));
+            yield return Row(time, path, id == "5145" ? AccessRow.AccessedOverShare : AccessRow.ShareAccessed, user, sid);
+        }
+    }
+
+    /// <summary>
+    /// What a 4663 says was done, strongest first: the AccessList holds the rights used, as
+    /// message codes (%%1537 DELETE, %%4417 WriteData, %%4418 AppendData, %%4416 ReadData).
+    /// </summary>
+    private static string FileAuditActivity(string accessList) =>
+        accessList.Contains("%%1537", StringComparison.Ordinal) ? AccessRow.Deleted
+        : accessList.Contains("%%4417", StringComparison.Ordinal) || accessList.Contains("%%4418", StringComparison.Ordinal) ? AccessRow.Written
+        : accessList.Contains("%%4416", StringComparison.Ordinal) ? AccessRow.Read
+        : AccessRow.Accessed;
+
+    /// <summary>
+    /// LinuxUserFiles' other history: the desktop's recently used files (recently-used.xbel, with
+    /// when each was last visited) and vim's file marks (.viminfo, with when the mark was set).
+    /// A file vim lists without a time is left out.
+    /// </summary>
+    public static IEnumerable<AccessRow> ReadLinuxRecent(string file, CancellationToken cancellationToken)
+    {
+        foreach (var cell in CaseUsers.Rows(file, cancellationToken))
+        {
+            var activity = cell("Type") switch
+            {
+                "recent file (desktop)" => AccessRow.Opened,
+                "vim file mark" => AccessRow.OpenedInVim,
+                _ => null
+            };
+            if (activity is null || IpHistoryRecord.ParseTime(cell("TimeUtc")) is not { } time) continue;
+            var entry = cell("Entry").Trim();
+            if (entry.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) entry = entry["file://".Length..];
+            if (!entry.StartsWith('/') && !entry.StartsWith('~')) continue;   // smb://, sftp:// and the like: not a local file
+            yield return Row(time, entry, activity, cell("User"));
         }
     }
 

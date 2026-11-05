@@ -16,6 +16,11 @@ public sealed record AccessRow(DateTime TimeUtc, string System, string User, str
     public const string OpenedOrSaved = "Opened or saved via dialog";
     public const string ShareAccessed = "Share accessed";
     public const string AccessedOverShare = "Accessed over share";
+    public const string OpenedInVim = "Opened in vim";
+    public const string Read = "Read (file audit)";
+    public const string Written = "Written (file audit)";
+    public const string Deleted = "Deleted (file audit)";
+    public const string Accessed = "Accessed (file audit)";
 
     public static readonly string[] HostColumns = ["TimeUtc", "System", "User", "SID", "Path", "Activity", "Source"];
     public static readonly string[] CaseColumns = ["Date/Time (UTC)", "System", "User", "Path", "Activity"];

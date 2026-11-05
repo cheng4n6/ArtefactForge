@@ -73,16 +73,22 @@ public class DataAccessTests
 
     private static string JsonValue(string text) => text.Replace(@"\", @"\\");
 
-    private static string ShareEvent(string computer, string time, int id, string user, string share, string relative, string keywords = "Audit success") =>
+    private static string SecurityEvent(string computer, string time, int id, string keywords, params (string, string)[] data) =>
         $"1,1,{time}.0000000,{id},LogAlways,Microsoft-Windows-Security-Auditing,Security,4,8,{computer},0,,,,,,,,,,,,False,"
         + $@"C:\x\Security.evtx,{keywords},0,"
         + "\"{\"\"EventData\"\":{\"\"Data\"\":["
-        + string.Join(",", new[]
-          {
-              ("SubjectUserSid", user == "bob" ? BobSid : AliceSid), ("SubjectUserName", user), ("SubjectDomainName", "CORP"),
-              ("IpAddress", "10.0.0.5"), ("ShareName", share), ("ShareLocalPath", @"\??\D:\Shares"), ("RelativeTargetName", relative)
-          }.Select(d => $"{{\"\"@Name\"\":\"\"{d.Item1}\"\",\"\"#text\"\":\"\"{JsonValue(d.Item2)}\"\"}}"))
+        + string.Join(",", data.Select(d => $"{{\"\"@Name\"\":\"\"{d.Item1}\"\",\"\"#text\"\":\"\"{JsonValue(d.Item2)}\"\"}}"))
         + "]}}\"";
+
+    private static string ShareEvent(string computer, string time, int id, string user, string share, string relative, string keywords = "Audit success") =>
+        SecurityEvent(computer, time, id, keywords,
+            ("SubjectUserSid", user == "bob" ? BobSid : AliceSid), ("SubjectUserName", user), ("SubjectDomainName", "CORP"),
+            ("IpAddress", "10.0.0.5"), ("ShareName", share), ("ShareLocalPath", @"\??\D:\Shares"), ("RelativeTargetName", relative));
+
+    private static string FileAudit(string time, string user, string type, string path, string accessList) =>
+        SecurityEvent("FS01.corp.example", time, 4663, "Audit success",
+            ("SubjectUserSid", AliceSid), ("SubjectUserName", user), ("SubjectDomainName", "CORP"),
+            ("ObjectType", type), ("ObjectName", path), ("AccessList", accessList), ("AccessMask", "0x1"));
 
     private static List<Dictionary<string, string>> ReadCsv(string path)
     {
@@ -277,12 +283,71 @@ public class DataAccessTests
               ShareEvent("FS01.corp.example", "2026-02-20 10:00:03", 5145, "WS01$", @"\\*\Finance", @"x.txt"),
               ShareEvent("FS01.corp.example", "2026-02-20 10:00:04", 5145, "alice", @"\\*\IPC$", @"srvsvc"));
 
-        var rows = DataAccessReport.ReadShareEvents(file, default).ToList();
+        var rows = DataAccessReport.ReadSecurityEvents(file, default).ToList();
 
         Assert.Equal(
             [(@"\\FS01\Finance\Payroll\March.xlsx", AccessRow.AccessedOverShare), (@"\\FS01\Finance", AccessRow.ShareAccessed)],
             rows.Select(r => (r.Path, r.Activity)));
         Assert.All(rows, r => Assert.Equal((@"CORP\alice", AliceSid), (r.User, r.Sid)));
+    }
+
+    [Fact]
+    public void File_audit_events_say_whether_a_file_was_read_written_or_deleted()
+    {
+        using var dir = new TempDirectory();
+        var file = Path.Combine(dir.Path, "EvtxECmd_EventLogs.csv");
+        Write(file, EvtxHeader,
+              FileAudit("2026-02-21 09:00:00", "alice", "File", @"D:\Finance\Payroll.xlsx", "%%4416 "),
+              FileAudit("2026-02-21 09:00:01", "alice", "File", @"D:\Finance\Payroll.xlsx", "%%4417 %%4416"),
+              FileAudit("2026-02-21 09:00:02", "alice", "File", @"D:\Finance\Old.xlsx", "%%1537"),
+              FileAudit("2026-02-21 09:00:03", "alice", "File", @"D:\Finance\Old.xlsx", "%%4423"),
+              FileAudit("2026-02-21 09:00:04", "alice", "Key", @"\REGISTRY\MACHINE\SOFTWARE\x", "%%4416"),
+              FileAudit("2026-02-21 09:00:05", "WS01$", "File", @"D:\Finance\x.txt", "%%4416"));
+
+        var rows = DataAccessReport.ReadSecurityEvents(file, default).ToList();
+
+        Assert.Equal(
+            [
+                (@"D:\Finance\Payroll.xlsx", AccessRow.Read), (@"D:\Finance\Payroll.xlsx", AccessRow.Written),
+                (@"D:\Finance\Old.xlsx", AccessRow.Deleted), (@"D:\Finance\Old.xlsx", AccessRow.Accessed)
+            ],
+            rows.Select(r => (r.Path, r.Activity)));
+        Assert.All(rows, r => Assert.Equal((@"CORP\alice", AliceSid), (r.User, r.Sid)));
+    }
+
+    [Fact]
+    public void Linux_recent_files_and_vim_marks_are_read_with_their_times()
+    {
+        using var dir = new TempDirectory();
+        var file = Path.Combine(dir.Path, "dave_LinuxUserFiles_OtherHistory.csv");
+        Write(file, "\"User\",\"Source\",\"Type\",\"Line\",\"Entry\",\"TimeUtc\"",
+              "\"dave\",\"recently-used.xbel\",\"recent file (desktop)\",\"1\",\"file:///home/dave/Finance/Q1 report.ods\",\"2026-03-01 10:00:00\"",
+              "\"dave\",\"recently-used.xbel\",\"recent file (desktop)\",\"2\",\"sftp://fs01/share/x.txt\",\"2026-03-01 10:05:00\"",
+              "\"dave\",\".viminfo\",\"vim file mark\",\"20\",\"/etc/shadow\",\"2026-03-02 11:00:00\"",
+              "\"dave\",\".viminfo\",\"vim file edited\",\"21\",\"/etc/passwd\",\"\"",
+              "\"dave\",\".viminfo\",\"vim command\",\"3\",\"wq\",\"2026-03-02 11:01:00\"");
+
+        var rows = DataAccessReport.ReadLinuxRecent(file, default).ToList();
+
+        Assert.Equal(
+            [("/home/dave/Finance/Q1 report.ods", AccessRow.Opened), ("/etc/shadow", AccessRow.OpenedInVim)],
+            rows.Select(r => (r.Path, r.Activity)));
+        Assert.All(rows, r => Assert.Equal("dave", r.User));
+    }
+
+    [Fact]
+    public void The_case_report_has_a_data_access_section_per_account_and_host()
+    {
+        using var dir = new TempDirectory();
+        HostWithActivity(dir, "HOST01");
+        CaseUsers.AddCompromised(dir.Path, new CompromisedUser("alice", ""));
+        DataAccessReport.Build(dir.Path);
+
+        var html = File.ReadAllText(Core.Report.CaseReport.Rebuild(dir.Path).Path!);
+
+        Assert.Contains("id=\"dataaccess\"", html);
+        Assert.Contains("2026-02-01 09:00:00", html);
+        Assert.Contains("Opened 2", html);
     }
 
     // --- the case ---------------------------------------------------------------------------------
@@ -379,7 +444,7 @@ public class DataAccessTests
 
         Assert.Equal((2, 1, 1), (summary.Rows, summary.Users, summary.Hosts));
         Assert.Equal((1, 3), summary.Sources.Where(s => s.Source == DataAccessReport.LnkRecent).Select(s => (s.Hosts, s.Rows)).Single());
-        Assert.Equal(0, summary.Sources.Single(s => s.Source == DataAccessReport.ShareEvents).Hosts);
+        Assert.Equal(0, summary.Sources.Single(s => s.Source == DataAccessReport.SecurityEvents).Hosts);
     }
 
     [Theory]
