@@ -118,7 +118,7 @@ public static class AtomicFile
             }
 
             // A rename within one folder: the original is swapped in one step, on a share too.
-            File.Move(temp, path, overwrite: true);
+            Replace(temp, path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -131,6 +131,28 @@ public static class AtomicFile
         {
             TryDelete(temp);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Windows refuses to replace a file another reader has open, even a reader that shares delete,
+    /// and readers are brief here: the case report or the IOCs tab reading the hits while a sweep
+    /// writes them. So a refused replace is tried again for a couple of seconds before it is
+    /// reported; a file held open in another program is still reported.
+    /// </summary>
+    private static void Replace(string temp, string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temp, path, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < 20 && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(100);
+            }
         }
     }
 

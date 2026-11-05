@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using ArtefactForge.Core;
 using ArtefactForge.Core.Ioc;
 using Microsoft.Win32;
 
@@ -78,12 +80,93 @@ public partial class MainWindow
     private void SetIocEnabled()
     {
         // A run rebuilds the hits of the hosts it processes, so the list waits for it to finish.
-        var free = !_iocBusy && RunButton.IsEnabled && AnalysisCaseDirectory() is not null;
-        IocAddButton.IsEnabled = free;
-        IocImportButton.IsEnabled = free;
-        IocRemoveButton.IsEnabled = free;
-        IocSweepButton.IsEnabled = free;
+        var caseDir = AnalysisCaseDirectory();
+        var open = RunButton.IsEnabled && caseDir is not null;
+        // Adding never waits for a sweep: what is added meanwhile goes in the next batch. Remove
+        // and Sweep all wait, one change at a time, so the result line reports the one in hand.
+        var sweeping = _iocBusy || (_iocQueue is { IsBusy: true } queue && SameCase(queue, caseDir));
+        IocAddButton.IsEnabled = open;
+        IocImportButton.IsEnabled = open;
+        IocRemoveButton.IsEnabled = open && !sweeping;
+        IocSweepButton.IsEnabled = open && !sweeping;
     }
+
+    private static bool SameCase(IocSweepQueue queue, string? caseDir) =>
+        caseDir is not null && string.Equals(Path.GetFullPath(queue.CaseDirectory), Path.GetFullPath(caseDir),
+                                             StringComparison.OrdinalIgnoreCase);
+
+    private IocSweepQueue? _iocQueue;
+
+    /// <summary>The add queue of this case, made when the first IOC is added to it.</summary>
+    private IocSweepQueue QueueFor(string caseDir)
+    {
+        if (_iocQueue is { } current && SameCase(current, caseDir)) return current;
+
+        // A queue still sweeping another case carries on; its result only goes to that case's files.
+        var queue = new IocSweepQueue(caseDir);
+        var lastShown = DateTime.MinValue;
+        queue.Progress = new Progress<string>(message =>
+        {
+            if (!ReferenceEquals(queue, _iocQueue) || (DateTime.Now - lastShown).TotalMilliseconds < 200) return;
+            lastShown = DateTime.Now;
+            var waiting = queue.Waiting;
+            IocResult.Text = message + (waiting > 0 ? $" ({waiting} more IOC{(waiting == 1 ? "" : "s")} waiting)" : "");
+        });
+        queue.BatchFinished += batch => Dispatcher.InvokeAsync(() => OnIocBatchSwept(queue, batch));
+        return _iocQueue = queue;
+    }
+
+    private void OnIocBatchSwept(IocSweepQueue queue, IocSweepBatch batch)
+    {
+        if (!ReferenceEquals(queue, _iocQueue)) return;
+        var waiting = queue.Waiting;
+        var line = batch.Result?.Describe()
+                   ?? $"The sweep of {batch.Iocs.Count} new IOC{(batch.Iocs.Count == 1 ? "" : "s")} failed: {batch.Error}";
+        if (waiting > 0) line += $" {waiting} more IOC{(waiting == 1 ? "" : "s")} waiting for the next sweep.";
+        if (batch.Error is not null)
+            MessageBox.Show(this, line, "IOCs", MessageBoxButton.OK, MessageBoxImage.Warning);
+        RefreshIocs(line);
+        RefreshCaseBar();
+    }
+
+    /// <summary>
+    /// Puts IOCs on the list at once and queues them for a sweep, without waiting for a sweep that
+    /// is already running. <paramref name="add"/> saves them and says what it did.
+    /// </summary>
+    private async Task AddIocsAsync(string caseDir, Func<(IReadOnlyList<IocEntry> Added, string Line)> add)
+    {
+        IReadOnlyList<IocEntry> added;
+        string line;
+        try
+        {
+            // Off the window's thread: saving the list reads and writes it.
+            (added, line) = await Task.Run(add);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            MessageBox.Show(this, ex.Message, "IOCs", MessageBoxButton.OK, MessageBoxImage.Warning);
+            RefreshIocs(ex.Message);
+            return;
+        }
+
+        if (added.Count > 0)
+        {
+            SweepSlots.Shared.KeepFreeBytes = SavedRunOptions.ToBytes(KeepFreeForSweeps());
+            var queue = QueueFor(caseDir);
+            var behind = queue.Sweeping > 0;
+            queue.Add(added);
+            line += behind
+                ? $" It will be swept when the sweep running now finishes ({queue.Waiting} IOC{(queue.Waiting == 1 ? "" : "s")} waiting)."
+                : " Sweeping...";
+        }
+        RefreshIocs(line);
+    }
+
+    /// <summary>Keep free as typed on the Setup tab, or as last saved when the box is not a number.</summary>
+    private double KeepFreeForSweeps() =>
+        SavedRunOptions.TryParseGB(KeepFreeGB.Text, CultureInfo.CurrentCulture, out var gb)
+            ? new SavedRunOptions { KeepFreeGB = gb }.Clamped().KeepFreeGB
+            : Preferences.Current.RunOptions.Clamped().KeepFreeGB;
 
     private void OnIocValueKey(object sender, KeyEventArgs e)
     {
@@ -104,12 +187,12 @@ public partial class MainWindow
 
         IocValueBox.Clear();
         IocNoteBox.Clear();
-        await RunIocAsync(caseDir, async progress =>
+        await AddIocsAsync(caseDir, () =>
         {
             var added = IocList.Add(caseDir, [entry]);
-            if (added.Count == 0) return $"{entry.TypeLabel} {entry.Value} is already on the list.";
-            var result = await IocSweep.SweepAsync(caseDir, added, progress);
-            return $"Added {entry.TypeLabel} {entry.Value}. " + result.Describe();
+            return (added, added.Count == 0
+                ? $"{entry.TypeLabel} {entry.Value} is already on the list."
+                : $"Added {entry.TypeLabel} {entry.Value}.");
         });
     }
 
@@ -124,13 +207,11 @@ public partial class MainWindow
         };
         if (dialog.ShowDialog(this) != true) return;
 
-        await RunIocAsync(caseDir, async progress =>
+        await AddIocsAsync(caseDir, () =>
         {
             var import = IocList.Import(caseDir, dialog.FileName);
-            var line = $"Imported {import.Added.Count} IOC(s); {import.AlreadyListed} already listed"
-                       + (import.Rejected.Count > 0 ? $"; {import.Rejected.Count} not added (type not recognised)." : ".");
-            if (import.Added.Count == 0) return line;
-            return line + " " + (await IocSweep.SweepAsync(caseDir, import.Added, progress)).Describe();
+            return (import.Added, $"Imported {import.Added.Count} IOC(s); {import.AlreadyListed} already listed"
+                                  + (import.Rejected.Count > 0 ? $"; {import.Rejected.Count} not added (type not recognised)." : "."));
         });
     }
 
@@ -178,6 +259,7 @@ public partial class MainWindow
     {
         _iocBusy = true;
         SetIocEnabled();
+        SweepSlots.Shared.KeepFreeBytes = SavedRunOptions.ToBytes(KeepFreeForSweeps());
         var lastShown = DateTime.MinValue;
         var progress = new Progress<string>(message =>
         {

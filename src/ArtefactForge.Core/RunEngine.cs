@@ -89,6 +89,7 @@ public sealed class RunEngine
         var memoryHeavy = new MemoryBudget(report.MemoryBudgetBytes);
         // The budget counts only the memory-heavy modules; this watches what is actually free.
         var memoryFloor = new MemoryFloor(config.KeepFreeMemoryBytes);
+        Ioc.SweepSlots.Shared.KeepFreeBytes = config.KeepFreeMemoryBytes;   // the hosts' IOC sweeps keep it free too
         // How long each module took when this case last ran, so the longest memory-heavy one starts
         // first instead of last: it is the long pole of the batch.
         var lastDurations = LoadDurations(Path.Combine(logDir, "manifest.json"));
@@ -103,8 +104,9 @@ public sealed class RunEngine
         var gate = new object();
 
         // A host's own post-run steps start as soon as its last module finishes, beside the other
-        // hosts' modules, instead of every host waiting for the whole batch. One host at a time:
-        // the IOC sweep writes one hits file for the case. The case-wide steps still run at the end.
+        // hosts' modules, instead of every host waiting for the whole batch. The steps that build
+        // files run one host at a time; the IOC sweeps of hosts overlap. The case-wide steps still
+        // run at the end.
         var hostSteps = new List<Task>();
         var hostsDone = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sweptEarly = new List<Ioc.IocSweepResult>();
@@ -175,31 +177,37 @@ public sealed class RunEngine
         // The post-run steps that read only this host's own output.
         async Task AfterHostAsync(string host)
         {
+            var built = new List<WorkResult>();
             await hostGate.WaitAsync(CancellationToken.None);
             try
             {
                 if (cancellationToken.IsCancellationRequested) return;
                 var collectionDir = Path.Combine(caseDir, host);
-                var built = new List<WorkResult>();
                 if (Windows.IpHistory.BuildCollection(collectionDir, cancellationToken) is { } ip) built.Add(ip);
                 if (Windows.RemoteAccess.BuildCollection(collectionDir, cancellationToken) is { } rdp) built.Add(rdp);
                 if (Windows.Ransomware.BuildHost(collectionDir, cancellationToken) is { } ransom) built.Add(ransom);
-                var swept = await Ioc.IocSweep.AfterHostAsync(caseDir, host,
-                    results.Where(r => string.Equals(r.Collection, host, StringComparison.OrdinalIgnoreCase)).ToList());
-                lock (gate)
-                {
-                    report.Results.AddRange(built);
-                    hostsDone.Add(host);
-                    if (swept is not null) sweptEarly.Add(swept);
-                }
             }
             catch (OperationCanceledException)
             {
                 // Stopped: the end of the run says which hosts were left out.
+                return;
             }
             finally
             {
                 hostGate.Release();
+            }
+
+            // Outside the gate, so the next host's steps start while this host is swept, and
+            // hosts that finish close together are swept side by side (IocSweep shares out the
+            // files and writes the hits file one sweep at a time). After the steps above, which
+            // write CSVs of this host that the sweep reads.
+            var swept = await Ioc.IocSweep.AfterHostAsync(caseDir, host,
+                results.Where(r => string.Equals(r.Collection, host, StringComparison.OrdinalIgnoreCase)).ToList());
+            lock (gate)
+            {
+                report.Results.AddRange(built);
+                hostsDone.Add(host);
+                if (swept is not null) sweptEarly.Add(swept);
             }
         }
 
