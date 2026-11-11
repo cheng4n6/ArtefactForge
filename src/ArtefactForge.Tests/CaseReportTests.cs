@@ -297,8 +297,145 @@ public class CaseReportTests
         Assert.Null(DetectionSummary.ParseTime("not a time"));
     }
 
+    [Fact]
+    public void Each_host_shows_its_time_zone_last_boot_and_when_it_was_collected()
+    {
+        using var dir = Case();
+        // ActiveTimeBias -60 (British Summer Time), as RECmd prints a negative DWORD.
+        SystemInfo(dir, "WS01", ("Hostname", "WS01"), ("ProductName", "Windows 11 Pro"),
+                   ("Timezone", "GMT Standard Time"), ("TimezoneActiveBiasMinutes", "4294967236"));
+        Write(dir, Path.Combine("WS01", RemoteAccess.Folder, RemoteAccess.SourcesFileName),
+              "Log,Status,Events,FirstEventUtc,LastEventUtc,ClearedUtc,Input",
+              "Security,used,10,2026-02-20 00:00:00,2026-03-02 00:00:00,,EventLogs\\EvtxECmd_EventLogs.csv",
+              "System boots,used,4,2026-02-01 08:00:00,2026-03-01 07:00:05,,EventLogs\\EvtxECmd_EventLogs.csv");
+        SystemInfo(dir, "WEB01", ("Hostname", "WEB01"), ("PRETTY_NAME", "Ubuntu 22.04.4 LTS"),
+                   ("Timezone", "Europe/London"), ("LastBootUtc", "2026-02-27 06:30:00"));
+
+        var run = new RunReport { CaseDirectory = dir.Path, LogDirectory = Path.Combine(dir.Path, "_Logs") };
+        run.Results.Add(new WorkResult { Collection = "WS01", Module = "PECmd", Category = "ProgramExecution", Status = WorkStatus.Completed });
+        run.Results.Add(new WorkResult { Collection = "WEB01", Module = "LinuxAuth", Category = "Linux", Status = WorkStatus.Completed });
+        run.CollectorTimes["WS01"] = new CollectorTimes
+        {
+            CollectedUtc = new DateTime(2026, 3, 2, 9, 15, 0, DateTimeKind.Utc),
+            CollectedFrom = "Velociraptor client_info.json (ClientStart)"
+        };
+        run.CollectorTimes["WEB01"] = new CollectorTimes
+        {
+            CollectedUtc = new DateTime(2026, 3, 2, 9, 40, 0, DateTimeKind.Utc),
+            CollectedFrom = "when WEB01.zip was last written; the collector recorded no time",
+            CollectedApprox = true
+        };
+        CaseReport.AfterRun(run);
+
+        var html = Report(dir);
+        Assert.Contains("GMT Standard Time (UTC+01:00)", html);
+        Assert.Contains("Europe/London", html);
+        Assert.Contains(">2026-03-01 07:00:05<", html);   // WS01: the newest System log boot
+        Assert.Contains(">2026-02-27 06:30:00<", html);   // WEB01: wtmp
+        Assert.Contains(">2026-03-02 09:15:00<", html);
+        Assert.Contains("From Velociraptor client_info.json (ClientStart)", html);
+        Assert.Contains(">Approx</span>", html);
+        Assert.Contains("Not recorded", html);   // DC01 was not processed by this run
+
+        // A later run that skipped WS01's zip as done records no times for it; the first run's stand.
+        var again = new RunReport { CaseDirectory = dir.Path, LogDirectory = Path.Combine(dir.Path, "_Logs") };
+        again.Results.Add(new WorkResult { Collection = "WS01", Module = "RBCmd", Category = "FileDeletion", Status = WorkStatus.Completed });
+        CaseReport.AfterRun(again);
+        Assert.Contains(">2026-03-02 09:15:00<", Report(dir));
+    }
+
+    [Fact]
+    public void Known_addresses_are_labelled_from_the_case_file_and_the_summaries_and_bad_lines_are_raised()
+    {
+        using var dir = Case();
+        Write(dir, KnownAddresses.FileName,
+              "Address,Label,Note",
+              "# Remote access ranges",
+              "10.0.0.0/8,Office LAN,",
+              "203.0.113.0/24,VPN,Remote access pool",
+              "not-an-ip,Bad,",
+              "10.1.2.3/8,Typo,");
+
+        CaseReport.Rebuild(dir.Path);
+
+        var html = Report(dir);
+        // DC01's own address: its role makes it DC, which is more specific than the office range.
+        Assert.Contains("10.0.0.10 <span class=\"pill p-tag\" title=\"Domain controller DC01. From system summary\">DC</span>", html);
+        Assert.Contains(">Remote access pool<", html);
+        Assert.Contains("line 5: not-an-ip is not an IP address", html);
+        Assert.Contains("line 6: 10.1.2.3/8 is not an IP address", html);
+        Assert.Contains("Lines of KnownAddresses.csv not read", html);
+    }
+
+    [Fact]
+    public void Addresses_in_the_IP_history_link_to_it_and_the_RDP_trace_shows_their_labels()
+    {
+        using var dir = Case();
+        Write(dir, KnownAddresses.FileName, "Address,Label,Note", "203.0.113.0/24,VPN,Remote access pool");
+        Write(dir, IpHistory.FileName,
+              string.Join(",", IpHistoryRecord.Columns),
+              "10.0.0.10,DC01,DC01$,,2026-03-01 08:00:00,2026-03-01 18:00:00,Kerberos,12,DC01",
+              "10.0.0.21,WS02,WS02$,,2026-03-01 08:00:00,2026-03-01 18:00:00,Kerberos,4,DC01");
+        var start = new RdpSession("DC01", "DC01", new DateTime(2026, 3, 1, 10, 0, 0, DateTimeKind.Utc), null, "Logon",
+                                   "alice", "10.0.0.21", "WS02", []);
+        RdpHop[] hops =
+        [
+            new() { Number = 1, Result = RdpTrace.Confirmed, ToHost = "DC01", TimeUtc = start.StartUtc, Account = "alice",
+                    SourceIp = "10.0.0.21", FromHost = "WS02" },
+            new() { Number = 2, Result = RdpTrace.EndOfChain, ToHost = "WS02", TimeUtc = start.StartUtc.AddMinutes(-20),
+                    Account = "bob", SourceIp = "203.0.113.7" }
+        ];
+        RdpTrace.Save(dir.Path, new RdpTraceResult(start, hops, "From DC01 back to 203.0.113.7 in 2 hops.", "203.0.113.7",
+                                                   ["alice", "bob"], [], ["DC01"]), []);
+
+        var html = Report(dir);
+        Assert.Contains("<a class=\"ip\" href=\"#ips\" data-ip=\"10.0.0.21\"", html);
+        Assert.Contains("<a class=\"ip\" href=\"#ips\" data-ip=\"10.0.0.10\"", html);
+        // Not in the IP history, so not a link; but labelled, on the hop and on its finding.
+        Assert.DoesNotContain("data-ip=\"203.0.113.7\"", html);
+        Assert.Contains("203.0.113.7 <span class=\"pill p-tag\"", html);
+        Assert.Contains("Known as VPN.", html);
+        Assert.Contains("window.ipLookup", html);
+    }
+
+    [Fact]
+    public void The_most_specific_known_address_wins_and_the_analysts_label_wins_a_tie()
+    {
+        using var dir = Case();
+        SystemInfo(dir, "WS01", ("Hostname", "WS01"), ("ProductName", "Windows 11 Pro"),
+                   ("IPAddresses", "10.0.0.50"), ("DnsServers", "10.0.0.10, 10.0.0.53"), ("Gateways", "10.0.0.1"));
+        Write(dir, KnownAddresses.FileName, "Address,Label,Note", "10.0.0.0/24,Server VLAN,", "10.0.0.53,Resolver,Pi-hole");
+        var hosts = IocSweep.Hosts(dir.Path)
+            .Select(h => new ReportHost(h, Path.Combine(dir.Path, h),
+                SystemInventory.Collect(dir.Path).Single(c => c.Collection == h).Facts))
+            .ToList();
+
+        var known = KnownAddresses.Load(dir.Path, hosts);
+
+        Assert.Equal("DC", known.For("10.0.0.10")?.Label);          // a DC that is also a DNS server
+        Assert.Equal("Resolver", known.For("10.0.0.53")?.Label);    // the analyst's, over "DNS"
+        Assert.Equal("Gateway", known.For("10.0.0.1")?.Label);
+        Assert.Equal("Server VLAN", known.For("10.0.0.50")?.Label);
+        Assert.Equal("Server VLAN", known.For("::ffff:10.0.0.99")?.Label);
+        Assert.Null(known.For("192.168.1.1"));
+        Assert.Null(known.For("not an address"));
+    }
+
+    [Fact]
+    public void Known_addresses_file_is_created_with_its_header_and_never_overwritten()
+    {
+        using var dir = new TempDirectory();
+
+        var path = KnownAddresses.EnsureFile(dir.Path);
+        Assert.StartsWith("Address,Label,Note", File.ReadAllText(path).TrimStart('﻿'));
+        File.WriteAllText(path, "Address,Label,Note\n10.8.0.0/16,VPN,\n");
+        KnownAddresses.EnsureFile(dir.Path);
+        Assert.Contains("10.8.0.0/16,VPN", File.ReadAllText(path));
+        Assert.Empty(KnownAddresses.Load(dir.Path, []).Problems);
+    }
+
     private static string HostsSectionAddresses(string addresses) =>
         (string)typeof(CaseReport).Assembly.GetType("ArtefactForge.Core.Report.HostsSection")!
             .GetMethod("AddressList", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
-            .Invoke(null, [addresses])!;
+            .Invoke(null, [addresses, null])!;
 }

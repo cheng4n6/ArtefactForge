@@ -272,7 +272,7 @@ public static class CaseReport
         }
 
         html.Append("<footer><span>Built from the summary files in the case folder. Nothing in this report is entered by hand, ")
-            .Append("so rebuilding it never loses anything; IOCs and traces are kept in their own files.</span>")
+            .Append("so rebuilding it never loses anything; IOCs, traces and known addresses are kept in their own files.</span>")
             .Append(context.Snapshot
                 ? "<span>This snapshot is not updated. The live report is CaseReport.html in the case folder.</span>"
                 : "<span>To keep a fixed copy for sending, use Export snapshot in the app.</span>")
@@ -326,8 +326,11 @@ public static class CaseReport
         {
             var needsReview = g.Count(r => r.Status is WorkStatus.Failed or WorkStatus.NoOutput or WorkStatus.CheckLog
                                                      or WorkStatus.ToolMissing or WorkStatus.TimedOut);
+            // A zip skipped as already done has no collector times in this run; the last run's stand.
+            var collector = report.CollectorTimes.GetValueOrDefault(g.Key) is { IsEmpty: false } read ? read
+                          : runs.GetValueOrDefault(g.Key)?.Collector;
             runs[g.Key] = new HostRun(now, g.Count(r => r.Status == WorkStatus.Completed),
-                                      g.Count(r => r.Status == WorkStatus.Skipped), needsReview);
+                                      g.Count(r => r.Status == WorkStatus.Skipped), needsReview, collector);
         }
 
         var path = RunsPath(report.CaseDirectory);

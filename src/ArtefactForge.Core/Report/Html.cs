@@ -28,6 +28,27 @@ internal static class Html
     public static string Plural(long n, string one, string many) => n == 1 ? one : many;
 
     /// <summary>
+    /// An address as the report shows it: a link that looks it up in the IP history when the
+    /// history has it, and the label of a known address beside it. Anything else is escaped text.
+    /// </summary>
+    public static string Ip(CaseReportContext context, string address)
+    {
+        var text = address.Trim();
+        if (text.Length == 0) return "";
+        var shown = context.InIpHistory(text)
+            ? $"<a class=\"ip\" href=\"#ips\" data-ip=\"{E(Windows.IpHistoryRecord.Normalise(text))}\" title=\"Look it up in the IP history\">{E(text)}</a>"
+            : E(text);
+        return context.KnownAddresses.For(text) is { } label ? shown + " " + Label(label) : shown;
+    }
+
+    /// <summary>A known address's label, with its note and where it came from on hover.</summary>
+    public static string Label(AddressLabel label)
+    {
+        var title = (label.Note.Length > 0 ? label.Note + ". " : "") + "From " + label.From;
+        return $"<span class=\"pill p-tag\" title=\"{E(title)}\">{E(label.Label)}</span>";
+    }
+
+    /// <summary>
     /// The line with the first occurrence of <paramref name="value"/> marked, cut to a window
     /// around it when long (an event payload can run to thousands of characters).
     /// </summary>

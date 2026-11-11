@@ -23,7 +23,10 @@ public partial class MainWindow
         }
 
         var path = CaseReport.PathFor(caseDirectory);
-        if (!File.Exists(path))
+        // Known addresses are edited outside the app, so nothing else rebuilds the report for them.
+        var known = KnownAddresses.PathFor(caseDirectory);
+        if (!File.Exists(path)
+            || (File.Exists(known) && File.GetLastWriteTimeUtc(known) > File.GetLastWriteTimeUtc(path)))
         {
             var result = await Task.Run(() => CaseReport.Rebuild(caseDirectory));
             if (!result.Written)
@@ -33,6 +36,31 @@ public partial class MainWindow
             }
         }
         Open(path);
+    }
+
+    /// <summary>
+    /// Opens the case's KnownAddresses.csv in the program that opens .csv files, creating it with
+    /// its header first. Open report rebuilds the report once it has been saved.
+    /// </summary>
+    private void OnEditKnownAddresses(object sender, RoutedEventArgs e)
+    {
+        var caseDirectory = AnalysisCaseDirectory();
+        if (caseDirectory is null || !Directory.Exists(caseDirectory))
+        {
+            MessageBox.Show(this, "Choose the output folder and case name on the Setup page, or run the case "
+                                  + "first, so there is a case to label addresses for.", "No case folder");
+            return;
+        }
+
+        try
+        {
+            Open(KnownAddresses.EnsureFile(caseDirectory));
+            Append($"Known addresses: {KnownAddresses.FileName} opened. Save it, then Open report to see the labels.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, ex.Message, "Known addresses", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async void OnExportSnapshot(object sender, RoutedEventArgs e)

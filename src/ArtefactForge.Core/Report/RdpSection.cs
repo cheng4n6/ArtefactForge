@@ -51,8 +51,9 @@ internal sealed class RdpSection : ICaseReportSection
                 if (external && !externalReported)
                 {
                     externalReported = true;
+                    var known = context.KnownAddresses.For(last.SourceIp) is { } label ? $" Known as {label.Label}." : "";
                     findings.Add(new ReportFinding(FindingLevel.Critical, last.SourceIp, "RDP chain ends at an external IP",
-                        $"{hops.Count} {Plural(hops.Count, "hop", "hops")} into {trace.StartHost}", "rdp"));
+                        $"{hops.Count} {Plural(hops.Count, "hop", "hops")} into {trace.StartHost}.{known}", "rdp"));
                 }
             }
             var collect = hops.Where(h => h.Result == RdpTrace.CollectNext).ToList();
@@ -75,7 +76,7 @@ internal sealed class RdpSection : ICaseReportSection
                 continue;
             }
 
-            body.Append(Chain(hops));
+            body.Append(Chain(context, hops));
             body.Append("<div class=\"tbl\" style=\"border-top:1px solid var(--line)\"><table><thead><tr><th>Hop</th><th>From</th>")
                 .Append("<th>To</th><th>Time (UTC)</th><th>Account</th><th>Evidence</th><th>Result</th></tr></thead><tbody>");
             foreach (var hop in hops)
@@ -83,7 +84,9 @@ internal sealed class RdpSection : ICaseReportSection
                 var evidence = string.Join(" / ", new[] { hop.ReceivingEvidence, hop.SendingEvidence }.Where(e => e.Length > 0));
                 body.Append("<tr>")
                     .Append($"<td>{E(hop.Number)}</td>")
-                    .Append($"<td>{E(hop.Source)}{(hop.FromHost.Length > 0 && hop.SourceIp.Length > 0 ? $"<br><small class=\"mono muted\">{E(hop.SourceIp)}</small>" : "")}</td>")
+                    .Append(hop.FromHost.Length > 0
+                        ? $"<td>{E(hop.FromHost)}{(hop.SourceIp.Length > 0 ? $"<br><small class=\"mono muted\">{Ip(context, hop.SourceIp)}</small>" : "")}</td>"
+                        : $"<td class=\"mono\">{(hop.SourceIp.Length > 0 ? Ip(context, hop.SourceIp) : E(hop.Source))}</td>")
                     .Append($"<td>{E(hop.ToHost)}</td>")
                     .Append($"<td class=\"mono\">{E(hop.Time)}</td>")
                     .Append($"<td>{E(hop.Account)}</td>")
@@ -118,14 +121,15 @@ internal sealed class RdpSection : ICaseReportSection
     }
 
     /// <summary>Origin on the left, the host the trace started from on the right.</summary>
-    private static string Chain(IReadOnlyList<Hop> hops)
+    private static string Chain(CaseReportContext context, IReadOnlyList<Hop> hops)
     {
         var origin = hops[hops.Count - 1];
         var originClass = origin.Result == RdpTrace.EndOfChain ? " ext" : origin.Result == RdpTrace.CollectNext ? " collect" : "";
         var originNote = origin.Result == RdpTrace.EndOfChain ? (IsExternal(origin.SourceIp) ? "External" : "End of chain")
                        : origin.Result == RdpTrace.CollectNext ? "Not in the case" : "";
+        var originName = origin.FromHost.Length == 0 && origin.SourceIp.Length > 0 ? Ip(context, origin.SourceIp) : E(origin.Source);
         var chain = new StringBuilder("<div class=\"chain-wrap\"><div class=\"chain\">")
-            .Append($"<div class=\"node{originClass}\"><b class=\"mono\">{E(origin.Source)}</b><small>{E(originNote)}</small></div>");
+            .Append($"<div class=\"node{originClass}\"><b class=\"mono\">{originName}</b><small>{E(originNote)}</small></div>");
         for (var i = hops.Count - 1; i >= 0; i--)
         {
             var hop = hops[i];
