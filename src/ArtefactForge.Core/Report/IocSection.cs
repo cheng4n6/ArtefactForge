@@ -82,7 +82,7 @@ internal sealed class IocSection : ICaseReportSection
             var note = ioc.Note.Length > 0 ? " - " + ioc.Note : "";
             body.Append($"<details class=\"ioc\"{(first && hits > 0 ? " open" : "")}><summary>")
                 .Append($"<span class=\"t\">{E(ioc.TypeLabel)}</span>")
-                .Append($"<span class=\"v\">{E(ioc.Value)}</span>")
+                .Append($"<span class=\"v\">{(ioc.Type == IocType.IP ? Ip(context, ioc.Value) : E(ioc.Value))}</span>")
                 .Append($"<button class=\"copy\" type=\"button\" data-copy=\"{E(ioc.Value)}\">Copy</button>")
                 .Append($"<span class=\"n\">{N(hits)} {Plural(hits, "hit", "hits")}{E(note)}</span>")
                 .Append($"<span class=\"r\">{tags}</span></summary>");

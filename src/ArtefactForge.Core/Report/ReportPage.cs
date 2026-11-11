@@ -66,6 +66,9 @@ internal static class ReportPage
         .p-crit{background:var(--crit-bg);color:var(--crit)}.p-high{background:var(--high-bg);color:var(--high)}
         .p-med{background:var(--med-bg);color:var(--med)}.p-low{background:var(--low-bg);color:var(--low)}
         .p-ok{background:var(--ok-bg);color:var(--ok)}.p-plain{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+        .p-tag{background:var(--accent-soft);color:var(--accent);font-family:var(--ui);font-weight:500}
+        a.ip{color:inherit;text-decoration:underline dotted var(--muted);text-underline-offset:3px}
+        a.ip:hover{color:var(--accent);text-decoration-color:var(--accent)}
         .stack{display:flex;height:10px;border-radius:5px;overflow:hidden;min-width:160px;background:var(--bg)}
         .stack span{display:block;height:100%}
         .s-crit{background:var(--crit)}.s-high{background:var(--high)}.s-med{background:var(--med)}.s-low{background:var(--low)}
@@ -112,8 +115,13 @@ internal static class ReportPage
         @media print{nav{display:none}.page{display:block}.tbl{overflow:visible}}
         """;
 
-    /// <summary>Copy buttons and the nav's current-section marker. Sections add their own after this.</summary>
+    /// <summary>
+    /// Copy buttons, address links into the IP history lookup, and the nav's current-section
+    /// marker. Sections add their own after this. Without scripts an address link still goes to
+    /// the IP history section.
+    /// </summary>
     public const string Script = """
+        document.addEventListener("click",e=>{const a=e.target.closest("a.ip");if(!a||!window.ipLookup)return;e.preventDefault();e.stopPropagation();window.ipLookup(a.dataset.ip);});
         document.addEventListener("click",e=>{const b=e.target.closest(".copy");if(!b)return;e.preventDefault();e.stopPropagation();
           const v=b.dataset.copy,done=t=>{b.textContent=t;setTimeout(()=>b.textContent="Copy",1200)};
           try{navigator.clipboard.writeText(v).then(()=>done("Copied"),()=>done("Select to copy"))}catch(_){done("Select to copy")}});

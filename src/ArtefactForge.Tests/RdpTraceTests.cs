@@ -254,6 +254,48 @@ public class RdpTraceTests
         Assert.StartsWith("not present", sources["Prefetch"]["Status"]);
     }
 
+    private static string SystemEvent(string time, int id, string provider) =>
+        $"1,1,{time}.0000000,{id},Info,{provider},System,4,8,dc01,0,,,,,,,,,,,,False,C:\\x\\System.evtx,,0,{{}}";
+
+    [Fact]
+    public void System_log_boot_events_are_kept_for_the_case_report()
+    {
+        using var dir = new TempDirectory();
+        WriteChain(dir);
+        File.AppendAllLines(Path.Combine(dir.Path, "DC01", "EventLogs", "EvtxECmd_EventLogs.csv"),
+        [
+            SystemEvent("2026-06-30 08:00:00", 12, "Microsoft-Windows-Kernel-General"),
+            SystemEvent("2026-07-01 07:00:05", 6005, "EventLog"),
+            // The same ID from another provider is not a boot.
+            SystemEvent("2026-07-01 09:00:00", 12, "Microsoft-Windows-Something-Else")
+        ]);
+
+        RemoteAccess.Build(dir.Path);
+
+        var boots = RemoteAccess.ReadSources(Path.Combine(dir.Path, "DC01", RemoteAccess.Folder, RemoteAccess.SourcesFileName))
+                                .Single(r => r.Log == RemoteAccess.BootRow);
+        Assert.Equal("used", boots.Status);
+        Assert.Equal(2, boots.Events);
+        Assert.Equal(new DateTime(2026, 7, 1, 7, 0, 5), boots.Last);
+        var none = RemoteAccess.ReadSources(Path.Combine(dir.Path, "WS01", RemoteAccess.Folder, RemoteAccess.SourcesFileName))
+                               .Single(r => r.Log == RemoteAccess.BootRow);
+        Assert.StartsWith("not present", none.Status);
+    }
+
+    [Fact]
+    public void A_remote_access_file_built_before_boot_events_were_kept_is_built_once_more()
+    {
+        using var dir = new TempDirectory();
+        WriteChain(dir);
+        RemoteAccess.Build(dir.Path);
+        var sources = Path.Combine(dir.Path, "DC01", RemoteAccess.Folder, RemoteAccess.SourcesFileName);
+        Assert.Contains(File.ReadAllLines(sources), l => l.Contains(RemoteAccess.BootRow));
+        File.WriteAllLines(sources, File.ReadAllLines(sources).Where(l => !l.Contains(RemoteAccess.BootRow)));
+
+        Assert.Equal("DC01", Assert.Single(RemoteAccess.Build(dir.Path)).Collection);
+        Assert.Empty(RemoteAccess.Build(dir.Path));
+    }
+
     [Fact]
     public void Cleared_logs_are_recorded_and_flagged_on_the_hop()
     {

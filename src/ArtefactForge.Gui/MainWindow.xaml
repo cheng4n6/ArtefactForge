@@ -1066,6 +1066,8 @@
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <Button Content="Open case folder" Click="OnOpenCaseFolder" MinWidth="130"/>
+                            <Button Content="Known addresses" Click="OnEditKnownAddresses" MinWidth="130"
+                                    ToolTip="Label addresses you know, such as the VPN pool or a proxy, in KnownAddresses.csv. The case report shows the label beside the address."/>
                             <Button x:Name="ExportSnapshotButton" Content="Export snapshot" Click="OnExportSnapshot" MinWidth="130"
                                     ToolTip="Save a dated copy of the case report that is never updated, for sending"/>
                             <Button Content="Open report" Click="OnOpenCaseReport" MinWidth="110" Style="{StaticResource RunButton}"

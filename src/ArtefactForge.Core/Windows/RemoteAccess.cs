@@ -46,6 +46,11 @@ public static class RemoteAccess
     public const string LsmLog = "LocalSessionManager";
     public const string RdpCoreLog = "RdpCoreTS";
     public const string ClientLog = "RDPClient";
+    /// <summary>
+    /// Not a log: the System log's boot events (Kernel-General 12, EventLog 6005), for the case
+    /// report's last boot. Events is how many there were; first and last are the first and last boot.
+    /// </summary>
+    public const string BootRow = "System boots";
 
     private const string RcmChannel = "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational";
     private const string LsmChannel = "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational";
@@ -95,7 +100,7 @@ public static class RemoteAccess
 
         var inputs = FindInputs(collectionDir);
         if (inputs.All.Count == 0) return null;
-        if (UpToDate(outFile, sourcesFile, inputs.All)) return null;
+        if (UpToDate(outFile, sourcesFile, inputs.All, inputs.EventLog is not null)) return null;
 
         var stopwatch = Stopwatch.StartNew();
         var started = DateTimeOffset.Now;
@@ -122,6 +127,10 @@ public static class RemoteAccess
                         ? new SourceRow(log, "not present: no events from this log in the EvtxECmd output", 0, null, null, [], input)
                         : new SourceRow(log, "used", c.Events, c.First, c.Last, c.Cleared, input));
                 }
+                sources.Add(read.Coverage.GetValueOrDefault(BootRow) is { } boots
+                    ? new SourceRow(BootRow, "used", boots.Events, boots.First, boots.Last, [], input)
+                    : new SourceRow(BootRow, "not present: no boot events (System 12 or 6005) in the EvtxECmd output",
+                                    0, null, null, [], input));
             }
             else
             {
@@ -228,10 +237,11 @@ public static class RemoteAccess
         var idCol = Column("EventId");
         var channelCol = Column("Channel");
         var computerCol = Column("Computer");
+        var providerCol = Column("Provider");
         var payloadCol = Column("Payload");
         if (timeCol < 0 || idCol < 0 || channelCol < 0 || payloadCol < 0)
             throw new InvalidDataException($"{Path.GetFileName(path)} is not EvtxECmd output: TimeCreated, EventId, Channel or Payload column missing");
-        var last = new[] { timeCol, idCol, channelCol, computerCol }.Max();
+        var last = new[] { timeCol, idCol, channelCol, computerCol, providerCol }.Max();
         // The Payload is read only for the events below; every other row needs just its time.
         var wantPayload = payloadCol > last
             ? fields => LogName(fields[channelCol]) is { } l && WantsPayload(l, fields[idCol].Trim())
@@ -256,6 +266,16 @@ public static class RemoteAccess
             {
                 case (SecurityLog, "1102"):
                     if (time is { } cleared) c.Cleared.Add(cleared);
+                    break;
+                case (SystemLog, "12" or "6005"):
+                    // Other providers use these IDs too. With no Provider column, the ID alone decides.
+                    var provider = providerCol >= 0 ? fields[providerCol].Trim() : "";
+                    var booted = id == "12" ? "Microsoft-Windows-Kernel-General" : "EventLog";
+                    if (provider.Length == 0 || provider.Equals(booted, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!coverage.TryGetValue(BootRow, out var boots)) coverage[BootRow] = boots = new LogCoverage();
+                        boots.Saw(time);
+                    }
                     break;
                 case (_, _) when !hasPayload:
                     break;
@@ -625,9 +645,12 @@ public static class RemoteAccess
     }
 
     /// <summary>Both outputs exist and are newer than every input, so a rebuild would write the same.</summary>
-    private static bool UpToDate(string outFile, string sourcesFile, IReadOnlyList<string> inputs)
+    private static bool UpToDate(string outFile, string sourcesFile, IReadOnlyList<string> inputs, bool hasEventLog)
     {
         if (!File.Exists(sourcesFile) || !File.Exists(outFile)) return false;
+        // A file built before the boot row existed is built once more, so the case report has a
+        // last boot for hosts processed by an earlier version. Only one with event log input has it.
+        if (hasEventLog && !ReadSources(sourcesFile).Any(r => r.Log == BootRow)) return false;
         var built = File.GetLastWriteTimeUtc(sourcesFile);
         if (File.GetLastWriteTimeUtc(outFile) < built) built = File.GetLastWriteTimeUtc(outFile);
         return inputs.All(i => File.GetLastWriteTimeUtc(i) <= built);

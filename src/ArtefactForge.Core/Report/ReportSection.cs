@@ -1,3 +1,5 @@
+using ArtefactForge.Core.Windows;
+
 namespace ArtefactForge.Core.Report;
 
 /// <summary>How urgent a finding on the report's "Needs attention" row is. Highest first.</summary>
@@ -42,7 +44,8 @@ public interface ICaseReportSection
 /// <summary>One host folder in the case and what its system summary says about it.</summary>
 public sealed record ReportHost(string Collection, string Directory, IReadOnlyDictionary<string, string> Facts)
 {
-    private string Fact(string item) => Facts.TryGetValue(item, out var v) ? v.Trim() : "";
+    /// <summary>One item of the host's system summary, or empty.</summary>
+    public string Fact(string item) => Facts.TryGetValue(item, out var v) ? v.Trim() : "";
 
     /// <summary>The machine's own name where the summary has it, else the collection's.</summary>
     public string Name => Fact("Hostname") is { Length: > 0 } name ? name : Collection;
@@ -126,6 +129,32 @@ public sealed class CaseReportContext
                 : DetectionSummary.MergeByRule(m.SelectMany(h => RatedDetections.GetValueOrDefault(h.Collection) ?? [])),
             StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Labels for known addresses: the case's KnownAddresses.csv and what the summaries say.</summary>
+    public KnownAddresses KnownAddresses => _known ??= KnownAddresses.Load(CaseDirectory, Hosts);
+
+    /// <summary>The case's IP history, read once; null when the case has none.</summary>
+    public IReadOnlyList<IpHistoryRecord>? IpHistory
+    {
+        get
+        {
+            if (_ipHistoryRead) return _ipHistory;
+            _ipHistoryRead = true;
+            var path = Path.Combine(CaseDirectory, Windows.IpHistory.FileName);
+            if (File.Exists(path)) _ipHistory = IpHistoryRecord.Read(path);
+            return _ipHistory;
+        }
+    }
+
+    /// <summary>True when the address has a row in the IP history, so a link to it finds something.</summary>
+    public bool InIpHistory(string address) =>
+        (_ipHistoryAddresses ??= new HashSet<string>(
+            (IpHistory ?? []).Select(r => IpHistoryRecord.Normalise(r.IpAddress)), StringComparer.OrdinalIgnoreCase))
+        .Contains(IpHistoryRecord.Normalise(address));
+
+    private KnownAddresses? _known;
+    private IReadOnlyList<IpHistoryRecord>? _ipHistory;
+    private bool _ipHistoryRead;
+    private HashSet<string>? _ipHistoryAddresses;
     private Dictionary<string, HostDetections>? _detections;
     private Dictionary<string, IReadOnlyList<RuleHits>>? _rated;
     private List<IReadOnlyList<ReportHost>>? _machines;
@@ -146,5 +175,9 @@ public sealed class CaseReportContext
     }
 }
 
-/// <summary>What one run recorded about a host it processed: when, and how its modules ended.</summary>
-public sealed record HostRun(DateTime ProcessedUtc, int Completed, int Skipped, int NeedsReview);
+/// <summary>
+/// What one run recorded about a host it processed: when, how its modules ended, and when the
+/// collection was made as its collector recorded it (null for runs before that was kept).
+/// </summary>
+public sealed record HostRun(DateTime ProcessedUtc, int Completed, int Skipped, int NeedsReview,
+                             CollectorTimes? Collector = null);

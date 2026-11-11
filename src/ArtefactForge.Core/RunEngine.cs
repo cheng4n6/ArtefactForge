@@ -18,6 +18,8 @@ public sealed class RunReport
     public EvidenceListResult? EvidenceList { get; set; }
     /// <summary>One per zip unpacked during the run.</summary>
     public List<ExtractionRecord> Extractions { get; } = [];
+    /// <summary>When each collection processed was made, by collection, as its collector recorded it.</summary>
+    public Dictionary<string, CollectorTimes> CollectorTimes { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>The memory memory-heavy modules shared, and the free memory that decided it.</summary>
     public long? MemoryBudgetBytes { get; set; }
     public long? FreeMemoryBytesAtStart { get; set; }
@@ -96,7 +98,8 @@ public sealed class RunEngine
 
         // What the manifest lists as processed: zips appear once extracted, under their real root.
         var collections = config.Targets.Where(t => !t.IsArchive)
-            .Select(t => new CollectionRecord(t.CollectionName, t.Root, t.Layout.Id, t.IsLive, null))
+            .Select(t => new CollectionRecord(t.CollectionName, t.Root, t.Layout.Id, t.IsLive, null,
+                CollectorTimesReader.Read(t.Root, null, t.IsLive, started)))
             .ToList();
 
         // Zips run concurrently with each other and with collections on disk, so the report,
@@ -160,6 +163,7 @@ public sealed class RunEngine
 
         report.MemoryFloorWaits = memoryFloor.Waits;
         SaveState(statePath, completed, results);
+        foreach (var c in collections) report.CollectorTimes[c.CollectionName] = c.Times;
         WriteManifests(report, logDir, config, collections, started);
         await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 
@@ -393,7 +397,9 @@ public sealed class RunEngine
                 }
 
                 resolved.Add(match.Renamed(target.CollectionName));
-                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath));
+                // Read now: the collector's files go when the extracted collection is cleaned up.
+                var times = CollectorTimesReader.Read(match.Root, zipPath, false, started);
+                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath, times));
 
                 AddResult(ExtractionResult(target,
                     problems > 0 ? WorkStatus.CheckLog : WorkStatus.Completed,
@@ -469,7 +475,8 @@ public sealed class RunEngine
         return $"{target.CollectionName}|_archive|{hash}";
     }
 
-    private sealed record CollectionRecord(string CollectionName, string Root, string Layout, bool IsLive, string? Archive);
+    private sealed record CollectionRecord(string CollectionName, string Root, string Layout, bool IsLive, string? Archive,
+                                           CollectorTimes Times);
 
     /// <summary>Reports on the caller's thread, unlike Progress&lt;T&gt;, which posts to whatever context created it.</summary>
     private sealed class Reporter<T>(Action<T> report) : IProgress<T>
