@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-11-11
+
+### Features
+
+- **Case report:** each host shows when it was collected, its time zone and its last boot. The
+  collection time comes from the collector (Velociraptor, UAC, a KAPE console log, or the run
+  itself for a live system), and an estimate is marked Approx. Hover a time for where it came
+  from.
+- **Case report:** an address that is in the IP history links to it, and opens the lookup on that
+  address.
+- **Case report:** known addresses are labelled wherever they appear, such as DC or VPN. Domain
+  controllers, DNS servers and gateways are labelled from the system summaries; add your own,
+  single addresses or ranges, with Known addresses on the Analysis tab (KnownAddresses.csv in the
+  case folder).
+- **IOC sweep:** IOCs can be added and imported while a sweep runs. Each goes on the list at once,
+  and everything added during a sweep is swept together as soon as it finishes.
+- **IOC sweep:** hosts are swept side by side instead of one after another, both after each host
+  of a run finishes and from the IOCs tab, within the run's Keep free memory. Sweeping four hosts
+  of a 1.2 GB case went from about 15 s to 11 s.
+- **Data access:** the account list shows each account once, grouped by SID or username, with the
+  hosts it was seen on under its expand arrow. Ticking an account no longer reloads the list or
+  loses its sort.
+
 ## 0.4.0 - 2026-11-05
 
 ### Features
