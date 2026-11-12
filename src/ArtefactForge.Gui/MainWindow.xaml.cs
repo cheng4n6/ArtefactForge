@@ -985,8 +985,21 @@ public partial class MainWindow : Window
 
     private void OnDetect(object sender, RoutedEventArgs e) => Detect();
 
-    private void Detect()
+    // The detection in progress, or the last one. Run and Preview plan wait for it, so pressing
+    // either straight after typing a path still sees what that path holds.
+    private Task _detection = Task.CompletedTask;
+    // Counts detections, so one overtaken by a newer one (the path changed meanwhile) shows nothing.
+    private int _detectionNumber;
+
+    private void Detect() => _detection = DetectAsync();
+
+    /// <summary>
+    /// Looks at the evidence path off the window's thread. Listing a batch folder of zips on a
+    /// share, or reading through a large tar.gz, takes long enough to freeze the window.
+    /// </summary>
+    private async Task DetectAsync()
     {
+        var number = ++_detectionNumber;
         _collections.Clear();
         UpdateApplies();
         var path = EvidencePath.Text.Trim();
@@ -1001,7 +1014,30 @@ public partial class MainWindow : Window
 
         RecallOutput(path);
 
-        var discovery = EvidenceDiscovery.Discover(path, BatchMode.IsChecked == true, _layouts);
+        var batch = BatchMode.IsChecked == true;
+        var layouts = _layouts;
+        DetectionSummary.Text = "Detecting...";
+        DetectionSummary.ToolTip = null;
+        DiscoveryResult discovery;
+        bool selfIsCollection;
+        try
+        {
+            (discovery, selfIsCollection) = await Task.Run(() =>
+            {
+                var result = EvidenceDiscovery.Discover(path, batch, layouts);
+                // Only asked when batch found nothing: see below.
+                var self = result.Targets.Count == 0 && batch && LayoutDetector.Detect(path, layouts).Count > 0;
+                return (result, self);
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            if (number == _detectionNumber) DetectionSummary.Text = "Could not read the evidence: " + ex.Message;
+            return;
+        }
+        // A newer detection has started: its result is the one to show.
+        if (number != _detectionNumber) return;
+
         var found = discovery.Targets;
         var unmatched = discovery.Unmatched.Count;
 
@@ -1035,8 +1071,7 @@ public partial class MainWindow : Window
         // Batch treats each SUBFOLDER as a collection, so ticking it on a mounted image or a
         // single collection folder finds nothing - the evidence is the folder itself. Say so,
         // rather than leaving 'no layout matched' to be interpreted as unsupported evidence.
-        if (found.Count == 0 && BatchMode.IsChecked == true
-            && LayoutDetector.Detect(path, _layouts).Count > 0)
+        if (selfIsCollection)
         {
             DetectionSummary.Text = "This folder is itself a collection, not a folder of them. "
                                     + "Untick Batch to process it as one host.";
@@ -1045,7 +1080,7 @@ public partial class MainWindow : Window
 
         // A folder of collections does not itself look like a collection. If this one does, batch
         // would process the drive folder inside it and name the collection after that, e.g. 'C'.
-        var batchOnACollection = BatchMode.IsChecked == true && discovery.SelectionIsCollection;
+        var batchOnACollection = batch && discovery.SelectionIsCollection;
 
         DetectionSummary.Text = found.Count == 0
             ? "No layout matched. Check the folder, or add a layout profile."
@@ -1309,8 +1344,9 @@ public partial class MainWindow : Window
         };
     }
 
-    private void OnPreviewPlan(object sender, RoutedEventArgs e)
+    private async void OnPreviewPlan(object sender, RoutedEventArgs e)
     {
+        await _detection;   // a path just typed is still being looked at
         var config = BuildConfiguration();
         if (config is null) return;
 
@@ -1329,6 +1365,7 @@ public partial class MainWindow : Window
 
     private async void OnRun(object sender, RoutedEventArgs e)
     {
+        await _detection;   // a path just typed is still being looked at
         var config = BuildConfiguration();
         if (config is null) return;
         if (!ConfirmOutput(config)) return;
