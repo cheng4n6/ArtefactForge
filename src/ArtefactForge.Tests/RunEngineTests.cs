@@ -67,6 +67,43 @@ public class RunEngineTests
     private const string WritesAFile = @"/c echo hello> ""%destinationDirectory%\result.txt""";
     private const string Sleeps = "/c ping -n 12 127.0.0.1 >nul";
 
+    /// <summary>Counts what is posted to it, as a window's thread would receive it.</summary>
+    private sealed class CountingContext : SynchronizationContext
+    {
+        public int Posts;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref Posts);
+            ThreadPool.QueueUserWorkItem(_ => d(state));
+        }
+    }
+
+    [Fact]
+    public async Task The_run_does_none_of_its_work_on_the_callers_thread()
+    {
+        using var dir = new TempDirectory();
+        var config = Config(dir, [Module("Writer", WritesAFile)]);
+        var context = new CountingContext();
+        var previous = SynchronizationContext.Current;
+        Task<RunReport> run;
+        try
+        {
+            // As a window calls it: with its own context current.
+            SynchronizationContext.SetSynchronizationContext(context);
+            run = new RunEngine().RunAsync(config);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        var report = await run;
+
+        Assert.Equal(WorkStatus.Completed, Assert.Single(report.Results).Status);
+        Assert.Equal(0, context.Posts);
+    }
+
     [Fact]
     public async Task Missing_executable_is_reported_not_thrown()
     {

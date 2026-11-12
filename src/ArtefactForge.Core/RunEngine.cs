@@ -61,7 +61,16 @@ public sealed class RunEngine
     /// <summary>Set when output that could not be harvested was left in staging for the analyst.</summary>
     private volatile bool _keepStaging;
 
-    public async Task<RunReport> RunAsync(RunConfiguration config, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Runs the whole run on the thread pool, whatever thread calls it. Called from a window, every
+    /// step that carries on after a wait would otherwise queue behind the window's own work: moving
+    /// output out of staging, joining a Split step's parts, copying a tar's entries, the steps at
+    /// the end of the run. Progress and Extraction are raised on pool threads.
+    /// </summary>
+    public Task<RunReport> RunAsync(RunConfiguration config, CancellationToken cancellationToken = default) =>
+        Task.Run(() => RunOnPoolAsync(config, cancellationToken));
+
+    private async Task<RunReport> RunOnPoolAsync(RunConfiguration config, CancellationToken cancellationToken)
     {
         var started = DateTimeOffset.Now;
         _keepStaging = false;
