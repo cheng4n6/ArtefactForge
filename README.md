@@ -38,6 +38,33 @@ one. It held up better than I expected. Bug reports are welcome, and so is appla
 - **Processes Linux evidence on Windows**, as a folder (UAC output, a tar, or an X-Ways or FTK
   export), so no ext4 driver is needed. Where no Windows tool exists, such as the systemd journal,
   ArtefactForge carries its own parser.
+- **Reads collections as they arrive**: a zip, a Velociraptor offline collection, or a UAC
+  `.tar.gz` is unpacked into the case (every entry checked against its CRC), parsed, and
+  optionally cleaned up afterwards. The evidence itself is never written to.
+- **Fits the PC it runs on**: memory-heavy tools share the memory that is free, and nothing new
+  starts while free memory is under the amount you choose to keep.
+
+## After processing: working the case
+
+Once the hosts are processed, the Analysis tab (and the matching commands) works across the
+whole case from the output already on disk, with no new tools and nothing run again:
+
+- **Case report.** `CaseReport.html` in the case folder: one page for any browser, offline, that
+  starts with what needs attention and has a section for each of the items below.
+- **IOC sweep.** A list of IOCs for the case (file names, paths, hashes, IPs, domains, accounts),
+  searched for across every host's output. A new IOC is searched for alone; a host processed
+  again is swept against the whole list.
+- **RDP trace.** Lists RDP sessions and traces one back from host to host across the case.
+- **IP history.** Who had an address and when, built from a domain controller's Kerberos, DHCP
+  and DNS records.
+- **Ransomware.** For each Windows host: the extension added to encrypted files, the ransom
+  note, and when encryption started and finished, from the MFT and USN journal output.
+- **Data access.** The files and folders that compromised accounts opened or browsed, with
+  times, from LNK files, jump lists, ShellBags, MRUs and file share and audit events.
+- **Evidence list.** A spreadsheet of what was processed, with hashes.
+
+These are leads for an analyst to check, not conclusions. Several have so far only been proven
+on test data; see the beta warning above.
 
 ## Screenshots
 
