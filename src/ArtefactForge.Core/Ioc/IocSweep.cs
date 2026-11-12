@@ -18,6 +18,8 @@ public sealed class IocSweepResult
     public int Iocs { get; init; }
     public int Hosts { get; init; }
     public int FilesScanned { get; init; }
+    /// <summary>Files passed over after their header: only hashes were looked for and they have no hash column.</summary>
+    public int FilesPassedOver { get; init; }
     public long BytesScanned { get; init; }
     public int Hits { get; init; }
     public int HostsWithHits { get; init; }
@@ -34,6 +36,8 @@ public sealed class IocSweepResult
         var line = $"Swept {Iocs} IOC{S(Iocs)} across {Hosts} host{S(Hosts)} ({FilesScanned:N0} file{S(FilesScanned)}, {size}) "
                    + $"in {DurationSeconds:N0}s: "
                    + (Hits == 0 ? "no hits." : $"{Hits:N0} hit{S(Hits)} on {HostsWithHits} host{S(HostsWithHits)}.");
+        if (FilesPassedOver > 0)
+            line += $" {FilesPassedOver:N0} file{S(FilesPassedOver)} with no hash column {(FilesPassedOver == 1 ? "was" : "were")} not read: only hashes were looked for.";
         if (Problems.Count > 0)
             line += $" {Problems.Count} file{S(Problems.Count)} could not be read, so the sweep is incomplete - see _Logs\\{LogName}.";
         return line;
@@ -193,6 +197,7 @@ public static class IocSweep
                     Iocs = sweeps.Max(s => s.Iocs),
                     Hosts = sweeps.Sum(s => s.Hosts),
                     FilesScanned = sweeps.Sum(s => s.FilesScanned),
+                    FilesPassedOver = sweeps.Sum(s => s.FilesPassedOver),
                     BytesScanned = sweeps.Sum(s => s.BytesScanned),
                     Hits = sweeps.Sum(s => s.Hits),
                     HostsWithHits = sweeps.Sum(s => s.HostsWithHits),
@@ -300,6 +305,7 @@ public static class IocSweep
         var problems = new ConcurrentBag<string>();
         var hits = new ConcurrentBag<IocHit>();
         var files = 0;
+        var passedOver = 0;
         long bytes = 0;
 
         if (!matcher.IsEmpty)
@@ -339,10 +345,17 @@ public static class IocSweep
                     await slots.WaitAsync(cancellationToken);
                     try
                     {
-                        foreach (var hit in ScanFile(caseDirectory, item.Host, item.File, matcher, modules, cancellationToken))
-                            hits.Add(hit);
-                        Interlocked.Increment(ref files);
-                        Interlocked.Add(ref bytes, item.Size);
+                        var found = ScanFile(caseDirectory, item.Host, item.File, matcher, modules, cancellationToken);
+                        if (found is null)
+                        {
+                            Interlocked.Increment(ref passedOver);
+                        }
+                        else
+                        {
+                            foreach (var hit in found) hits.Add(hit);
+                            Interlocked.Increment(ref files);
+                            Interlocked.Add(ref bytes, item.Size);
+                        }
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
@@ -388,6 +401,7 @@ public static class IocSweep
                 Iocs = matcher.Iocs.Count,
                 Hosts = hosts.Count,
                 FilesScanned = files,
+                FilesPassedOver = passedOver,
                 BytesScanned = bytes,
                 Hits = ordered.Count,
                 HostsWithHits = ordered.Select(h => h.Host).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
@@ -403,7 +417,8 @@ public static class IocSweep
         }
     }
 
-    private static IEnumerable<IocHit> ScanFile(
+    /// <summary>The hits in one file, or null when its header shows nothing on the list could be in it.</summary>
+    private static List<IocHit>? ScanFile(
         string caseDirectory, string host, string file, IocMatcher matcher,
         IReadOnlyDictionary<string, string> modules, CancellationToken cancellationToken)
     {
@@ -416,7 +431,12 @@ public static class IocSweep
         var checkedAt = 0;
         foreach (var record in CsvText.Records(reader))
         {
-            if (header is null) { header = CsvHeader.Parse(record.Text); continue; }
+            if (header is null)
+            {
+                header = CsvHeader.Parse(record.Text);
+                if (!matcher.CanMatch(header)) return null;
+                continue;
+            }
             if (++checkedAt % 65536 == 0) cancellationToken.ThrowIfCancellationRequested();
 
             var matches = matcher.Match(record.Text, header, out var fields);
