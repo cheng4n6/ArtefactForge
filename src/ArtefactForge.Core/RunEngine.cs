@@ -514,6 +514,8 @@ public sealed class RunEngine
         config.OptionOverrides.TryGetValue(item.Module.Name, out var overrides);
         var options = ModuleOptions.Expand(item.Module, overrides);
         var outputName = item.Module.OutputName ?? item.Module.Name;
+        // The module's own Timeout, else the run's default, so no tool can hang the run for ever.
+        var timeout = item.Module.Timeout ?? (config.DefaultTimeoutSeconds > 0 ? config.DefaultTimeoutSeconds : (int?)null);
         var delivered = 0;
         var emptyFiles = 0;
         var notMoved = new List<string>();
@@ -708,9 +710,9 @@ public sealed class RunEngine
 
             Task<ProcessOutcome> RunToolAsync(string arguments, string stdout, string stderr, string? workingDirectory) =>
                 Builtins.IsBuiltin(tool.FullPath)
-                    ? Builtins.RunAsync(tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken)
+                    ? Builtins.RunAsync(tool.FullPath, arguments, stdout, stderr, timeout, cancellationToken)
                     : ProcessRunner.RunAsync(
-                        tool.FullPath, arguments, stdout, stderr, item.Module.Timeout, cancellationToken, workingDirectory);
+                        tool.FullPath, arguments, stdout, stderr, timeout, cancellationToken, workingDirectory);
 
             // The parts are joined only when every one of them finished cleanly. Otherwise the
             // joined file would pass for the whole input while missing a part's events.
@@ -794,6 +796,10 @@ public sealed class RunEngine
                 result.Reason = Part(timedOut) + (partialNote.Length == 0
                     ? timedOut.Outcome.Error
                     : timedOut.Outcome.Error?.TrimEnd('.') + partialNote);
+                // Say where the limit came from: the module set none, so the analyst can give it one.
+                if (item.Module.Timeout is null)
+                    result.Reason += " This is the limit for a module that sets no Timeout of its own;"
+                                     + " if the tool was still working, set a longer Timeout in its .forge file.";
                 return false;
             }
 

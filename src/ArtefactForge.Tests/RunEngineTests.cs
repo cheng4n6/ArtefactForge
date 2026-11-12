@@ -50,7 +50,7 @@ public class RunEngineTests
 
     private static RunConfiguration Config(TempDirectory dir, ModuleDefinition[] modules,
         bool vss = false, bool rootIsSelection = false, int workers = 4, int heavy = 2,
-        bool skipCompleted = true, bool live = false) => new()
+        bool skipCompleted = true, bool live = false, int? defaultTimeout = null) => new()
     {
         CaseName = "CASE",
         OutputRoot = dir.Dir("out"),
@@ -60,12 +60,39 @@ public class RunEngineTests
         MaxWorkers = workers,
         MaxHeavyWorkers = heavy,
         Vss = vss,
-        SkipCompleted = skipCompleted
+        SkipCompleted = skipCompleted,
+        DefaultTimeoutSeconds = defaultTimeout ?? 24 * 60 * 60
     };
 
     /// <summary>cmd.exe parses its own command line, so redirection inside /c works.</summary>
     private const string WritesAFile = @"/c echo hello> ""%destinationDirectory%\result.txt""";
     private const string Sleeps = "/c ping -n 12 127.0.0.1 >nul";
+
+    [Fact]
+    public async Task A_module_with_no_timeout_is_stopped_by_the_runs_default()
+    {
+        using var dir = new TempDirectory();
+        var config = Config(dir, [Module("Hangs", Sleeps)], defaultTimeout: 2);
+
+        var watch = Stopwatch.StartNew();
+        var result = Assert.Single((await new RunEngine().RunAsync(config)).Results);
+
+        Assert.Equal(WorkStatus.TimedOut, result.Status);
+        Assert.Contains("sets no Timeout of its own", result.Reason);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(9), "the tool was left to finish");
+    }
+
+    [Fact]
+    public async Task A_modules_own_timeout_wins_over_the_runs_default()
+    {
+        using var dir = new TempDirectory();
+        var module = Module("Writer", @"/c ping -n 4 127.0.0.1 >nul & echo hello> ""%destinationDirectory%\result.txt""", timeout: 60);
+        var config = Config(dir, [module], defaultTimeout: 1);
+
+        var result = Assert.Single((await new RunEngine().RunAsync(config)).Results);
+
+        Assert.Equal(WorkStatus.Completed, result.Status);
+    }
 
     [Fact]
     public async Task Missing_executable_is_reported_not_thrown()
