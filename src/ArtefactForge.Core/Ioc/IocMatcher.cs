@@ -79,6 +79,14 @@ public sealed class IocMatcher
 
     public bool IsEmpty => _needles.Count == 0;
 
+    /// <summary>
+    /// False when no IOC on the list could be found in a file with this header: every one is a
+    /// hash, which is looked for only in hash columns, and the file has none. An MFT or event log
+    /// CSV of several GB need not be read at all for a list of hashes.
+    /// </summary>
+    public bool CanMatch(CsvHeader header) =>
+        header.HashColumns.Length > 0 || _needles.Any(n => n.Type != IocType.Hash);
+
     public IReadOnlyList<IocEntry> Iocs => _needles.Select(n => n.Entry).ToList();
 
     /// <summary>The IOCs found in one record. Fields are split only when a record is a candidate.</summary>
