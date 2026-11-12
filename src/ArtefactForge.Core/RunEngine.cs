@@ -105,6 +105,11 @@ public sealed class RunEngine
         // Zips run concurrently with each other and with collections on disk, so the report,
         // the manifest's collection list and the resume state are shared and locked.
         var gate = new object();
+        // Work finished in this run, kept apart from what earlier runs finished so nothing planned
+        // later in the run is skipped because of it. Saved as each module finishes: a run that is
+        // closed, crashes or loses power still leaves the next one knowing what was done.
+        var finishedNow = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var manifestGate = new object();
 
         // A host's own post-run steps start as soon as its last module finishes, beside the other
         // hosts' modules, instead of every host waiting for the whole batch. The steps that build
@@ -162,9 +167,31 @@ public sealed class RunEngine
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
         report.MemoryFloorWaits = memoryFloor.Waits;
-        SaveState(statePath, completed, results);
+        SaveState(statePath, completed.Concat(finishedNow).Concat(results.Where(IsFinished).Select(StateKey)));
         foreach (var c in collections) report.CollectorTimes[c.CollectionName] = c.Times;
-        WriteManifests(report, logDir, config, collections, started);
+        try
+        {
+            lock (manifestGate)
+            {
+                WriteManifests(report, report.Results, logDir, config, collections, started,
+                               report.DurationSeconds, finished: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Hours of finished work must not end as "run failed" with nothing to show: the
+            // results come back, with this among them for review.
+            report.Results.Add(new WorkResult
+            {
+                Collection = config.CaseName,
+                Module = "Manifest",
+                Category = "_Logs",
+                Status = WorkStatus.Failed,
+                Reason = "could not write the run manifest: " + ex.Message + " - is the output disk full?",
+                Destination = logDir,
+                Started = DateTimeOffset.Now
+            });
+        }
         await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 
         // Rolls the per-collection system summaries into one inventory for the case. Runs after
@@ -212,6 +239,32 @@ public sealed class RunEngine
                 report.Results.AddRange(built);
                 hostsDone.Add(host);
                 if (swept is not null) sweptEarly.Add(swept);
+            }
+            WriteProgressManifest();
+        }
+
+        // The manifest so far, marked unfinished, each time a host is done. A run that never
+        // reaches its end still leaves a record of what ran, with which tools, on which hosts.
+        void WriteProgressManifest()
+        {
+            List<WorkResult> soFar;
+            List<CollectionRecord> hosts;
+            lock (gate)
+            {
+                soFar = report.Results.Concat(results).ToList();
+                hosts = collections.ToList();
+            }
+            lock (manifestGate)
+            {
+                try
+                {
+                    WriteManifests(report, soFar, logDir, config, hosts, started,
+                                   (DateTimeOffset.Now - started).TotalSeconds, finished: false);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // The manifest at the end of the run reports a log folder that cannot be written.
+                }
             }
         }
 
@@ -298,6 +351,8 @@ public sealed class RunEngine
                     ran.Add(result);
                     lock (gate)
                     {
+                        if (IsFinished(result) && finishedNow.Add(StateKey(result)))
+                            SaveState(statePath, completed.Concat(finishedNow));
                         var host = item.Target.CollectionName;
                         if (--left[host] == 0 && !cancellationToken.IsCancellationRequested)
                             hostSteps.Add(Task.Run(() => AfterHostAsync(host)));
@@ -429,7 +484,13 @@ public sealed class RunEngine
             // missing tools and cancelled work do need another go, so the zip is processed again.
             if (resolved.Count == pending.Count && problems == 0
                 && ran.All(r => r.Status is WorkStatus.Completed or WorkStatus.CheckLog or WorkStatus.NoOutput))
-                lock (gate) foreach (var key in doneKeys) completed.Add(key);
+            {
+                lock (gate)
+                {
+                    foreach (var key in doneKeys) finishedNow.Add(key);
+                    SaveState(statePath, completed.Concat(finishedNow));
+                }
+            }
 
             if (!config.CleanupExtracted) return;
 
@@ -1090,23 +1151,39 @@ public sealed class RunEngine
         return durations;
     }
 
-    private static void SaveState(string path, HashSet<string> existing, IEnumerable<WorkResult> results)
-    {
-        // Only genuinely finished work is remembered, so a re-run retries failures and timeouts.
-        foreach (var result in results.Where(r => r.Status is WorkStatus.Completed or WorkStatus.CheckLog))
-        {
-            existing.Add(result.Collection + "|" + result.Module + "|" + (result.Iteration ?? "-"));
-        }
+    /// <summary>Only genuinely finished work is remembered, so a re-run retries failures and timeouts.</summary>
+    private static bool IsFinished(WorkResult result) => result.Status is WorkStatus.Completed or WorkStatus.CheckLog;
 
-        try { File.WriteAllText(path, JsonSerializer.Serialize(existing.OrderBy(k => k), JsonOptions)); }
-        catch { /* a lost state file only costs a re-run */ }
+    private static string StateKey(WorkResult result) =>
+        result.Collection + "|" + result.Module + "|" + (result.Iteration ?? "-");
+
+    /// <summary>
+    /// Written through a temporary file, as it is saved while the run is going: a crash part-way
+    /// through a save leaves the last whole state, not half of one.
+    /// </summary>
+    private static void SaveState(string path, IEnumerable<string> keys)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(
+                keys.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(k => k), JsonOptions);
+            Ioc.AtomicFile.WriteAllText(path, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A lost state file only costs a re-run.
+        }
     }
 
+    /// <param name="finished">
+    /// False for the manifest written as each host is done: it lists the run so far, and the
+    /// processing log, which is added to, is left for the end.
+    /// </param>
     private static void WriteManifests(
-        RunReport report, string logDir, RunConfiguration config, IReadOnlyList<CollectionRecord> collections,
-        DateTimeOffset started)
+        RunReport report, IEnumerable<WorkResult> results, string logDir, RunConfiguration config,
+        IReadOnlyList<CollectionRecord> collections, DateTimeOffset started, double durationSeconds, bool finished)
     {
-        var ordered = report.Results
+        var ordered = results
             .OrderBy(r => r.Collection, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Module, StringComparer.OrdinalIgnoreCase)
@@ -1124,7 +1201,8 @@ public sealed class RunEngine
             },
             Case = config.CaseName,
             Started = started,
-            DurationSeconds = report.DurationSeconds,
+            DurationSeconds = durationSeconds,
+            Finished = finished,
             config.MaxWorkers,
             config.MaxHeavyWorkers,
             report.MemoryBudgetBytes,
@@ -1151,6 +1229,7 @@ public sealed class RunEngine
             foreach (var p in r.Processors) csv.AppendLine(Row(r, p));
         }
         File.WriteAllText(Path.Combine(logDir, "manifest.csv"), csv.ToString());
+        if (!finished) return;
 
         var log = new StringBuilder();
         log.AppendLine(started.ToString("yyyy-MM-dd HH:mm:ss") + " === " + BuildInfo.Describe()
