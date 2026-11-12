@@ -11,6 +11,10 @@ Platform: windows
 Elevation: live              # locked or admin-only on a live system; collections read fine
 Priority: 11
 IoWeight: heavy
+# Memory-heavy: with -m it reads the $MFT as well, to resolve parent paths, and took as much as
+# MFTECmd_MFT did (2.41 GB beside its 2.36 GB for a 1.2 GB $MFT, 2026-11-12).
+MemoryWeight: heavy
+MemoryEstimateMB: 2500
 Processors:
   -
     Executable: eztools\MFTECmd.exe
