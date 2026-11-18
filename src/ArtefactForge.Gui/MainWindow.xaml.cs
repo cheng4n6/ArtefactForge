@@ -1172,6 +1172,7 @@ public partial class MainWindow : Window
         UseVss.IsChecked = saved.Vss;
         SkipCompleted.IsChecked = saved.SkipCompleted;
         CleanupExtracted.IsChecked = saved.CleanupExtracted;
+        BuildLakeAfterRun.IsChecked = saved.BuildLake;
     }
 
     /// <summary>
@@ -1189,7 +1190,8 @@ public partial class MainWindow : Window
             KeepFreeGB = SavedRunOptions.TryParseGB(KeepFreeGB.Text, CultureInfo.CurrentCulture, out var k) ? k : previous.KeepFreeGB,
             Vss = UseVss.IsChecked == true,
             SkipCompleted = SkipCompleted.IsChecked == true,
-            CleanupExtracted = CleanupExtracted.IsChecked == true
+            CleanupExtracted = CleanupExtracted.IsChecked == true,
+            BuildLake = BuildLakeAfterRun.IsChecked == true
         }.Clamped();
         Preferences.Save();
     }
@@ -1305,7 +1307,8 @@ public partial class MainWindow : Window
             SkipCompleted = SkipCompleted.IsChecked == true,
             Layouts = _layouts,
             CleanupExtracted = CleanupExtracted.IsChecked == true,
-            ArchivesAtOnce = runOptions.ZipsAtOnce
+            ArchivesAtOnce = runOptions.ZipsAtOnce,
+            BuildLake = BuildLakeAfterRun.IsChecked == true
         };
     }
 
@@ -1382,6 +1385,7 @@ public partial class MainWindow : Window
         StatCollections.Text = $"0 / {_progress.Count}";
 
         var engine = new RunEngine();
+        engine.LakeMessage += line => Dispatcher.InvokeAsync(() => Append("[Lake] " + line));
         // Posted, not invoked: Invoke held every worker, and the extraction loop, until the window
         // had redrawn. Posts run in the order they were made.
         engine.Extraction += evt => Dispatcher.InvokeAsync(() =>

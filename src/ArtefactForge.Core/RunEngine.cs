@@ -55,6 +55,8 @@ public sealed class RunEngine
     public event Action<ProgressEvent>? Progress;
     /// <summary>Progress of each zip being extracted, and the work found inside once it is.</summary>
     public event Action<ExtractionEvent>? Extraction;
+    /// <summary>What the evidence lake build is doing, line by line, when the run builds one.</summary>
+    public event Action<string>? LakeMessage;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -166,8 +168,13 @@ public sealed class RunEngine
         foreach (var c in collections) report.CollectorTimes[c.CollectionName] = c.Times;
         WriteHostOutputs(report, config, collections);
         // Only when asked. After every host's outputs.json, which it reads; before the manifest,
-        // so its result is listed there like any other step's.
-        if (config.BuildLake) report.Results.Add(EvidenceLake.Build(caseDir));
+        // so its result is listed there like any other step's. A stopped run builds none: the
+        // analyst can build it from what was finished, on the Analysis tab or with lake build.
+        if (config.BuildLake)
+            report.Results.Add(report.Cancelled
+                ? EvidenceLakeStep.NotBuilt(caseDir, "The run was stopped, so the evidence lake was not built; build it from the Analysis tab or with lake build")
+                : EvidenceLakeStep.Build(caseDir, config.MaxWorkers, config.KeepFreeMemoryBytes,
+                    new Reporter<string>(m => LakeMessage?.Invoke(m)), cancellationToken));
         WriteManifests(report, logDir, config, collections, started);
         await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 

@@ -460,16 +460,21 @@ public class HostOutputsTests
     }
 
     [Fact]
-    public async Task A_run_asked_for_the_lake_says_the_add_on_is_not_installed_and_flags_it()
+    public async Task A_run_asked_for_the_lake_builds_it_from_the_hosts_outputs_json()
     {
         using var dir = new TempDirectory();
-        var report = await new RunEngine().RunAsync(Config(dir, [Module("Writer", WritesAFile)], lake: true));
+        var engine = new RunEngine();
+        var messages = new List<string>();
+        engine.LakeMessage += messages.Add;
+        var report = await engine.RunAsync(Config(dir, [Module("Writer", WritesAFile)], lake: true));
 
-        var lake = Assert.Single(report.Results, r => r.Module == EvidenceLake.ModuleName);
-        Assert.Equal(WorkStatus.ToolMissing, lake.Status);
-        Assert.Equal(EvidenceLake.NotInstalled, lake.Reason);
-        Assert.Equal(1, report.NeedsReview);
-        Assert.False(Directory.Exists(Path.Combine(report.CaseDirectory, EvidenceLake.FolderName)));
+        var lake = Assert.Single(report.Results, r => r.Module == EvidenceLakeStep.ModuleName);
+        Assert.Equal(WorkStatus.Completed, lake.Status);
+        Assert.Equal(EvidenceLakeStep.CaseCollection, lake.Collection);
+        Assert.Equal(0, report.NeedsReview);
+        Assert.True(File.Exists(Path.Combine(report.CaseDirectory, EvidenceLakeStep.FolderName, "case.duckdb")));
+        Assert.Contains(messages, m => m.Contains("found from outputs.json"));
+        Assert.Equal("built", EvidenceLakeStep.Status(report.CaseDirectory)!.Result);
     }
 
     [Fact]
@@ -481,8 +486,8 @@ public class HostOutputsTests
         var manifestPath = Path.Combine(report.LogDirectory, "manifest.json");
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
         var lake = Assert.Single(manifest.RootElement.GetProperty("Results").EnumerateArray(),
-            r => r.GetProperty("Module").GetString() == EvidenceLake.ModuleName);
-        Assert.Equal(EvidenceLake.NotInstalled, lake.GetProperty("Reason").GetString());
+            r => r.GetProperty("Module").GetString() == EvidenceLakeStep.ModuleName);
+        Assert.StartsWith("Built ", lake.GetProperty("Reason").GetString());
 
         var outputsPath = Path.Combine(report.CaseDirectory, "HOST01", "outputs.json");
         Assert.True(File.GetLastWriteTimeUtc(outputsPath) <= File.GetLastWriteTimeUtc(manifestPath));
@@ -497,7 +502,8 @@ public class HostOutputsTests
 
         var report = await new RunEngine().RunAsync(config);
 
-        Assert.DoesNotContain(report.Results, r => r.Module == EvidenceLake.ModuleName);
+        Assert.DoesNotContain(report.Results, r => r.Module == EvidenceLakeStep.ModuleName);
+        Assert.False(Directory.Exists(Path.Combine(report.CaseDirectory, EvidenceLakeStep.FolderName)));
         Assert.Equal(0, report.NeedsReview);
     }
 
