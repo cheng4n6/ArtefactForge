@@ -124,6 +124,9 @@ public static class EvidenceLakeStep
         var rejected = result.Sources.Where(s => s.RowsRejected > 0).ToList();
         if (rejected.Count > 0)
             parts.Add($"{rejected.Count} with rows that could not be read ({rejected.Sum(s => s.RowsRejected).ToString("N0", CultureInfo.InvariantCulture)} rows)");
+        var untimed = result.Sources.Where(s => s.TimeUnread > 0).ToList();
+        if (untimed.Count > 0)
+            parts.Add($"{untimed.Count} with rows kept out of the timeline for want of a UTC time ({untimed.Sum(s => s.TimeUnread).ToString("N0", CultureInfo.InvariantCulture)} rows)");
         parts.AddRange(result.Warnings);
         return $"Built, {result.Loaded} of {result.Sources.Count} source(s) loaded, " +
                $"{result.TimelineRows.ToString("N0", CultureInfo.InvariantCulture)} timeline rows; check: " +

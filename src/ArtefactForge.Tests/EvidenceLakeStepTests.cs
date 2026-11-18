@@ -35,9 +35,9 @@ public class EvidenceLakeStepTests
         Outcome = outcome, Message = "Built X: 1 host(s).", Sources = sources, TimelineRows = 12
     };
 
-    private static LakeSourceResult Source(string status, long rejected = 0) => new()
+    private static LakeSourceResult Source(string status, long rejected = 0, long untimed = 0) => new()
     {
-        SourceId = 1, Host = "HOST01", Path = "a.csv", Status = status, RowsRejected = rejected
+        SourceId = 1, Host = "HOST01", Path = "a.csv", Status = status, RowsRejected = rejected, TimeUnread = untimed
     };
 
     [Fact]
@@ -46,12 +46,13 @@ public class EvidenceLakeStepTests
         Assert.Equal(WorkStatus.Completed, EvidenceLakeStep.Describe(Result(LakeOutcome.Built, Source("loaded"))).Status);
 
         var (status, reason) = EvidenceLakeStep.Describe(Result(LakeOutcome.BuiltCheckLog,
-            Source("loaded"), Source("header_mismatch"), Source("failed"), Source("loaded", rejected: 3)));
+            Source("loaded"), Source("header_mismatch"), Source("failed"), Source("loaded", rejected: 3), Source("loaded", untimed: 7)));
 
         Assert.Equal(WorkStatus.CheckLog, status);
         Assert.Contains("1 with a header that does not fit", reason);
         Assert.Contains("1 not loaded", reason);
         Assert.Contains("1 with rows that could not be read (3 rows)", reason);
+        Assert.Contains("1 with rows kept out of the timeline for want of a UTC time (7 rows)", reason);
         Assert.Contains(@"_Lake\lake.log", reason);
     }
 
