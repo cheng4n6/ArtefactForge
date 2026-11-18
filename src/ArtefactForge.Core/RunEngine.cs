@@ -99,7 +99,7 @@ public sealed class RunEngine
         // What the manifest lists as processed: zips appear once extracted, under their real root.
         var collections = config.Targets.Where(t => !t.IsArchive)
             .Select(t => new CollectionRecord(t.CollectionName, t.Root, t.Layout.Id, t.IsLive, null,
-                CollectorTimesReader.Read(t.Root, null, t.IsLive, started)))
+                CollectorTimesReader.Read(t.Root, null, t.IsLive, started)) { Platform = t.Layout.Platform })
             .ToList();
 
         // Zips run concurrently with each other and with collections on disk, so the report,
@@ -172,6 +172,9 @@ public sealed class RunEngine
         // collection produced a summary. The evidence list reads the same summaries.
         report.InventoryPath = SystemInventory.Build(caseDir);
         report.EvidenceList = EvidenceList.Rebuild(caseDir);
+        // Only when asked. After every host's outputs.json and the case files, which it reads;
+        // before the case report, which shows how it went.
+        if (config.BuildLake) report.Results.Add(EvidenceLake.Build(caseDir));
         Report.CaseReport.AfterRun(report);   // last: the case report reads everything above
         return report;
 
@@ -399,7 +402,8 @@ public sealed class RunEngine
                 resolved.Add(match.Renamed(target.CollectionName));
                 // Read now: the collector's files go when the extracted collection is cleaned up.
                 var times = CollectorTimesReader.Read(match.Root, zipPath, false, started);
-                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath, times));
+                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath, times)
+                    { Platform = match.Layout.Platform });
 
                 AddResult(ExtractionResult(target,
                     problems > 0 ? WorkStatus.CheckLog : WorkStatus.Completed,
@@ -476,7 +480,12 @@ public sealed class RunEngine
     }
 
     private sealed record CollectionRecord(string CollectionName, string Root, string Layout, bool IsLive, string? Archive,
-                                           CollectorTimes Times);
+                                           CollectorTimes Times)
+    {
+        /// <summary>For outputs.json; manifest.json already names the layout.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Platform Platform { get; init; }
+    }
 
     /// <summary>Reports on the caller's thread, unlike Progress&lt;T&gt;, which posts to whatever context created it.</summary>
     private sealed class Reporter<T>(Action<T> report) : IProgress<T>
@@ -781,6 +790,7 @@ public sealed class RunEngine
                     OutputFilesCreated = r == 0 ? harvested.Files.Count : 0,
                     OutputBytes = r == 0 ? harvested.Bytes : 0,
                     OutputFiles = r == 0 ? harvested.Files : [],
+                    DeliveredTo = r == 0 && harvested.Files.Count > 0 ? harvestTo : null,
                     Error = run.Outcome.Error ?? run.Outcome.LogError
                 });
             }
@@ -1106,6 +1116,12 @@ public sealed class RunEngine
         RunReport report, string logDir, RunConfiguration config, IReadOnlyList<CollectionRecord> collections,
         DateTimeOffset started)
     {
+        // Each host's outputs.json first, so a host whose list could not be written is in the
+        // manifest and the results like any other problem.
+        var hosts = new Dictionary<string, HostContext>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in collections) hosts[c.CollectionName] = new HostContext(c.Platform, c.Times);
+        report.Results.AddRange(HostOutputs.Write(report.CaseDirectory, report.Results, config.Modules, hosts, DateTime.UtcNow));
+
         var ordered = report.Results
             .OrderBy(r => r.Collection, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)
