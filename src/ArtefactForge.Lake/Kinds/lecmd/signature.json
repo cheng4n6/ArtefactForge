@@ -1,0 +1,12 @@
+{
+  "kind": "lecmd",
+  "parser": "LECmd",
+  "description": "LNK files (LECmd Recent and OfficeRecent): the target opened, when the shortcut was created and last changed",
+  "fileNames": [ "^LECmd(_[A-Za-z]+)?\\.csv$", "^LECmd_Output\\.csv$", "RecentLNK\\.csv$" ],
+  "requiredColumns": [
+    "SourceFile", "SourceCreated", "SourceModified", "TargetCreated", "TargetModified", "TargetAccessed",
+    "FileSize", "LocalPath", "NetworkPath", "Arguments", "MachineID"
+  ],
+  "timeColumn": "SourceCreated",
+  "mappingVersion": 1
+}

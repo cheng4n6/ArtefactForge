@@ -1,0 +1,9 @@
+{
+  "kind": "appcompatcache",
+  "parser": "AppCompatCacheParser",
+  "description": "ShimCache (AppCompatCacheParser): each entry at its file's last modified time, with the Executed flag",
+  "fileNames": [ "AppCompatCache\\.csv$" ],
+  "requiredColumns": [ "ControlSet", "CacheEntryPosition", "Path", "LastModifiedTimeUTC", "Executed", "Duplicate" ],
+  "timeColumn": "LastModifiedTimeUTC",
+  "mappingVersion": 1
+}

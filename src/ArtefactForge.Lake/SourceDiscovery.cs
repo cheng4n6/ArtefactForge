@@ -251,7 +251,7 @@ public static partial class SourceDiscovery
         }
 
         // No name match. With outputs.json the parser narrows the field; without, every kind.
-        var byHeader = candidates.Where(k => k.HeaderFits(source.Header)).ToList();
+        var byHeader = candidates.Where(k => !k.NameRequired && k.HeaderFits(source.Header)).ToList();
         if (byHeader.Count == 1)
             return Map(source, byHeader[0], byParser ? null : $"recognised as {byHeader[0].Kind} by its header");
         if (byHeader.Count > 1)

@@ -97,16 +97,18 @@ public sealed class LakeRulesTests
     }
 
     [Fact]
-    public void Every_kind_has_a_mapping_and_a_raw_table_name()
+    public void Every_kind_but_ArtefactForges_own_has_a_mapping_from_its_raw_table_and_a_time_column()
     {
-        Assert.Equal(["evtxecmd", "mftecmd.mft", "mftecmd.usnjournal", "pecmd.output", "pecmd.timeline"],
-            KindRegistry.All.Select(k => k.Kind));
         Assert.All(KindRegistry.All, k =>
         {
+            Assert.NotEmpty(k.RequiredColumns);
+            if (k.Kind.StartsWith("af.", StringComparison.Ordinal)) return;   // loaded raw, compared in phase 3
             Assert.NotNull(k.MapSql);
             Assert.Contains("FROM " + k.RawTable, k.MapSql);
-            Assert.NotEmpty(k.RequiredColumns);
+            if (k.Kind is not ("evtxecmd" or "mftecmd.mft" or "mftecmd.usnjournal" or "pecmd.output" or "pecmd.timeline"))
+                Assert.NotNull(k.TimeColumn);
         });
+        Assert.Equal(KindRegistry.All.Count, KindRegistry.All.Select(k => k.Kind).Distinct().Count());
     }
 
     [Fact]

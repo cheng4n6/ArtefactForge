@@ -25,6 +25,11 @@ public sealed record KindDefinition
     /// <summary>True when the file has exactly the required columns and no others.</summary>
     public bool ExactColumns { get; init; }
     /// <summary>
+    /// True when the header alone does not identify the kind, because other files share it
+    /// (RECmd's batch CSVs, Linux _Events and _KeyEvents): then only a file-name match maps it.
+    /// </summary>
+    public bool NameRequired { get; init; }
+    /// <summary>
     /// Columns map.sql reads that only some versions or options of the tool write (Hayabusa's
     /// profiles, Chainsaw's groups). A raw table without one gets it, empty, before mapping.
     /// </summary>

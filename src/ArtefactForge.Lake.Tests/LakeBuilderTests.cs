@@ -122,13 +122,13 @@ public sealed class LakeBuilderTests
 
         var result = LakeBuilder.Build(temp.Path, Small);
 
-        var lnk = Assert.Single(result.Sources, s => s.Path == "LNKFiles/alice/alice_LECmd_Recent.csv");
+        var lnk = Assert.Single(result.Sources, s => s.Path == "Timeline/alice/alice_WxTCmd_Activity.csv");
         Assert.Equal(SourceStatus.Loaded, lnk.Status);
-        Assert.Equal("unmapped.lecmd_recent", lnk.Kind);
+        Assert.Equal("unmapped.wxtcmd_activity", lnk.Kind);
         Assert.Equal(1, lnk.RowsLoaded);
         Assert.Equal(0, lnk.TimelineRows);
         using var lake = OpenLake(LakePath(temp));
-        var row = Assert.Single(Rows(lake, "SELECT * FROM raw_unmapped_lecmd_recent"));
+        var row = Assert.Single(Rows(lake, "SELECT * FROM raw_unmapped_wxtcmd_activity"));
         Assert.Equal("HOST01", row["host"]);
         Assert.Equal(1L, row["row_no"]);
         Assert.Equal(@"C:\Users\alice\Documents\a.docx", row["LocalPath"]);

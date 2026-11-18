@@ -1,0 +1,12 @@
+{
+  "kind": "srumecmd.appresource",
+  "parser": "SrumECmd",
+  "description": "SRUM application resource use (SrumECmd): each program that ran in an interval, with the bytes it read and wrote",
+  "fileNames": [ "^SrumECmd_AppResourceUseInfo_Output\\.csv$", "AppResourceUseInfo_Output\\.csv$" ],
+  "requiredColumns": [
+    "Id", "Timestamp", "ExeInfo", "Sid", "UserName", "BackgroundBytesRead", "BackgroundBytesWritten",
+    "ForegroundBytesRead", "ForegroundBytesWritten", "FaceTime"
+  ],
+  "timeColumn": "Timestamp",
+  "mappingVersion": 1
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "amcache.files",
+  "parser": "AmcacheParser",
+  "description": "Amcache file entries (AmcacheParser associated and unassociated), with SHA1, at the file key's last write",
+  "fileNames": [ "^Amcache_(Un)?[Aa]ssociatedFileEntries\\.csv$" ],
+  "requiredColumns": [
+    "ApplicationName", "ProgramId", "FileKeyLastWriteTimestamp", "SHA1", "IsOsComponent", "FullPath",
+    "Name", "FileExtension", "Size", "ProductName", "Version"
+  ],
+  "timeColumn": "FileKeyLastWriteTimestamp",
+  "mappingVersion": 1
+}

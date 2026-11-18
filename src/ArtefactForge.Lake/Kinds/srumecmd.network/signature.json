@@ -1,0 +1,12 @@
+{
+  "kind": "srumecmd.network",
+  "parser": "SrumECmd",
+  "description": "SRUM network usage (SrumECmd): bytes each program sent and received, per interval and interface",
+  "fileNames": [ "^SrumECmd_NetworkUsages_Output\\.csv$", "NetworkUsages_Output\\.csv$" ],
+  "requiredColumns": [
+    "Id", "Timestamp", "ExeInfo", "SidType", "Sid", "UserName", "AppId", "BytesReceived", "BytesSent",
+    "InterfaceType", "ProfileName"
+  ],
+  "timeColumn": "Timestamp",
+  "mappingVersion": 1
+}
