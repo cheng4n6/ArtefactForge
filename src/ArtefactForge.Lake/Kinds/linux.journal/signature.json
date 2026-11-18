@@ -1,0 +1,13 @@
+{
+  "kind": "linux.journal",
+  "parser": "LinuxJournal",
+  "description": "systemd journal entries (ArtefactForge LinuxJournal_Entries): every entry, with the process and command line",
+  "fileNames": [ "^LinuxJournal_Entries\\.csv$" ],
+  "requiredColumns": [
+    "TimestampUtc", "Hostname", "Priority", "SyslogIdentifier", "PID", "UID", "Comm", "Unit", "Message", "Exe",
+    "CommandLine", "BootId"
+  ],
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with no UTC time",
+  "mappingVersion": 1
+}

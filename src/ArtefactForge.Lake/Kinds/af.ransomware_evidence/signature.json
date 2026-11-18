@@ -1,0 +1,19 @@
+{
+  "kind": "af.ransomware_evidence",
+  "parser": "ArtefactForge",
+  "description": "ArtefactForge's ransomware evidence per host (Ransomware\\RansomwareEvidence.csv); raw only",
+  "fileNames": [
+    "^RansomwareEvidence\\.csv$"
+  ],
+  "requiredColumns": [
+    "Kind",
+    "TimeUtc",
+    "Path",
+    "Name",
+    "PreviousName",
+    "Size",
+    "InUse",
+    "Source"
+  ],
+  "mappingVersion": 1
+}

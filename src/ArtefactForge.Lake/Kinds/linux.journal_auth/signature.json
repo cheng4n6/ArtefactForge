@@ -1,0 +1,11 @@
+{
+  "kind": "linux.journal_auth",
+  "parser": "LinuxJournal",
+  "description": "systemd journal auth events (ArtefactForge LinuxJournal_Auth): logons, failures, sudo and account changes",
+  "fileNames": [ "^LinuxJournal_Auth\\.csv$" ],
+  "requiredColumns": [ "TimestampUtc", "Host", "Process", "PID", "Event", "User", "SourceIP", "Command", "Message", "SourceFile" ],
+  "nameRequired": true,
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with no UTC time",
+  "mappingVersion": 1
+}

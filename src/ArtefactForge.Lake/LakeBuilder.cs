@@ -421,7 +421,7 @@ public static class LakeBuilder
         {
             var load = loads[id];
             var result = byId[id];
-            var mapped = source.Plan == SourcePlan.Mapped && load.Status == SourceStatus.Loaded;
+            var mapped = source.Plan == SourcePlan.Mapped && load.Status == SourceStatus.Loaded && source.Definition?.MapSql is not null;
             using var command = db.CreateCommand();
             command.CommandText = "INSERT INTO sources VALUES ($id, $host, $path, $kind, $parser, $version, $outputStatus, " +
                                   "$status, $reason, $raw, $mapping, $mappingVersion, $rows, $rejected, $timeline, $size, $mtime, $unread)";

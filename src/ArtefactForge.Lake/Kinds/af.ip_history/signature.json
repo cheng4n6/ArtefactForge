@@ -1,0 +1,23 @@
+{
+  "kind": "af.ip_history",
+  "parser": "ArtefactForge",
+  "description": "ArtefactForge's IP history per host (IpHistory\\IpHistory.csv) and for the case (IpHistory.csv); raw only",
+  "fileNames": [
+    "^IpHistory\\.csv$"
+  ],
+  "caseFiles": [
+    "^IpHistory\\.csv$"
+  ],
+  "requiredColumns": [
+    "IpAddress",
+    "HostName",
+    "Account",
+    "MacAddress",
+    "FirstSeenUtc",
+    "LastSeenUtc",
+    "Source",
+    "EventCount",
+    "Collection"
+  ],
+  "mappingVersion": 1
+}

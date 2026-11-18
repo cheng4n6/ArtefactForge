@@ -1,0 +1,14 @@
+{
+  "kind": "linux.auth",
+  "parser": "Parse-LinuxAuth",
+  "description": "Linux auth logs (ArtefactForge LinuxAuth events): logons, failures, sudo and account changes",
+  "fileNames": [ "^LinuxAuth_Events\\.csv$" ],
+  "requiredColumns": [
+    "Timestamp", "TimestampUtc", "RawTime", "YearInferred", "Host", "Process", "PID", "Event", "User",
+    "SourceIP", "Command", "Message", "SourceFile"
+  ],
+  "nameRequired": true,
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with only the host's local time (no UTC time; the year may be inferred)",
+  "mappingVersion": 1
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "linux.weblogs",
+  "parser": "LinuxWebLogs",
+  "description": "Apache and nginx access logs (ArtefactForge LinuxWebLogs_Access): every request",
+  "fileNames": [ "^LinuxWebLogs_Access\\.csv$" ],
+  "requiredColumns": [
+    "TimestampUtc", "RawTime", "Server", "VHost", "ClientIP", "User", "Method", "Url", "Protocol", "Status",
+    "Bytes", "Referer", "UserAgent", "Flags"
+  ],
+  "nameRequired": true,
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with no UTC time",
+  "mappingVersion": 1
+}

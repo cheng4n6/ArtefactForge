@@ -1,0 +1,10 @@
+{
+  "kind": "linux.bodyfile",
+  "parser": "LinuxBodyfile",
+  "description": "File system timeline from a bodyfile (ArtefactForge LinuxBodyfile_Timeline): each file at each of its times",
+  "fileNames": [ "^LinuxBodyfile_Timeline\\.csv$" ],
+  "requiredColumns": [ "TimestampUtc", "MACB", "Path", "LinkTarget", "Size", "Mode", "User", "Group", "Inode" ],
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with no UTC time",
+  "mappingVersion": 1
+}

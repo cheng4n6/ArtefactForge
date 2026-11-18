@@ -1,0 +1,11 @@
+{
+  "kind": "hayabusa",
+  "parser": "hayabusa",
+  "description": "Hayabusa timeline: each Sigma or Hayabusa rule hit, with its level, any output profile and either timestamp format",
+  "fileNames": [ "^Hayabusa_Timeline\\.csv$", "^hayabusa.*timeline.*\\.csv$" ],
+  "requiredColumns": [ "Timestamp", "RuleTitle", "Level", "Computer", "Channel", "EventID" ],
+  "optionalColumns": [ "RecordID", "Details", "ExtraFieldInfo", "MitreTactics", "MitreTags", "RuleFile", "RuleID", "EvtxFile" ],
+  "timeColumn": "Timestamp",
+  "timeParse": "offset",
+  "mappingVersion": 1
+}
