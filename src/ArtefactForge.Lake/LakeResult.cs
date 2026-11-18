@@ -33,6 +33,8 @@ public sealed record LakeSourceResult
     public long RowsRejected { get; init; }
     /// <summary>Rows whose time could not be read: in the raw table, not the timeline.</summary>
     public long TimeUnread { get; init; }
+    /// <summary>Rows with only the host's local time, converted to UTC with its time zone.</summary>
+    public long TimeConverted { get; init; }
     public long TimelineRows { get; init; }
 
     public bool NeedsReview => Status is SourceStatus.HeaderMismatch or SourceStatus.Failed || RowsRejected > 0 || TimeUnread > 0;

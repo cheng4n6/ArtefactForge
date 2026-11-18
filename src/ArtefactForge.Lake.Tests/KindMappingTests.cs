@@ -244,6 +244,80 @@ public sealed class KindMappingTests
         Assert.Equal(LakeOutcome.BuiltCheckLog, result.Outcome);
     }
 
+    /// <summary>A host folder with outputs.json naming its time zone, and one LinuxAuth_Events.csv.</summary>
+    private static (LakeResult Result, List<Dictionary<string, object?>> Rows) BuildAuthWithZone(string? zone,
+        params Dictionary<string, string>[] rows)
+    {
+        using var temp = new TempDirectory();
+        temp.Write(@"HOST01\Auth\LinuxAuth_Events.csv", Csv(H(AuthHeader), rows));
+        var manifest = new ArtefactForge.Lake.Contract.OutputsManifest
+        {
+            Producer = new ArtefactForge.Lake.Contract.OutputsProducer { Name = "ArtefactForge" },
+            Host = new ArtefactForge.Lake.Contract.OutputsHost { Name = "HOST01", Platform = "linux", TimeZone = zone },
+            Outputs =
+            [
+                new ArtefactForge.Lake.Contract.OutputEntry
+                {
+                    Path = "Auth/LinuxAuth_Events.csv", Parser = "Parse-LinuxAuth", ToolFileName = "LinuxAuth_Events.csv", Status = "completed"
+                }
+            ]
+        };
+        ArtefactForge.Lake.Contract.OutputsManifestFile.Write(Path.Combine(temp.Path, "HOST01", "outputs.json"), manifest);
+        var result = LakeBuilder.Build(temp.Path, Small);
+        using var lake = OpenLake(Path.Combine(temp.Path, "_Lake", "case.duckdb"));
+        return (result, Rows(lake, "SELECT * FROM timeline ORDER BY ts"));
+    }
+
+    private static Dictionary<string, string> LocalOnly(string local, string inferred = "") =>
+        Row(("Timestamp", local), ("TimestampUtc", ""), ("RawTime", "Mar 28 12:00:00"), ("YearInferred", inferred),
+            ("Process", "sshd"), ("Event", "LoginSuccess"), ("User", "alice"), ("SourceIP", "192.0.2.10"));
+
+    [Fact]
+    public void Local_only_Linux_times_are_converted_with_the_hosts_zone_at_each_dates_own_offset()
+    {
+        // Europe/London moved from GMT to BST at 01:00 UTC on 29 March 2026.
+        var (result, rows) = BuildAuthWithZone("Europe/London",
+            LocalOnly("2026-03-28 12:00:00"), LocalOnly("2026-03-30 12:00:00", inferred: "yes"));
+
+        Assert.Equal(LakeOutcome.Built, result.Outcome);
+        Assert.Equal([new DateTime(2026, 3, 28, 12, 0, 0), new DateTime(2026, 3, 30, 11, 0, 0)], rows.Select(r => (DateTime)r["ts"]!));
+        Assert.All(rows, r => Assert.Contains("converted from local time (Europe/London)", (string)r["ts_desc"]!));
+        Assert.DoesNotContain("year inferred", (string)rows[0]["ts_desc"]!);
+        Assert.Contains("year inferred", (string)rows[1]["ts_desc"]!);
+        Assert.Equal("Mar 28 12:00:00", rows[0]["ts_raw"]);
+        var source = Assert.Single(result.Sources);
+        Assert.Equal(2, source.TimeConverted);
+        Assert.Equal(0, source.TimeUnread);
+    }
+
+    [Fact]
+    public void A_zone_that_is_only_an_offset_converts_and_a_UTC_time_is_left_as_it_is()
+    {
+        var (result, rows) = BuildAuthWithZone("UTC+05:30",
+            LocalOnly("2026-06-01 12:00:00"),
+            Row(("Timestamp", "2026-06-01 13:00:00"), ("TimestampUtc", "2026-06-01 07:00:00"), ("Event", "LoginFailed"), ("User", "root")));
+
+        Assert.Equal([new DateTime(2026, 6, 1, 6, 30, 0), new DateTime(2026, 6, 1, 7, 0, 0)], rows.Select(r => (DateTime)r["ts"]!));
+        Assert.Equal("logged", rows[1]["ts_desc"]);
+        Assert.Equal(1, Assert.Single(result.Sources).TimeConverted);
+    }
+
+    [Theory]
+    [InlineData("Mars/Olympus_Mons")]
+    [InlineData("GMT Standard Time (UTC+00:00)")]   // a Windows name and one moment's offset: not a zone to convert with
+    [InlineData(null)]
+    public void Without_a_usable_zone_local_only_times_stay_raw_and_are_counted(string? zone)
+    {
+        var (result, rows) = BuildAuthWithZone(zone, LocalOnly("2026-03-28 12:00:00"));
+
+        Assert.Empty(rows);
+        var source = Assert.Single(result.Sources);
+        Assert.Equal(0, source.TimeConverted);
+        Assert.Equal(1, source.TimeUnread);
+        Assert.Contains("no time zone for the host", source.Reason);
+        Assert.Equal(LakeOutcome.BuiltCheckLog, result.Outcome);
+    }
+
     [Fact]
     public void Linux_auth_key_events_with_the_same_header_are_kept_raw_so_no_logon_is_counted_twice()
     {

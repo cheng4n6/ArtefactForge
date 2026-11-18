@@ -130,7 +130,7 @@ public static class LakeBuilder
                         SourceId = id, Host = source.Host, Path = source.Path, Kind = source.Kind,
                         Parser = source.Parser, ParserVersion = source.ParserVersion,
                         OutputStatus = source.OutputStatus, Status = load.Status, Reason = load.Reason,
-                        RowsLoaded = load.Rows, RowsRejected = load.Rejected, TimeUnread = load.TimeUnread,
+                        RowsLoaded = load.Rows, RowsRejected = load.Rejected, TimeUnread = load.TimeUnread, TimeConverted = load.TimeConverted,
                         TimelineRows = timelineCounts.GetValueOrDefault(id)
                     });
                 }
@@ -190,6 +190,7 @@ public static class LakeBuilder
     private sealed record SourceLoad(string Status, string? Reason, long Rows, long Rejected, string? RawTable)
     {
         public long TimeUnread { get; init; }
+        public long TimeConverted { get; init; }
     }
 
     private static SourceLoad LoadSource(DuckDBConnection db, DiscoveredSource source, int id, LakeLog log)
@@ -353,29 +354,45 @@ public static class LakeBuilder
         List<(DiscoveredSource Source, int Id)> planned, Dictionary<int, SourceLoad> loads, LakeLog log)
     {
         if (kind.TimeColumn is null) return;
-        var column = LakeDatabase.Identifier(kind.TimeColumn);
-        var counts = new List<(int Id, long Unread, long Empty)>();
+        var column = "r." + LakeDatabase.Identifier(kind.TimeColumn);
+        var empty = $"nullif(trim({column}), '') IS NULL";
+        // With a local time column, an empty time is converted where the host has a usable zone.
+        var converted = kind.LocalTimeColumn is null
+            ? "NULL"
+            : $"lake_local_utc(r.{LakeDatabase.Identifier(kind.LocalTimeColumn)}, z.iana, z.fixed_offset)";
+        var counts = new List<(int Id, long Unread, long Empty, long Converted, string? Zone)>();
         using (var command = db.CreateCommand())
         {
             command.CommandText =
-                $"SELECT source_id, count(*) FILTER (WHERE nullif(trim({column}), '') IS NOT NULL AND {kind.TimeFunction}({column}) IS NULL), " +
-                $"count(*) FILTER (WHERE nullif(trim({column}), '') IS NULL) FROM {LakeDatabase.Identifier(kind.RawTable)} GROUP BY source_id";
+                $"SELECT r.source_id, count(*) FILTER (WHERE NOT ({empty}) AND {kind.TimeFunction}({column}) IS NULL), " +
+                $"count(*) FILTER (WHERE {empty} AND {converted} IS NULL), " +
+                $"count(*) FILTER (WHERE {empty} AND {converted} IS NOT NULL), " +
+                "any_value(coalesce(z.iana, z.fixed_offset)) " +
+                $"FROM {LakeDatabase.Identifier(kind.RawTable)} r LEFT JOIN host_zones z ON z.host = r.host GROUP BY r.source_id";
             using var reader = command.ExecuteReader();
-            while (reader.Read()) counts.Add((reader.GetInt32(0), reader.GetInt64(1), reader.GetInt64(2)));
+            while (reader.Read())
+                counts.Add((reader.GetInt32(0), reader.GetInt64(1), reader.GetInt64(2), reader.GetInt64(3),
+                            reader.IsDBNull(4) ? null : reader.GetString(4)));
         }
-        foreach (var (id, unread, empty) in counts)
+        foreach (var (id, unread, emptyRows, convertedRows, zone) in counts)
         {
             if (!loads.TryGetValue(id, out var load)) continue;
+            var source = planned.First(p => p.Id == id).Source;
+            if (convertedRows > 0)
+            {
+                loads[id] = load = load with { TimeConverted = convertedRows };
+                log.Write($"{source.Host}/{source.Path}: {convertedRows:N0} row(s) with only the host's local time converted to UTC " +
+                          $"with its time zone ({zone}); their ts_desc says so");
+            }
             var notes = new List<string>();
             if (unread > 0)
                 notes.Add($"{unread:N0} row(s) with a {kind.TimeColumn} that could not be read as a time: in the raw table, not the timeline");
-            var emptyCounted = kind.EmptyTimeNote is not null && empty > 0;
-            if (emptyCounted) notes.Add($"{empty:N0} row(s) {kind.EmptyTimeNote}: in the raw table, not the timeline");
+            var emptyCounted = kind.EmptyTimeNote is not null && emptyRows > 0;
+            if (emptyCounted) notes.Add($"{emptyRows:N0} row(s) {kind.EmptyTimeNote}: in the raw table, not the timeline");
             if (notes.Count == 0) continue;
             var note = string.Join("; ", notes);
-            var count = unread + (emptyCounted ? empty : 0);
+            var count = unread + (emptyCounted ? emptyRows : 0);
             loads[id] = load with { Reason = load.Reason is null ? note : load.Reason + "; " + note, TimeUnread = count };
-            var source = planned.First(p => p.Id == id).Source;
             log.Write($"Check {source.Host}/{source.Path}: {note}");
         }
     }
@@ -424,7 +441,7 @@ public static class LakeBuilder
             var mapped = source.Plan == SourcePlan.Mapped && load.Status == SourceStatus.Loaded && source.Definition?.MapSql is not null;
             using var command = db.CreateCommand();
             command.CommandText = "INSERT INTO sources VALUES ($id, $host, $path, $kind, $parser, $version, $outputStatus, " +
-                                  "$status, $reason, $raw, $mapping, $mappingVersion, $rows, $rejected, $timeline, $size, $mtime, $unread)";
+                                  "$status, $reason, $raw, $mapping, $mappingVersion, $rows, $rejected, $timeline, $size, $mtime, $unread, $converted)";
             command.Parameters.Add(new DuckDBParameter("id", id));
             command.Parameters.Add(new DuckDBParameter("host", source.Host));
             command.Parameters.Add(new DuckDBParameter("path", source.Path));
@@ -439,6 +456,7 @@ public static class LakeBuilder
             command.Parameters.Add(new DuckDBParameter("mappingVersion", mapped ? (object)source.Definition!.MappingVersion : DBNull.Value));
             command.Parameters.Add(new DuckDBParameter("rows", load.Rows));
             command.Parameters.Add(new DuckDBParameter("unread", load.TimeUnread));
+            command.Parameters.Add(new DuckDBParameter("converted", load.TimeConverted));
             command.Parameters.Add(new DuckDBParameter("rejected", load.Rejected));
             command.Parameters.Add(new DuckDBParameter("timeline", result.TimelineRows));
             command.Parameters.Add(new DuckDBParameter("size", (object?)source.Size ?? DBNull.Value));
@@ -519,7 +537,7 @@ public static class LakeBuilder
             warnings = result.Warnings,
             sources = result.Sources.Select(s => new
             {
-                s.SourceId, s.Host, s.Path, s.Kind, s.Parser, s.ParserVersion, s.OutputStatus, s.Status, s.TimeUnread,
+                s.SourceId, s.Host, s.Path, s.Kind, s.Parser, s.ParserVersion, s.OutputStatus, s.Status, s.TimeUnread, s.TimeConverted,
                 s.Reason, s.RowsLoaded, s.RowsRejected, s.TimelineRows
             })
         };

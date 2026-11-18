@@ -45,6 +45,12 @@ public sealed record KindDefinition
     /// against their source with this note; null when an empty time is not worth a look.
     /// </summary>
     public string? EmptyTimeNote { get; init; }
+    /// <summary>
+    /// The column holding the host's local time for rows with no <see cref="TimeColumn"/>. The
+    /// mapping converts it with the host's zone (host_zones); the rows it converts are counted
+    /// against their source, and only those it cannot convert are counted as without a time.
+    /// </summary>
+    public string? LocalTimeColumn { get; init; }
     /// <summary>How <see cref="TimeColumn"/> is read: "plain" (UTC as written) or "offset" (with a +hh:mm or Z).</summary>
     public string TimeParse { get; init; } = "plain";
     /// <summary>

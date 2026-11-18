@@ -17,6 +17,12 @@ CREATE MACRO lake_path_user(p) AS
     nullif(coalesce(nullif(regexp_extract(p, '(?i)[\\/]Users[\\/]([^\\/]+)[\\/]', 1), ''),
                     regexp_extract(p, '^/home/([^/]+)/', 1)), '');
 -- \Device\HarddiskVolume4\Windows\... and \VOLUME{...}\Windows\... as \Windows\...
+-- A local time (no zone written) in UTC, from the host's IANA zone (its offset on that date) or
+-- a fixed offset; null when there is neither. The year, if the log had none, is as given.
+CREATE MACRO lake_local_utc(x, iana, fixed_offset) AS
+    CASE WHEN iana IS NOT NULL THEN timezone('UTC', timezone(iana, TRY_CAST(x AS TIMESTAMP)))
+         WHEN fixed_offset IS NOT NULL THEN timezone('UTC', TRY_CAST(x || fixed_offset AS TIMESTAMPTZ))
+    END;
 CREATE MACRO lake_volume_path(p) AS regexp_replace(p, '(?i)^\\(Device\\HarddiskVolume\d+|VOLUME\{[^}]*\})', '');
 
 CREATE TABLE lake_meta (
@@ -57,8 +63,27 @@ CREATE TABLE sources (
     timeline_rows  BIGINT,
     size           BIGINT,
     mtime          TIMESTAMP,
-    time_unread    BIGINT             -- rows whose time the mapping could not read: raw only
+    time_unread    BIGINT,            -- rows whose time the mapping could not read: raw only
+    time_converted BIGINT             -- rows whose local time was converted to UTC with the host's zone
 );
+
+-- Each host's time zone as the lake can use it: an IANA name ("Europe/London"), which gives
+-- each time its own offset across daylight saving changes, else a fixed offset ("+01:00",
+-- "UTC-05:00"), else none. Windows zone names ("GMT Standard Time") are not IANA names and are
+-- left out, so they never stand in for a zone they are not.
+CREATE VIEW host_zones AS
+SELECT h.host,
+       h.time_zone,
+       n.name AS iana,
+       CASE WHEN n.name IS NULL
+            -- Only a zone that is nothing but an offset ("+05:30", "UTC+05:30"): the offset after a
+            -- named zone is the one in effect at one moment, wrong on the other side of a DST change.
+            THEN nullif(regexp_extract(h.time_zone, '^\(?(?:UTC|GMT)?\s*([+-]\d\d:?\d\d)\)?$', 1), '')
+       END AS fixed_offset
+FROM hosts h
+LEFT JOIN pg_timezone_names() n
+       ON n.name = regexp_extract(h.time_zone, '^([A-Za-z]+(/[A-Za-z0-9_+-]+)+|UTC|GMT|Etc/[A-Za-z0-9+-]+)(\s|\(|$)', 1)
+      AND h.time_zone NOT LIKE '% Time%';
 
 -- The cross-host timeline: one row per timestamped event, from the raw tables by one reviewed
 -- mapping per kind. source_id and row_no lead back to the exact row of the exact CSV.

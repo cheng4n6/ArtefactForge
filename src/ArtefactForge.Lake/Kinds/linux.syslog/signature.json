@@ -6,6 +6,7 @@
   "requiredColumns": [ "Timestamp", "TimestampUtc", "YearInferred", "RawTime", "Host", "Process", "PID", "Message", "Log", "SourceFile" ],
   "nameRequired": true,
   "timeColumn": "TimestampUtc",
-  "emptyTimeNote": "with only the host's local time (no UTC time; the year may be inferred)",
+  "localTimeColumn": "Timestamp",
+  "emptyTimeNote": "with only the host's local time and no time zone for the host to convert it with",
   "mappingVersion": 1
 }

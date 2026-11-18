@@ -1,11 +1,21 @@
--- LinuxAuth events (auth.log, secure). Only rows with a UTC time are mapped: a syslog line with
--- no zone has only the host's local time, which cannot be put on a UTC timeline without
--- guessing; those rows stay in raw_linux_auth and are counted against their source. _KeyEvents
--- is a subset of this file and is kept raw, so no event is counted twice.
+-- LinuxAuth events (auth.log, secure). A line with a zone has a UTC time (TimestampUtc). A
+-- classic syslog line has none, only the host's local time (Timestamp): it is converted to UTC
+-- with the host's time zone from outputs.json (host_zones), each line at its own date's offset,
+-- and ts_desc says so and with which zone. A line with no usable zone stays in raw_linux_auth
+-- and is counted against its source. _KeyEvents is a subset of this file and is kept raw.
+WITH a AS (
+    SELECT r.*,
+           lake_ts(r.TimestampUtc) AS utc,
+           CASE WHEN lake_ts(r.TimestampUtc) IS NULL THEN lake_local_utc(r.Timestamp, z.iana, z.fixed_offset) END AS converted,
+           coalesce(z.iana, z.fixed_offset) AS zone
+    FROM raw_linux_auth r
+    LEFT JOIN host_zones z ON z.host = r.host
+)
 SELECT
-    lake_ts(TimestampUtc)                                   AS ts,
-    coalesce(nullif(RawTime, ''), TimestampUtc)             AS ts_raw,
-    CASE WHEN YearInferred = 'yes' THEN 'logged_year_inferred' ELSE 'logged' END AS ts_desc,
+    coalesce(utc, converted)                                AS ts,
+    coalesce(nullif(RawTime, ''), nullif(TimestampUtc, ''), Timestamp) AS ts_raw,
+    concat_ws(', ', CASE WHEN utc IS NULL THEN 'logged; converted from local time (' || zone || ')' ELSE 'logged' END,
+              CASE WHEN YearInferred = 'yes' THEN 'year inferred' END) AS ts_desc,
     host,
     'linux'                                                 AS platform,
     'linux.auth'                                            AS kind,
@@ -28,5 +38,5 @@ SELECT
     concat_ws(': ', nullif(Event, ''), Message)             AS summary,
     source_id,
     row_no
-FROM raw_linux_auth
-WHERE lake_ts(TimestampUtc) IS NOT NULL
+FROM a
+WHERE coalesce(utc, converted) IS NOT NULL
