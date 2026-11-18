@@ -14,6 +14,25 @@ public partial class MainWindow
 {
     private bool _lakeBuilding;
     private bool _lakeWired;
+    private object? _runButtonToolTip;
+
+    /// <summary>Why Run and the other actions that write into the case wait while a lake is built.</summary>
+    internal const string LakeBuildingReason =
+        "The evidence lake is being built from this case, and it reads what this would write";
+
+    /// <summary>
+    /// True, after saying why, when a lake build is going: anything that writes into the case
+    /// (a run, an IOC sweep, a saved trace, a rebuilt report, an update) waits for it, so the lake
+    /// is never built from files that change under it. The Run button is disabled for the build
+    /// as for a tool install, which the analysis tabs already follow; this covers the rest.
+    /// </summary>
+    private bool LakeBuildBlocks(string what)
+    {
+        if (!_lakeBuilding) return false;
+        MessageBox.Show(this, $"{LakeBuildingReason}. Wait for the build to finish before {what}.", "Evidence lake building",
+            MessageBoxButton.OK, MessageBoxImage.Information);
+        return true;
+    }
 
     /// <summary>The row's text and buttons for the case, from its _Lake\build.json.</summary>
     private void RefreshLakeOverview(string? caseDir)
@@ -37,7 +56,8 @@ public partial class MainWindow
             : new OverviewLine(status.Describe(), status.NeedsAttention);
     }
 
-    // The Run button is the one place that says a run is going; follow it rather than add a second flag.
+    // The Run button is the one place that says a run, tool install or update is going; follow it
+    // rather than add a second flag. The lake build disables it too, for its own reason.
     private void WireLakeRow()
     {
         if (_lakeWired) return;
@@ -49,7 +69,7 @@ public partial class MainWindow
     {
         var caseDir = AnalysisCaseDirectory();
         var exists = caseDir is not null && Directory.Exists(caseDir);
-        var running = !RunButton.IsEnabled;
+        var running = !RunButton.IsEnabled && !_lakeBuilding;
         BuildLakeButton.IsEnabled = exists && !running && !_lakeBuilding;
         BuildLakeButton.ToolTip = running ? "A run is going: build the lake when it has finished"
             : _lakeBuilding ? "Building"
@@ -63,6 +83,10 @@ public partial class MainWindow
         if (caseDir is null || !Directory.Exists(caseDir) || _lakeBuilding || !RunButton.IsEnabled) return;
 
         _lakeBuilding = true;
+        _runButtonToolTip = RunButton.ToolTip;
+        RunButton.ToolTip = LakeBuildingReason + ": Run is available again when it finishes.";
+        ToolTipService.SetShowOnDisabled(RunButton, true);
+        RunButton.IsEnabled = false;
         UpdateLakeButtons();
         OverviewLakeText.ClearValue(TextBlock.ForegroundProperty);
         OverviewLakeText.Text = "Building...";
@@ -83,6 +107,8 @@ public partial class MainWindow
         finally
         {
             _lakeBuilding = false;
+            RunButton.ToolTip = _runButtonToolTip;
+            RunButton.IsEnabled = true;
         }
 
         RefreshLakeOverview(caseDir);

@@ -518,6 +518,7 @@ public partial class MainWindow : Window
 
     private async void OnUpdateFromFolder(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("installing an update")) return;
         var dialog = new OpenFolderDialog { Title = "Select the folder holding " + ReleaseFiles.Manifest };
         if (dialog.ShowDialog(this) == true) await CheckAppUpdate(new FolderReleaseSource(dialog.FolderName));
     }
@@ -554,6 +555,7 @@ public partial class MainWindow : Window
 
     private async void OnInstallAppUpdate(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("installing an update")) return;
         if (_offerSource is not { } source || _offerRelease is not { } release) return;
 
         // Output provenance records the ArtefactForge version; it must not change under a run.
@@ -1332,6 +1334,7 @@ public partial class MainWindow : Window
 
     private async void OnRun(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("starting a run")) return;
         var config = BuildConfiguration();
         if (config is null) return;
         if (!ConfirmOutput(config)) return;
@@ -1618,6 +1621,7 @@ public partial class MainWindow : Window
 
     private async void OnRebuildEvidenceList(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("rebuilding the evidence list")) return;
         if (AnalysisCaseDirectory() is not { } caseDirectory || !Directory.Exists(caseDirectory))
         {
             MessageBox.Show(this, "Choose the output folder and case name on the Setup page, or run the "
@@ -1640,6 +1644,7 @@ public partial class MainWindow : Window
 
     private void OnRerunFailed(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("re-running failed work")) return;
         // Failed work is never written to the state file, so a normal run with skip-completed on
         // retries exactly the failures and leaves finished work alone.
         SkipCompleted.IsChecked = true;
