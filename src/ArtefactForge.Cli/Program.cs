@@ -32,6 +32,7 @@ switch (verb)
     case "rdp": return RdpCommand(options);
     case "ransomware": return RansomwareCommand(options);
     case "data-access": return DataAccessCommand(options);
+    case "lake": return LakeCommand(options);
     default:
         Console.WriteLine(BuildInfo.Describe() + " - forensic artefact processing");
         Console.WriteLine();
@@ -61,6 +62,7 @@ switch (verb)
         Console.WriteLine("  data-access <case> [--add <user or SID>]");
         Console.WriteLine("                                    list the case's accounts in UserList.csv and, for the users in");
         Console.WriteLine("                                    CompromisedUsers.csv, the files and folders they opened in DataAccess.csv");
+        Console.WriteLine("  lake build <case>                 build the case's evidence lake (_Lake\\case.duckdb) from every host's output");
         Console.WriteLine("  update [--check] [--yes]          check for, download and install a newer ArtefactForge");
         Console.WriteLine("         [--source <folder>]        ...from a folder (share, USB) instead of GitHub");
         Console.WriteLine();
@@ -81,6 +83,7 @@ switch (verb)
         Console.WriteLine("  --cleanup-extracted  delete each zip's extracted data once its modules have finished");
         Console.WriteLine("  --zips-at-once <n>   zips extracted and parsed at the same time (default: 2)");
         Console.WriteLine("  --vss                process Volume Shadow Copies where supported");
+        Console.WriteLine("  --lake               build the evidence lake once every host is done");
         Console.WriteLine("  --rerun-all          ignore saved state and re-run completed work");
         Console.WriteLine("  --set M.Option=value set a module option, repeatable (see: options <module>)");
         Console.WriteLine();
@@ -270,6 +273,7 @@ async Task<int> Run(CommandLine options)
         if (e.Status == WorkStatus.Running) Console.WriteLine($"  ... {e.Item.Label}");
         else Console.WriteLine($"  {Tag(e.Status)} {e.Item.Label}{(e.Message is null ? "" : " - " + e.Message)}");
     };
+    engine.LakeMessage += line => Console.WriteLine("  [lake] " + line);
     // Per zip, since more than one extracts at once.
     var lastPercent = new System.Collections.Concurrent.ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
     engine.Extraction += e =>
@@ -449,6 +453,47 @@ int RebuildEvidenceList(string? caseDirectory)
     if (result.Outcome is EvidenceListOutcome.Written or EvidenceListOutcome.Unchanged)
         Console.WriteLine($"Evidence list: {result.Path}");
     return result.Outcome is EvidenceListOutcome.Locked or EvidenceListOutcome.Failed ? 1 : 0;
+}
+
+// Builds the evidence lake of a case from its hosts' outputs.json, without a run. A host with no
+// outputs.json (a case from before it existed) gets one first, from its files and the case's
+// last run manifest. --workers and --keep-free set the lake's threads and memory as for a run.
+int LakeCommand(CommandLine options)
+{
+    var action = options.Positional.ElementAtOrDefault(0);
+    var caseDirectory = options.Positional.ElementAtOrDefault(1);
+    if (!string.Equals(action, "build", StringComparison.OrdinalIgnoreCase)
+        || string.IsNullOrWhiteSpace(caseDirectory) || !Directory.Exists(caseDirectory))
+    {
+        Console.Error.WriteLine("Usage: lake build <case folder> [--workers n] [--keep-free GB]  (the folder holding the collections and _Logs)");
+        return 2;
+    }
+
+    var workers = Environment.ProcessorCount;
+    if (options.Value("workers") is { } workersText && !(SavedRunOptions.TryParseCount(workersText, out workers) && workers > 0))
+    {
+        Console.Error.WriteLine($"--workers expects a whole number above 0, got '{workersText}'.");
+        return 2;
+    }
+    var keepFree = 1.0;
+    if (options.Value("keep-free") is { } keepText
+        && !(SavedRunOptions.TryParseGB(keepText, System.Globalization.CultureInfo.InvariantCulture, out keepFree) && keepFree >= 0))
+    {
+        Console.Error.WriteLine($"--keep-free expects a number of GB, got '{keepText}'.");
+        return 2;
+    }
+
+    using var cancellation = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+    var result = EvidenceLakeStep.Build(Path.GetFullPath(caseDirectory), workers, SavedRunOptions.ToBytes(keepFree),
+        new Progress<string>(line => Console.WriteLine("  " + line)), cancellation.Token);
+    if (result.Status is WorkStatus.Completed)
+    {
+        Console.WriteLine(result.Reason + ".");
+        return 0;
+    }
+    Console.Error.WriteLine($"{Tag(result.Status).Trim()}: {result.Reason}.");
+    return 1;
 }
 
 // Rebuilds the case report from what is already in the case folder, or with --snapshot saves a dated
@@ -882,6 +927,7 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
     if (options.Has("vss")) request.Vss = true;
     if (options.Has("rerun-all")) request.SkipCompleted = false;
     if (options.Has("cleanup-extracted")) request.CleanupExtracted = true;
+    if (options.Has("lake")) request.Lake = true;
     request.ExtractTo = options.Value("extract-to") ?? request.ExtractTo;
     if (options.List("modules").Count > 0) request.Modules = options.List("modules");
     if (options.List("categories").Count > 0) request.Categories = options.List("categories");
@@ -1071,7 +1117,8 @@ RunConfiguration? BuildConfig(CommandLine options, bool outputRequired)
         Layouts = layouts,
         ExtractionRoot = string.IsNullOrWhiteSpace(request.ExtractTo) ? null : Path.GetFullPath(request.ExtractTo),
         CleanupExtracted = request.CleanupExtracted,
-        ArchivesAtOnce = runOptions.ZipsAtOnce
+        ArchivesAtOnce = runOptions.ZipsAtOnce,
+        BuildLake = request.Lake
     };
 
     // False, having said why, when the flag is given without a whole number after it.

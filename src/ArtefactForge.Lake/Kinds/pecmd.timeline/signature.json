@@ -1,0 +1,9 @@
+{
+  "kind": "pecmd.timeline",
+  "parser": "PECmd",
+  "description": "Prefetch run times (PECmd timeline), one row per recorded run",
+  "fileNames": [ "^PECmd_Output_Timeline\\.csv$" ],
+  "requiredColumns": [ "RunTime", "ExecutableName" ],
+  "exactColumns": true,
+  "mappingVersion": 1
+}

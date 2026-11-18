@@ -10,14 +10,17 @@ OutputName: LinuxBodyfile
 # Times are UTC. A time of 0 (birth time on older kernels) is left out. A symbolic link's target is
 # split into LinkTarget, and user and group IDs are named from the collected passwd and group files.
 #
-# The timeline is sorted in memory: a bodyfile of several million files needs a few GB, so the
-# module runs on its own.
+# The timeline is sorted in memory, inside ArtefactForge itself, so no peak is recorded for it in
+# the manifest. Measured 2026-11-18 on a made-up two-million-line bodyfile (242 MB): 0.8 GB more
+# than ArtefactForge was using before, about 3.5 times the bodyfile. 2000 MB covers about five
+# million files; a larger bodyfile still runs, it is just counted at less than it takes.
 Requires:
   - '%root%/_UAC/bodyfile'
 Platform: linux
 Priority: 60
 IoWeight: heavy
 MemoryWeight: heavy
+MemoryEstimateMB: 2000
 Processors:
   -
     Executable: builtin:LinuxBodyfile

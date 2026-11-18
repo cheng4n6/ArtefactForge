@@ -55,6 +55,8 @@ public sealed class RunEngine
     public event Action<ProgressEvent>? Progress;
     /// <summary>Progress of each zip being extracted, and the work found inside once it is.</summary>
     public event Action<ExtractionEvent>? Extraction;
+    /// <summary>What the evidence lake build is doing, line by line, when the run builds one.</summary>
+    public event Action<string>? LakeMessage;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -108,7 +110,7 @@ public sealed class RunEngine
         // What the manifest lists as processed: zips appear once extracted, under their real root.
         var collections = config.Targets.Where(t => !t.IsArchive)
             .Select(t => new CollectionRecord(t.CollectionName, t.Root, t.Layout.Id, t.IsLive, null,
-                CollectorTimesReader.Read(t.Root, null, t.IsLive, started)))
+                CollectorTimesReader.Read(t.Root, null, t.IsLive, started)) { Platform = t.Layout.Platform })
             .ToList();
 
         // Zips run concurrently with each other and with collections on disk, so the report,
@@ -173,6 +175,15 @@ public sealed class RunEngine
         report.MemoryFloorWaits = memoryFloor.Waits;
         SaveState(statePath, completed, results);
         foreach (var c in collections) report.CollectorTimes[c.CollectionName] = c.Times;
+        WriteHostOutputs(report, config, collections);
+        // Only when asked. After every host's outputs.json, which it reads; before the manifest,
+        // so its result is listed there like any other step's. A stopped run builds none: the
+        // analyst can build it from what was finished, on the Analysis tab or with lake build.
+        if (config.BuildLake)
+            report.Results.Add(report.Cancelled
+                ? EvidenceLakeStep.NotBuilt(caseDir, "The run was stopped, so the evidence lake was not built; build it from the Analysis tab or with lake build")
+                : EvidenceLakeStep.Build(caseDir, config.MaxWorkers, config.KeepFreeMemoryBytes,
+                    new Reporter<string>(m => LakeMessage?.Invoke(m)), cancellationToken));
         WriteManifests(report, logDir, config, collections, started);
         await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 
@@ -408,7 +419,8 @@ public sealed class RunEngine
                 resolved.Add(match.Renamed(target.CollectionName));
                 // Read now: the collector's files go when the extracted collection is cleaned up.
                 var times = CollectorTimesReader.Read(match.Root, zipPath, false, started);
-                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath, times));
+                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath, times)
+                    { Platform = match.Layout.Platform });
 
                 AddResult(ExtractionResult(target,
                     problems > 0 ? WorkStatus.CheckLog : WorkStatus.Completed,
@@ -485,7 +497,12 @@ public sealed class RunEngine
     }
 
     private sealed record CollectionRecord(string CollectionName, string Root, string Layout, bool IsLive, string? Archive,
-                                           CollectorTimes Times);
+                                           CollectorTimes Times)
+    {
+        /// <summary>For outputs.json; manifest.json already names the layout.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Platform Platform { get; init; }
+    }
 
     /// <summary>Reports on the caller's thread, unlike Progress&lt;T&gt;, which posts to whatever context created it.</summary>
     private sealed class Reporter<T>(Action<T> report) : IProgress<T>
@@ -790,6 +807,7 @@ public sealed class RunEngine
                     OutputFilesCreated = r == 0 ? harvested.Files.Count : 0,
                     OutputBytes = r == 0 ? harvested.Bytes : 0,
                     OutputFiles = r == 0 ? harvested.Files : [],
+                    DeliveredTo = r == 0 && harvested.Files.Count > 0 ? harvestTo : null,
                     Error = run.Outcome.Error ?? run.Outcome.LogError
                 });
             }
@@ -1109,6 +1127,18 @@ public sealed class RunEngine
 
         try { File.WriteAllText(path, JsonSerializer.Serialize(existing.OrderBy(k => k), JsonOptions)); }
         catch { /* a lost state file only costs a re-run */ }
+    }
+
+    /// <summary>
+    /// Each host's outputs.json. Before the manifest, so a host whose list could not be written is
+    /// in the manifest and the results like any other problem.
+    /// </summary>
+    private static void WriteHostOutputs(
+        RunReport report, RunConfiguration config, IReadOnlyList<CollectionRecord> collections)
+    {
+        var hosts = new Dictionary<string, HostContext>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in collections) hosts[c.CollectionName] = new HostContext(c.Platform, c.Times);
+        report.Results.AddRange(HostOutputs.Write(report.CaseDirectory, report.Results, config.Modules, hosts, DateTime.UtcNow));
     }
 
     private static void WriteManifests(

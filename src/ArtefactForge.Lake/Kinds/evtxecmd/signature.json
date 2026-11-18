@@ -1,0 +1,12 @@
+{
+  "kind": "evtxecmd",
+  "parser": "EvtxECmd",
+  "description": "Windows event logs (EvtxECmd), every event; the Maps' fields stay in raw_evtxecmd",
+  "fileNames": [ "^EvtxECmd_EventLogs\\d*\\.csv$", "^EvtxECmd_Output\\.csv$", "^EventLogs\\.csv$" ],
+  "requiredColumns": [
+    "RecordNumber", "EventRecordId", "TimeCreated", "EventId", "Provider", "Channel",
+    "ProcessId", "Computer", "UserId", "MapDescription", "UserName", "RemoteHost",
+    "PayloadData1", "PayloadData2", "ExecutableInfo", "SourceFile"
+  ],
+  "mappingVersion": 1
+}
