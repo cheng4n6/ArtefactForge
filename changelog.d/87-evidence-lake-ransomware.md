@@ -1,0 +1,3 @@
+### Features
+
+* **Evidence lake:** saved queries. `af-lake queries` lists them and `af-lake query <case> <name>` writes one to CSV, with `--param` to change a threshold; the lake is opened read-only. The first are the ransomware checks in SQL: building a lake now also writes the ransomware files (Ransomware.csv, and per host RansomwareSummary.csv, RansomwareEvidence.csv and the saved note) to `_Lake\results\Ransomware`, laid out as in the case, for comparison with the files the Ransomware step writes. The Ransomware step itself is unchanged; the case's own files will come from the lake in a later version, once the two have been compared on real cases.
