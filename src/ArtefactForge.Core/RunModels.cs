@@ -27,6 +27,13 @@ public sealed class RunConfiguration
     /// (<see cref="MemoryFloor"/>). Also kept out of the memory-heavy budget. Zero turns it off.
     /// </summary>
     public long KeepFreeMemoryBytes { get; init; } = 1L << 30;
+    /// <summary>
+    /// Seconds before a tool is killed when its module sets no Timeout. A tool that hangs (waiting
+    /// on a prompt, stuck on a damaged file) would otherwise hold its slot for ever and the run
+    /// would never end. A day is far longer than any tool should take, so it ends a hang without
+    /// cutting real work short. Zero or less turns it off.
+    /// </summary>
+    public int DefaultTimeoutSeconds { get; init; } = 24 * 60 * 60;
     public bool Vss { get; init; }
     /// <summary>Skip work already recorded complete, so a failed batch resumes where it stopped.</summary>
     public bool SkipCompleted { get; init; } = true;
