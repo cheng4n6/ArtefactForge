@@ -3,13 +3,16 @@
     Builds a self-contained deployment folder containing only what is needed to run.
 
 .DESCRIPTION
-    Produces a clean package with the two executables at its root:
+    Produces a clean package with the executables at its root:
 
         ArtefactForge\
             ArtefactForge.exe        the interface
             ArtefactForgeCli.exe     headless
+            af-lake.exe              builds an evidence lake (one DuckDB file) from parser output
+            duckdb.dll               DuckDB's native library, used by af-lake (win-x64 only)
             BUILD.txt                what this package is and when it was built
             README.md
+            THIRD-PARTY-NOTICES.txt  the licences of the libraries the executables include
             Modules\  Layouts\  Profiles\  Scripts\  Tools\
 
     Nothing else - no source, no docs beyond the README, no git history, no build artefacts.
@@ -20,8 +23,10 @@
     results can be opened on the same machine that parsed them. It costs roughly 690 MB of the
     total. A lean variant is a future option, not a missing feature.
 
-    Both executables are published as single files, so the root holds the two exes rather than
-    two exes plus a scatter of DLLs and .json runtime files.
+    The executables are published as single files, so the root holds the exes rather than a
+    scatter of DLLs and .json runtime files. The one exception is duckdb.dll: a single file does
+    not bundle a native library unless it extracts it to %TEMP% on every new version, so it sits
+    beside the exes instead.
 
     Framework-dependent by default: the EZ Tools already require the .NET 9 runtime, so any box
     that can run them can run this. -SelfContained bundles the runtime for a machine with no .NET,
@@ -122,7 +127,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "restore failed - see the output above"
 }
 
-foreach ($project in @('src\ArtefactForge.Gui', 'src\ArtefactForge.Cli')) {
+foreach ($project in @('src\ArtefactForge.Gui', 'src\ArtefactForge.Cli', 'src\ArtefactForge.Lake.Cli')) {
     Write-Host "  building $project"
     $output = & dotnet publish (Join-Path $root $project) @publishArgs 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -143,6 +148,8 @@ foreach ($folder in @('Modules', 'Layouts', 'Profiles', 'Scripts')) {
     if (Test-Path $source) { Copy-Item $source -Destination $Destination -Recurse -Force }
 }
 Copy-Item (Join-Path $root 'README.md') -Destination $Destination -Force -ErrorAction SilentlyContinue
+# The licences of the libraries in the exes and of duckdb.dll travel with them.
+Copy-Item (Join-Path $root 'THIRD-PARTY-NOTICES.txt') -Destination $Destination -Force
 Copy-Item (Join-Path $root 'Apps.yaml') -Destination $Destination -Force -ErrorAction SilentlyContinue
 
 if ($NoTools) {
@@ -174,6 +181,7 @@ Modules    $moduleCount
 Tools      $(if (Test-Path (Join-Path $Destination 'Tools')) { 'see Tools\VERSIONS.txt' } else { 'NOT INCLUDED - see below' })
 
 Run ArtefactForge.exe for the interface, or ArtefactForgeCli.exe for headless use.
+af-lake.exe builds an evidence lake from a case folder or from parser output ('af-lake help').
 Modules, Layouts, Profiles and Tools are resolved relative to this folder, so the
 whole folder can be copied anywhere as a unit.
 $(if ($NoTools -or -not (Test-Path (Join-Path $Destination 'Tools'))) {

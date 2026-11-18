@@ -65,6 +65,7 @@ public partial class MainWindow
 
     private async void OnExportSnapshot(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("exporting a snapshot")) return;
         var caseDirectory = AnalysisCaseDirectory();
         if (caseDirectory is null || !Directory.Exists(caseDirectory))
         {

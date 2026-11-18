@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Evidence lake outputs list",
+  "description": "<Case>/<Host>/outputs.json: what produced each file in one host folder, kept across runs. Paths are relative to the host folder.",
+  "type": "object",
+  "required": ["format", "formatVersion", "producer", "updatedUtc", "host", "outputs"],
+  "properties": {
+    "format": { "const": "evidence-lake-outputs" },
+    "formatVersion": { "const": 1 },
+    "producer": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": ["string", "null"] },
+        "build": { "type": ["string", "null"] }
+      }
+    },
+    "updatedUtc": { "$ref": "#/$defs/utc" },
+    "host": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "The host folder's name (the collection name)." },
+        "hostname": { "type": ["string", "null"], "description": "The machine's own name, from its system summary." },
+        "platform": { "enum": ["windows", "linux", null] },
+        "timeZone": { "type": ["string", "null"] },
+        "collectedUtc": { "anyOf": [{ "$ref": "#/$defs/utc" }, { "type": "null" }] },
+        "collector": { "type": ["string", "null"], "description": "velociraptor, uac, kape or live." }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/output" }
+    }
+  },
+  "$defs": {
+    "utc": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "output": {
+      "type": "object",
+      "required": ["path", "parser", "status"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative to the host folder with '/' separators; never absolute and never under _Incomplete.",
+          "pattern": "^(?![A-Za-z]:)(?!/)(?!_[Ii][Nn][Cc][Oo][Mm][Pp][Ll][Ee][Tt][Ee]/)[^\\\\]+$"
+        },
+        "format": { "type": ["string", "null"], "description": "The file extension in lower case, without the dot." },
+        "parser": { "type": "string", "minLength": 1, "description": "The tool that wrote the file; ArtefactForge for its own analyses." },
+        "parserVersion": { "type": ["string", "null"] },
+        "parserSha256": { "type": ["string", "null"] },
+        "toolFileName": { "type": ["string", "null"], "description": "The name the tool gave the file, before it was renamed." },
+        "module": { "type": ["string", "null"] },
+        "moduleVersion": { "type": ["string", "null"] },
+        "user": { "type": ["string", "null"] },
+        "arguments": { "type": ["string", "null"] },
+        "status": { "enum": ["completed", "checklog", "nooutput", "failed", "timedout", "cancelled"] },
+        "producedUtc": { "anyOf": [{ "$ref": "#/$defs/utc" }, { "type": "null" }] },
+        "bytes": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    }
+  }
+}

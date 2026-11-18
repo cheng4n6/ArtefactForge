@@ -50,7 +50,7 @@ public class RunEngineTests
 
     private static RunConfiguration Config(TempDirectory dir, ModuleDefinition[] modules,
         bool vss = false, bool rootIsSelection = false, int workers = 4, int heavy = 2,
-        bool skipCompleted = true, bool live = false) => new()
+        bool skipCompleted = true, bool live = false, int? defaultTimeout = null) => new()
     {
         CaseName = "CASE",
         OutputRoot = dir.Dir("out"),
@@ -60,12 +60,155 @@ public class RunEngineTests
         MaxWorkers = workers,
         MaxHeavyWorkers = heavy,
         Vss = vss,
-        SkipCompleted = skipCompleted
+        SkipCompleted = skipCompleted,
+        DefaultTimeoutSeconds = defaultTimeout ?? 24 * 60 * 60
     };
 
     /// <summary>cmd.exe parses its own command line, so redirection inside /c works.</summary>
     private const string WritesAFile = @"/c echo hello> ""%destinationDirectory%\result.txt""";
     private const string Sleeps = "/c ping -n 12 127.0.0.1 >nul";
+
+    /// <summary>Counts what is posted to it, as a window's thread would receive it.</summary>
+    private sealed class CountingContext : SynchronizationContext
+    {
+        public int Posts;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref Posts);
+            ThreadPool.QueueUserWorkItem(_ => d(state));
+        }
+    }
+
+    [Fact]
+    public async Task The_run_does_none_of_its_work_on_the_callers_thread()
+    {
+        using var dir = new TempDirectory();
+        var config = Config(dir, [Module("Writer", WritesAFile)]);
+        var context = new CountingContext();
+        var previous = SynchronizationContext.Current;
+        Task<RunReport> run;
+        try
+        {
+            // As a window calls it: with its own context current.
+            SynchronizationContext.SetSynchronizationContext(context);
+            run = new RunEngine().RunAsync(config);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        var report = await run;
+
+        Assert.Equal(WorkStatus.Completed, Assert.Single(report.Results).Status);
+        Assert.Equal(0, context.Posts);
+    }
+
+    [Fact]
+    public async Task Finished_work_is_saved_while_the_run_is_still_going()
+    {
+        using var dir = new TempDirectory();
+        var config = Config(dir, [Module("Writer", WritesAFile), Module("Slow", Sleeps, timeout: 60)]);
+        var statePath = Path.Combine(config.OutputRoot, "CASE", "_Logs", "state.json");
+        string? stateWhenWriterFinished = null;
+        using var stop = new CancellationTokenSource();
+
+        var engine = new RunEngine();
+        engine.Progress += e =>
+        {
+            if (e.Item.Module.Name != "Writer" || e.Status != WorkStatus.Completed) return;
+            stateWhenWriterFinished = File.Exists(statePath) ? File.ReadAllText(statePath) : "";
+            stop.Cancel();   // as if the app were closed here, with Slow still running
+        };
+        await engine.RunAsync(config, stop.Token);
+
+        Assert.NotNull(stateWhenWriterFinished);
+        Assert.Contains("TESTCOL|Writer|-", stateWhenWriterFinished);
+    }
+
+    [Fact]
+    public async Task The_manifest_is_written_as_each_host_finishes_and_says_the_run_is_not_over()
+    {
+        using var dir = new TempDirectory();
+        // The same module on two hosts: quick on one, slow on the one whose evidence holds slow.txt.
+        var module = Module("Writer",
+            @"/c (if exist ""%root%\slow.txt"" ping -n 8 127.0.0.1 >nul) & echo hello> ""%destinationDirectory%\result.txt""",
+            timeout: 60);
+        var quick = Target(dir.Dir("quick")).Renamed("QUICK");
+        var slowRoot = dir.Dir("slow");
+        File.WriteAllText(Path.Combine(slowRoot, "slow.txt"), "x");
+        var slow = Target(slowRoot).Renamed("SLOW");
+        var config = new RunConfiguration
+        {
+            CaseName = "CASE",
+            OutputRoot = dir.Dir("out"),
+            ToolRoots = [dir.Path],
+            Targets = [quick, slow],
+            Modules = [module],
+            MaxWorkers = 4,
+            MaxHeavyWorkers = 2
+        };
+        var manifestPath = Path.Combine(config.OutputRoot, "CASE", "_Logs", "manifest.json");
+
+        var run = new RunEngine().RunAsync(config);
+        string? early = null;
+        for (var i = 0; i < 60 && early is null && !run.IsCompleted; i++)
+        {
+            await Task.Delay(100);
+            try { if (File.Exists(manifestPath)) early = File.ReadAllText(manifestPath); }
+            catch (IOException) { }
+        }
+        var report = await run;
+
+        Assert.NotNull(early);
+        Assert.Contains("\"Finished\": false", early);
+        Assert.Contains("QUICK", early);
+        Assert.Contains("\"Finished\": true", File.ReadAllText(manifestPath));
+        Assert.Equal(2, report.Count(WorkStatus.Completed));
+    }
+
+    [Fact]
+    public async Task A_manifest_that_cannot_be_written_is_reported_and_the_results_still_come_back()
+    {
+        using var dir = new TempDirectory();
+        var config = Config(dir, [Module("Writer", WritesAFile)]);
+        // A folder where the manifest goes: writing it fails as it would on a full disk.
+        Directory.CreateDirectory(Path.Combine(config.OutputRoot, "CASE", "_Logs", "manifest.json"));
+
+        var report = await new RunEngine().RunAsync(config);
+
+        Assert.Contains(report.Results, r => r.Module == "Writer" && r.Status == WorkStatus.Completed);
+        var manifest = Assert.Single(report.Results, r => r.Module == "Manifest");
+        Assert.Equal(WorkStatus.Failed, manifest.Status);
+        Assert.Contains("could not write the run manifest", manifest.Reason);
+    }
+
+    [Fact]
+    public async Task A_module_with_no_timeout_is_stopped_by_the_runs_default()
+    {
+        using var dir = new TempDirectory();
+        var config = Config(dir, [Module("Hangs", Sleeps)], defaultTimeout: 2);
+
+        var watch = Stopwatch.StartNew();
+        var result = Assert.Single((await new RunEngine().RunAsync(config)).Results);
+
+        Assert.Equal(WorkStatus.TimedOut, result.Status);
+        Assert.Contains("sets no Timeout of its own", result.Reason);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(9), "the tool was left to finish");
+    }
+
+    [Fact]
+    public async Task A_modules_own_timeout_wins_over_the_runs_default()
+    {
+        using var dir = new TempDirectory();
+        var module = Module("Writer", @"/c ping -n 4 127.0.0.1 >nul & echo hello> ""%destinationDirectory%\result.txt""", timeout: 60);
+        var config = Config(dir, [module], defaultTimeout: 1);
+
+        var result = Assert.Single((await new RunEngine().RunAsync(config)).Results);
+
+        Assert.Equal(WorkStatus.Completed, result.Status);
+    }
 
     [Fact]
     public async Task Missing_executable_is_reported_not_thrown()

@@ -518,6 +518,7 @@ public partial class MainWindow : Window
 
     private async void OnUpdateFromFolder(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("installing an update")) return;
         var dialog = new OpenFolderDialog { Title = "Select the folder holding " + ReleaseFiles.Manifest };
         if (dialog.ShowDialog(this) == true) await CheckAppUpdate(new FolderReleaseSource(dialog.FolderName));
     }
@@ -554,6 +555,7 @@ public partial class MainWindow : Window
 
     private async void OnInstallAppUpdate(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("installing an update")) return;
         if (_offerSource is not { } source || _offerRelease is not { } release) return;
 
         // Output provenance records the ArtefactForge version; it must not change under a run.
@@ -1207,6 +1209,7 @@ public partial class MainWindow : Window
         UseVss.IsChecked = saved.Vss;
         SkipCompleted.IsChecked = saved.SkipCompleted;
         CleanupExtracted.IsChecked = saved.CleanupExtracted;
+        BuildLakeAfterRun.IsChecked = saved.BuildLake;
     }
 
     /// <summary>
@@ -1224,7 +1227,8 @@ public partial class MainWindow : Window
             KeepFreeGB = SavedRunOptions.TryParseGB(KeepFreeGB.Text, CultureInfo.CurrentCulture, out var k) ? k : previous.KeepFreeGB,
             Vss = UseVss.IsChecked == true,
             SkipCompleted = SkipCompleted.IsChecked == true,
-            CleanupExtracted = CleanupExtracted.IsChecked == true
+            CleanupExtracted = CleanupExtracted.IsChecked == true,
+            BuildLake = BuildLakeAfterRun.IsChecked == true
         }.Clamped();
         Preferences.Save();
     }
@@ -1340,7 +1344,8 @@ public partial class MainWindow : Window
             SkipCompleted = SkipCompleted.IsChecked == true,
             Layouts = _layouts,
             CleanupExtracted = CleanupExtracted.IsChecked == true,
-            ArchivesAtOnce = runOptions.ZipsAtOnce
+            ArchivesAtOnce = runOptions.ZipsAtOnce,
+            BuildLake = BuildLakeAfterRun.IsChecked == true
         };
     }
 
@@ -1365,6 +1370,7 @@ public partial class MainWindow : Window
 
     private async void OnRun(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("starting a run")) return;
         await _detection;   // a path just typed is still being looked at
         var config = BuildConfiguration();
         if (config is null) return;
@@ -1419,6 +1425,7 @@ public partial class MainWindow : Window
         StatCollections.Text = $"0 / {_progress.Count}";
 
         var engine = new RunEngine();
+        engine.LakeMessage += line => Dispatcher.InvokeAsync(() => Append("[Lake] " + line));
         // Posted, not invoked: Invoke held every worker, and the extraction loop, until the window
         // had redrawn. Posts run in the order they were made.
         engine.Extraction += evt => Dispatcher.InvokeAsync(() =>
@@ -1651,6 +1658,7 @@ public partial class MainWindow : Window
 
     private async void OnRebuildEvidenceList(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("rebuilding the evidence list")) return;
         if (AnalysisCaseDirectory() is not { } caseDirectory || !Directory.Exists(caseDirectory))
         {
             MessageBox.Show(this, "Choose the output folder and case name on the Setup page, or run the "
@@ -1673,6 +1681,7 @@ public partial class MainWindow : Window
 
     private void OnRerunFailed(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("re-running failed work")) return;
         // Failed work is never written to the state file, so a normal run with skip-completed on
         // retries exactly the failures and leaves finished work alone.
         SkipCompleted.IsChecked = true;

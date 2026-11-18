@@ -1,0 +1,11 @@
+{
+  "kind": "pecmd.output",
+  "parser": "PECmd",
+  "description": "Prefetch files (PECmd), one row per program at its last run; earlier runs come from the timeline",
+  "fileNames": [ "^PECmd_Output\\.csv$" ],
+  "requiredColumns": [
+    "SourceFilename", "SourceCreated", "ExecutableName", "Hash", "RunCount", "LastRun",
+    "FilesLoaded"
+  ],
+  "mappingVersion": 1
+}
