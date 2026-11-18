@@ -114,6 +114,7 @@ public partial class MainWindow
 
     private async void OnRdpTrace(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("saving a trace")) return;
         if (AnalysisCaseDirectory() is not { } caseDir || RdpSessionGrid.SelectedItem is not RdpSession session) return;
         var lookback = TimeSpan.FromHours(Hours(RdpLookbackBox.Text, 12));
 
@@ -134,12 +135,14 @@ public partial class MainWindow
 
     private async void OnRdpAddIp(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("adding IOCs")) return;
         if (_lastTrace?.EndAddress is not { } address) return;
         await AddRdpIocs([IocEntry.Create(IocType.IP, address, "RDP trace end point", _lastTrace.Hops[^1].ToHost)]);
     }
 
     private async void OnRdpAddAccounts(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("adding IOCs")) return;
         if (_lastTrace is not { } trace) return;
         await AddRdpIocs(trace.Accounts.Select(a => IocEntry.Create(IocType.Account, a, "RDP trace account", trace.Start.Host)).ToList());
     }

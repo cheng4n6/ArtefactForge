@@ -28,6 +28,12 @@ public sealed record LakeOptions
     /// <summary>The program building the lake, recorded in lake_meta and build.json.</summary>
     public string Producer { get; init; } = "af-lake";
 
+    /// <summary>
+    /// Lines the caller wants at the top of lake.log, such as what it did to the case before the
+    /// build (ArtefactForge writes outputs.json for hosts that had none).
+    /// </summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
+
     internal long EffectiveMemoryLimitBytes()
     {
         if (MemoryLimitBytes is > 0) return MemoryLimitBytes.Value;

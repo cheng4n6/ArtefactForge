@@ -240,6 +240,7 @@ public partial class MainWindow
     /// <summary>Reads the hosts whose output changed, then writes the case's DataAccess.csv.</summary>
     private async void OnDataAccessBuild(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("building the data access report")) return;
         if (AnalysisCaseDirectory() is not { } caseDir || !Directory.Exists(caseDir)) return;
         _dataAccessBusy = true;
         SetDataAccessEnabled();

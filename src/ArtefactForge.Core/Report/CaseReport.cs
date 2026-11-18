@@ -46,7 +46,8 @@ public static class CaseReport
         new DataAccessSection(),
         new IocSection(),
         new RdpSection(),
-        new IpHistorySection()
+        new IpHistorySection(),
+        new EvidenceLakeSection()
     ];
 
     public static string PathFor(string caseDirectory) => Path.Combine(caseDirectory, FileName);

@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ArtefactForge.Lake.Contract\ArtefactForge.Lake.Contract.csproj" />
+    <ProjectReference Include="..\ArtefactForge.Lake\ArtefactForge.Lake.csproj" />
   </ItemGroup>
 
 </Project>

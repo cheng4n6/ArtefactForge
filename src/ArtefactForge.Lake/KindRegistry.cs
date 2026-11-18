@@ -109,8 +109,20 @@ public static partial class LakeNames
     /// <summary>raw_ plus the kind with anything but letters and digits as '_': raw_pecmd_timeline.</summary>
     public static string RawTable(string kind) => "raw_" + Identifier(kind);
 
-    /// <summary>The kind for a file no mapping covers: unmapped.&lt;parser&gt;.</summary>
-    public static string Unmapped(string parser) => UnmappedPrefix + Identifier(parser);
+    /// <summary>
+    /// The kind for a file no mapping covers: unmapped.&lt;parser&gt;_&lt;file stem&gt;, from the name the
+    /// tool gave it (tool timestamp and user prefix already removed). The parser's name is not
+    /// repeated when the stem starts with it: LECmd_Recent.csv from LECmd is unmapped.lecmd_recent.
+    /// The same file from every host and user shares one table; different files of one tool do not.
+    /// </summary>
+    public static string Unmapped(string parser, string strippedFileName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(strippedFileName);
+        if (stem.StartsWith(parser + "_", StringComparison.OrdinalIgnoreCase)) stem = stem[(parser.Length + 1)..];
+        var parserPart = Identifier(parser);
+        var stemPart = stem.Length == 0 ? "" : Identifier(stem);
+        return UnmappedPrefix + (stemPart.Length == 0 || stemPart == parserPart ? parserPart : parserPart + "_" + stemPart);
+    }
 
     public static string Identifier(string text)
     {

@@ -58,6 +58,7 @@ public static class LakeBuilder
         using var log = new LakeLog(Path.Combine(lakeDirectory, LakeNames.LogFile), progress);
         log.Write($"Evidence lake build of {caseDirectory}");
         log.Write($"Lake folder {lakeDirectory}; producer {options.Producer}");
+        foreach (var note in options.Notes) log.Write(note);
 
         var warnings = new List<string>();
         var results = new List<LakeSourceResult>();
