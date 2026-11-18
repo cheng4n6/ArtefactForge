@@ -164,6 +164,10 @@ public sealed class RunEngine
         report.MemoryFloorWaits = memoryFloor.Waits;
         SaveState(statePath, completed, results);
         foreach (var c in collections) report.CollectorTimes[c.CollectionName] = c.Times;
+        WriteHostOutputs(report, config, collections);
+        // Only when asked. After every host's outputs.json, which it reads; before the manifest,
+        // so its result is listed there like any other step's.
+        if (config.BuildLake) report.Results.Add(EvidenceLake.Build(caseDir));
         WriteManifests(report, logDir, config, collections, started);
         await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 
@@ -172,9 +176,6 @@ public sealed class RunEngine
         // collection produced a summary. The evidence list reads the same summaries.
         report.InventoryPath = SystemInventory.Build(caseDir);
         report.EvidenceList = EvidenceList.Rebuild(caseDir);
-        // Only when asked. After every host's outputs.json and the case files, which it reads;
-        // before the case report, which shows how it went.
-        if (config.BuildLake) report.Results.Add(EvidenceLake.Build(caseDir));
         Report.CaseReport.AfterRun(report);   // last: the case report reads everything above
         return report;
 
@@ -1112,16 +1113,22 @@ public sealed class RunEngine
         catch { /* a lost state file only costs a re-run */ }
     }
 
+    /// <summary>
+    /// Each host's outputs.json. Before the manifest, so a host whose list could not be written is
+    /// in the manifest and the results like any other problem.
+    /// </summary>
+    private static void WriteHostOutputs(
+        RunReport report, RunConfiguration config, IReadOnlyList<CollectionRecord> collections)
+    {
+        var hosts = new Dictionary<string, HostContext>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in collections) hosts[c.CollectionName] = new HostContext(c.Platform, c.Times);
+        report.Results.AddRange(HostOutputs.Write(report.CaseDirectory, report.Results, config.Modules, hosts, DateTime.UtcNow));
+    }
+
     private static void WriteManifests(
         RunReport report, string logDir, RunConfiguration config, IReadOnlyList<CollectionRecord> collections,
         DateTimeOffset started)
     {
-        // Each host's outputs.json first, so a host whose list could not be written is in the
-        // manifest and the results like any other problem.
-        var hosts = new Dictionary<string, HostContext>(StringComparer.OrdinalIgnoreCase);
-        foreach (var c in collections) hosts[c.CollectionName] = new HostContext(c.Platform, c.Times);
-        report.Results.AddRange(HostOutputs.Write(report.CaseDirectory, report.Results, config.Modules, hosts, DateTime.UtcNow));
-
         var ordered = report.Results
             .OrderBy(r => r.Collection, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)

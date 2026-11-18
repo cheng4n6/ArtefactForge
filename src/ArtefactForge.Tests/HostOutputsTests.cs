@@ -473,6 +473,22 @@ public class HostOutputsTests
     }
 
     [Fact]
+    public async Task The_lake_result_is_in_the_manifest_which_is_written_after_each_outputs_json()
+    {
+        using var dir = new TempDirectory();
+        var report = await new RunEngine().RunAsync(Config(dir, [Module("Writer", WritesAFile)], lake: true));
+
+        var manifestPath = Path.Combine(report.LogDirectory, "manifest.json");
+        using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var lake = Assert.Single(manifest.RootElement.GetProperty("Results").EnumerateArray(),
+            r => r.GetProperty("Module").GetString() == EvidenceLake.ModuleName);
+        Assert.Equal(EvidenceLake.NotInstalled, lake.GetProperty("Reason").GetString());
+
+        var outputsPath = Path.Combine(report.CaseDirectory, "HOST01", "outputs.json");
+        Assert.True(File.GetLastWriteTimeUtc(outputsPath) <= File.GetLastWriteTimeUtc(manifestPath));
+    }
+
+    [Fact]
     public async Task A_run_not_asked_for_the_lake_does_not_mention_it()
     {
         using var dir = new TempDirectory();
