@@ -27,7 +27,7 @@ public sealed record LakeOptions
 
     /// <summary>
     /// Run the saved analyses once the lake is built and write what they find under
-    /// &lt;lake&gt;\results (for now the ransomware files, beside the ones ArtefactForge writes, to
+    /// &lt;lake&gt;\results (for now the ransomware and data access files, beside the ones ArtefactForge writes, to
     /// compare). Their failure leaves the lake built but marked for a look.
     /// </summary>
     public bool RunAnalyses { get; init; } = true;

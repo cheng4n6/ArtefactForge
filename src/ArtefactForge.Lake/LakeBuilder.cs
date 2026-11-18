@@ -197,21 +197,43 @@ public static class LakeBuilder
     private static void RunAnalyses(string database, string caseDirectory, string lakeDirectory, string tempDirectory,
         LakeOptions options, List<string> warnings, LakeLog log, CancellationToken cancellationToken)
     {
-        var outputRoot = Queries.RansomwareResults.OutputRootFor(lakeDirectory);
-        try
+        // Each in a session of its own, so what one leaves in the temporary schema cannot reach the next.
+        void Run(string name, string outputRoot, Func<Queries.LakeQuerySession, string?> write)
         {
-            Directory.CreateDirectory(tempDirectory);
-            using var session = new Queries.LakeQuerySession(database, caseDirectory, null, options, tempDirectory);
-            var written = Queries.RansomwareResults.Write(session, outputRoot, cancellationToken);
-            log.Write($"Ransomware from the lake's queries in {outputRoot}: {written.Describe()}");
+            try
+            {
+                Directory.CreateDirectory(tempDirectory);
+                using var session = new Queries.LakeQuerySession(database, caseDirectory, null, options, tempDirectory);
+                var problem = write(session);
+                if (problem is null) return;
+                var warning = $"The {name} queries need a look: {problem}";
+                warnings.Add(warning);
+                log.Write(warning);
+            }
+            catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException or InvalidDataException
+                                           or InvalidOperationException)
+            {
+                var warning = $"The {name} queries failed, so {outputRoot} is missing or incomplete: {FirstLine(ex.Message)}";
+                warnings.Add(warning);
+                log.Write(warning);
+            }
         }
-        catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException or InvalidDataException
-                                       or InvalidOperationException)
+
+        var ransomwareRoot = Queries.RansomwareResults.OutputRootFor(lakeDirectory);
+        Run("ransomware", ransomwareRoot, session =>
         {
-            var warning = $"The ransomware queries failed, so {outputRoot} is missing or incomplete: {FirstLine(ex.Message)}";
-            warnings.Add(warning);
-            log.Write(warning);
-        }
+            var written = Queries.RansomwareResults.Write(session, ransomwareRoot, cancellationToken);
+            log.Write($"Ransomware from the lake's queries in {ransomwareRoot}: {written.Describe()}");
+            return null;
+        });
+
+        var dataAccessRoot = Queries.DataAccessResults.OutputRootFor(lakeDirectory);
+        Run("data access", dataAccessRoot, session =>
+        {
+            var written = Queries.DataAccessResults.Write(session, dataAccessRoot, cancellationToken);
+            log.Write($"Data access from the lake's queries in {dataAccessRoot}: {written.Describe()}");
+            return written.Problem;
+        });
     }
 
     private sealed record SourceLoad(string Status, string? Reason, long Rows, long Rejected, string? RawTable)

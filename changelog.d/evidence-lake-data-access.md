@@ -1,0 +1,3 @@
+### Features
+
+* **Evidence lake:** the data access report in SQL. Building a lake now also writes the data access files (UserList.csv and DataAccess.csv, and per host Users.csv, Activity.csv and Sources.csv) to `_Lake\results\DataAccess`, laid out as in the case, for comparison with the files the DataAccess step writes. The compromised users are read from the case's CompromisedUsers.csv, as the step reads them. `af-lake data-access <case>` writes them without a rebuild. The DataAccess step itself is unchanged; the case's own files will come from the lake in a later version, once the two have been compared on real cases.

@@ -22,6 +22,21 @@ public sealed record LakeQueryInput(string Table, string FileName, IReadOnlyList
 public sealed record LakeQueryTable(string Table, IReadOnlyList<string> Columns);
 
 /// <summary>
+/// The rows of every host's files that match <see cref="Pattern"/>, whichever raw table they were
+/// loaded into: a file the lake has no mapping for goes to a table named after how it was found
+/// (raw_unmapped_recmd_ntuser_recentdocs, or another name with outputs.json), so a query that
+/// needs "the RecentDocs CSVs" names the files, as ArtefactForge looks for them, not the table.
+///
+/// The pattern is a host-relative folder and a file name pattern: Registry/*ProfileList*.csv for
+/// files directly in Registry, Registry/**/*_RecentDocs*.csv for that folder and every one below
+/// it. Names compare as Windows does, without regard to case. Two temporary objects are made:
+/// <c>&lt;Table&gt;</c>, a view of the files' rows (host, source_id, row_no and these columns, all
+/// text, empty where a file lacks one), and <c>&lt;Table&gt;_files</c>, one row per matching file
+/// that exists (host, source_id, path, mtime, status), loaded or not.
+/// </summary>
+public sealed record LakeQueryFiles(string Table, string Pattern, IReadOnlyList<string> Columns);
+
+/// <summary>
 /// One saved query: a .sql file under Queries\ in this assembly whose leading comment block says
 /// what it is. A "setup" query makes temporary tables for others and returns nothing; any other
 /// query is one SELECT whose rows are its result.
@@ -35,6 +50,7 @@ public sealed record LakeQueryTable(string Table, IReadOnlyList<string> Columns)
 ///   -- requires: ransomware_prepare    (setup queries run first, in order)
 ///   -- input: ransomware_overrides = Ransomware-Overrides.csv (Collection, Extension, NoteName)
 ///   -- table: raw_mftecmd_mft (FileName, ParentPath, FileSize)
+///   -- files: da_profilelist = Registry/*ProfileList*.csv (KeyName, ProfileImagePath)
 ///   -- parameter: usn_min_files = 50 - renames to one extension before it is called
 ///
 /// A parameter is read in the SQL as getvariable('usn_min_files'), as text: cast it where a
@@ -54,6 +70,7 @@ public sealed partial record LakeQuery
     public IReadOnlyList<string> Requires { get; init; } = [];
     public IReadOnlyList<LakeQueryInput> Inputs { get; init; } = [];
     public IReadOnlyList<LakeQueryTable> Tables { get; init; } = [];
+    public IReadOnlyList<LakeQueryFiles> Files { get; init; } = [];
     public IReadOnlyList<LakeQueryParameter> Parameters { get; init; } = [];
     public required string Sql { get; init; }
 
@@ -96,6 +113,7 @@ public sealed partial record LakeQuery
             Requires = All("requires").SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList(),
             Inputs = All("input").Select(v => ParseInput(name, v)).ToList(),
             Tables = All("table").Select(v => ParseTable(name, v)).ToList(),
+            Files = All("files").Select(v => ParseFiles(name, v)).ToList(),
             Parameters = All("parameter").Select(v => ParseParameter(name, v)).ToList(),
             Sql = text
         };
@@ -115,6 +133,18 @@ public sealed partial record LakeQuery
         if (!m.Success)
             throw new InvalidDataException($"Query {query}: table must read 'name (Column, Column)', not '{value}'");
         return new LakeQueryTable(m.Groups[1].Value, Columns(m.Groups[2].Value));
+    }
+
+    private static LakeQueryFiles ParseFiles(string query, string value)
+    {
+        var m = InputField().Match(value);
+        if (!m.Success)
+            throw new InvalidDataException($"Query {query}: files must read 'table = Folder/pattern.csv (Column, Column)', not '{value}'");
+        var pattern = m.Groups[2].Value.Trim();
+        if (!LakeFilePattern.IsValid(pattern))
+            throw new InvalidDataException(
+                $"Query {query}: files pattern '{pattern}' must be a folder, optionally /**, then a file name pattern");
+        return new LakeQueryFiles(m.Groups[1].Value, pattern, Columns(m.Groups[3].Value));
     }
 
     private static LakeQueryParameter ParseParameter(string query, string value)

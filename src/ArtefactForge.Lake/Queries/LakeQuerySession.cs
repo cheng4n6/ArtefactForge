@@ -81,6 +81,53 @@ public sealed class LakeQuerySession : IDisposable
             if (_set.Add("table:" + table.Table)) StandIn(table);
         foreach (var input in query.Inputs)
             if (_set.Add("input:" + input.Table)) LoadInput(input);
+        foreach (var files in query.Files)
+            if (_set.Add("files:" + files.Table)) LoadFiles(files);
+    }
+
+    /// <summary>
+    /// The files a <c>files:</c> line names, from the sources table: &lt;table&gt;_files lists
+    /// every one that exists, and &lt;table&gt; is a view over the rows of those that were loaded,
+    /// across whatever raw tables hold them. A raw table without one of the columns gives it empty.
+    /// </summary>
+    private void LoadFiles(LakeQueryFiles files)
+    {
+        var matched = new List<(int SourceId, string? RawTable)>();
+        using (var command = _db.CreateCommand())
+        {
+            command.CommandText = "SELECT source_id, path, raw_table FROM sources WHERE size IS NOT NULL ORDER BY source_id";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+                if (LakeFilePattern.Matches(files.Pattern, reader.GetString(1)))
+                    matched.Add((reader.GetInt32(0), reader.IsDBNull(2) ? null : reader.GetString(2)));
+        }
+
+        string Ids(IEnumerable<int> ids) => string.Join(", ", ids.Select(i => i.ToString(CultureInfo.InvariantCulture)));
+        var fileTable = LakeDatabase.Identifier(files.Table + "_files");
+        LakeDatabase.Execute(_db, $"CREATE TEMP TABLE {fileTable} AS SELECT host, source_id, path, mtime, status FROM sources " +
+                                  (matched.Count == 0 ? "WHERE false" : $"WHERE source_id IN ({Ids(matched.Select(m => m.SourceId))})"));
+
+        var meta = new[] { "host", "source_id", "row_no" };
+        var selects = new List<string>();
+        var catalogue = LakeDatabase.Identifier((string)LakeDatabase.Scalar(_db, "SELECT current_database()")!);
+        foreach (var group in matched.Where(m => m.RawTable is not null).GroupBy(m => m.RawTable!, StringComparer.OrdinalIgnoreCase))
+        {
+            var have = ColumnsOf(group.Key);
+            if (have.Count == 0) continue;
+            var columns = files.Columns.Select(c => (have.Contains(c) ? LakeDatabase.Identifier(c) : "NULL::VARCHAR") +
+                                                    " AS " + LakeDatabase.Identifier(c));
+            selects.Add($"SELECT {string.Join(", ", meta.Concat(columns))} FROM {catalogue}.main.{LakeDatabase.Identifier(group.Key)} " +
+                        $"WHERE source_id IN ({Ids(group.Select(m => m.SourceId))})");
+        }
+        var table = LakeDatabase.Identifier(files.Table);
+        if (selects.Count == 0)
+        {
+            var empty = new[] { "host VARCHAR", "source_id INTEGER", "row_no BIGINT" }
+                .Concat(files.Columns.Select(c => LakeDatabase.Identifier(c) + " VARCHAR"));
+            LakeDatabase.Execute(_db, $"CREATE TEMP TABLE {table} ({string.Join(", ", empty)})");
+            return;
+        }
+        LakeDatabase.Execute(_db, $"CREATE TEMP VIEW {table} AS {string.Join(" UNION ALL ", selects)}");
     }
 
     /// <summary>

@@ -25,6 +25,7 @@ namespace ArtefactForge.Lake.Cli
                 case "queries": return Queries(output);
                 case "query": return Query(args[1..], output, error);
                 case "ransomware": return RansomwareFiles(args[1..], output, error);
+                case "data-access": return DataAccessFiles(args[1..], output, error);
                 case null or "help" or "--help" or "-h" or "/?":
                     Usage(verb is null ? error : output);
                     return verb is null ? ExitUsage : ExitBuilt;
@@ -58,6 +59,11 @@ namespace ArtefactForge.Lake.Cli
             writer.WriteLine("      Ransomware\\RansomwareSummary.csv, RansomwareEvidence.csv and Note\\) from the");
             writer.WriteLine("      lake's queries to <folder>\\_Lake\\results\\Ransomware, or to --out DIR, as a");
             writer.WriteLine("      lake build does.");
+            writer.WriteLine("  af-lake data-access <folder> [--out DIR] [--lake FILE]");
+            writer.WriteLine("      Writes ArtefactForge's data access files (UserList.csv, DataAccess.csv, and per");
+            writer.WriteLine("      host DataAccess\\Users.csv, Activity.csv and Sources.csv) from the lake's queries");
+            writer.WriteLine("      to <folder>\\_Lake\\results\\DataAccess, or to --out DIR, as a lake build does.");
+            writer.WriteLine("      The compromised users are read from <folder>\\CompromisedUsers.csv.");
             writer.WriteLine();
             writer.WriteLine("Exit codes: 0 built; 3 built, but some sources need a look (see lake.log);");
             writer.WriteLine("1 not built, or built but not swapped in; 2 bad arguments.");
@@ -184,7 +190,26 @@ namespace ArtefactForge.Lake.Cli
             }
         }
 
-        private static int RansomwareFiles(string[] args, TextWriter output, TextWriter error)
+        private static int RansomwareFiles(string[] args, TextWriter output, TextWriter error) =>
+            AnalysisFiles(args, "ransomware", RansomwareResults.OutputRootFor, (session, root) =>
+            {
+                var written = RansomwareResults.Write(session, root);
+                return ($"Ransomware files in {root}: {written.Describe()}", null);
+            }, output, error);
+
+        private static int DataAccessFiles(string[] args, TextWriter output, TextWriter error) =>
+            AnalysisFiles(args, "data-access", DataAccessResults.OutputRootFor, (session, root) =>
+            {
+                var written = DataAccessResults.Write(session, root);
+                return ($"Data access files in {root}: {written.Describe()}", written.Problem);
+            }, output, error);
+
+        /// <summary>
+        /// Writes one analysis's files from the lake's queries, as a lake build does. A problem the
+        /// analysis reports (an input file it could not use) exits as "check the log".
+        /// </summary>
+        private static int AnalysisFiles(string[] args, string verb, Func<string, string> rootFor,
+            Func<LakeQuerySession, string, (string Done, string? Problem)> write, TextWriter output, TextWriter error)
         {
             string? folder = null, outDirectory = null, lake = null;
             for (var i = 0; i < args.Length; i++)
@@ -211,7 +236,7 @@ namespace ArtefactForge.Lake.Cli
             }
             if (folder is null || !Directory.Exists(folder))
             {
-                error.WriteLine(folder is null ? "ransomware needs a case folder." : $"Folder not found: {folder}");
+                error.WriteLine(folder is null ? $"{verb} needs a case folder." : $"Folder not found: {folder}");
                 return ExitUsage;
             }
             var lakeDirectory = Path.Combine(folder, LakeNames.LakeFolder);
@@ -221,18 +246,20 @@ namespace ArtefactForge.Lake.Cli
                 error.WriteLine($"No lake at {database}: build one with af-lake build {folder}");
                 return ExitFailed;
             }
-            var root = outDirectory ?? RansomwareResults.OutputRootFor(lakeDirectory);
+            var root = outDirectory ?? rootFor(lakeDirectory);
             try
             {
                 using var session = new LakeQuerySession(database, folder);
-                var written = RansomwareResults.Write(session, root);
-                output.WriteLine($"Ransomware files in {root}: {written.Describe()}");
-                return ExitBuilt;
+                var (done, problem) = write(session, root);
+                output.WriteLine(done);
+                if (problem is null) return ExitBuilt;
+                error.WriteLine(problem);
+                return ExitCheckLog;
             }
             catch (Exception ex) when (ex is System.Data.Common.DbException or IOException or UnauthorizedAccessException
                                            or InvalidDataException)
             {
-                error.WriteLine($"The ransomware queries failed: {ex.Message.Split('\n')[0].Trim()}");
+                error.WriteLine($"The {verb} queries failed: {ex.Message.Split('\n')[0].Trim()}");
                 return ExitFailed;
             }
         }
