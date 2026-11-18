@@ -166,23 +166,8 @@ internal sealed class HostsSection : ICaseReportSection
     /// </summary>
     private static string TimeZone(ReportHost host, CollectorTimes? collector)
     {
-        var zone = host.Fact("Timezone");
-        if (zone.Length > 0)
-        {
-            var from = "the system summary";
-            // ActiveTimeBias is minutes to add to local time for UTC. RECmd can print a negative
-            // DWORD as its unsigned value.
-            if (long.TryParse(host.Fact("TimezoneActiveBiasMinutes"), out var bias))
-            {
-                if (bias > int.MaxValue) bias -= 1L << 32;
-                if (Math.Abs(bias) <= 24 * 60)
-                {
-                    zone += $" ({CollectorTimesReader.Offset(TimeSpan.FromMinutes(-bias))})";
-                    from += "; the offset is the one in effect when the registry was last written (ActiveTimeBias)";
-                }
-            }
+        if (SystemInventory.TimeZone(host.Facts) is var (zone, from))
             return $"<span title=\"{E("From " + from)}\">{E(zone)}</span>";
-        }
         if (collector is { TimeZone.Length: > 0 })
             return $"<span title=\"{E("From " + collector.TimeZoneFrom)}\">{E(collector.TimeZone)}</span>";
         return Muted("Not recorded");

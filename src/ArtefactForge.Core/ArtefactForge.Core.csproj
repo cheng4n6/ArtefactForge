@@ -13,4 +13,8 @@
     <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\ArtefactForge.Lake.Contract\ArtefactForge.Lake.Contract.csproj" />
+  </ItemGroup>
+
 </Project>

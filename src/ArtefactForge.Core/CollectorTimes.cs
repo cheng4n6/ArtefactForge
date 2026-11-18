@@ -13,6 +13,8 @@ namespace ArtefactForge.Core;
 public sealed record CollectorTimes
 {
     public DateTime? CollectedUtc { get; init; }
+    /// <summary>The collector that took it, lower case: "velociraptor", "uac", "kape", "live". Null when not known.</summary>
+    public string? Collector { get; init; }
     /// <summary>Where <see cref="CollectedUtc"/> came from, in words.</summary>
     public string CollectedFrom { get; init; } = "";
     /// <summary>True when <see cref="CollectedUtc"/> is an estimate rather than a recorded time.</summary>
@@ -84,6 +86,7 @@ public static partial class CollectorTimesReader
         return new CollectorTimes
         {
             CollectedUtc = Trim(runStarted.UtcDateTime),
+            Collector = "live",
             CollectedFrom = "processed live: the start of the run",
             BootUtc = Trim(DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64)),
             BootFrom = "this machine's uptime when the run started",
@@ -121,6 +124,7 @@ public static partial class CollectorTimesReader
             return new CollectorTimes
             {
                 CollectedUtc = collected,
+                Collector = "velociraptor",
                 CollectedFrom = collected is null ? "" : "Velociraptor client_info.json (ClientStart)",
                 BootUtc = boot,
                 BootFrom = boot is null ? "" : "Velociraptor client_info.json (BootTime)",
@@ -149,6 +153,7 @@ public static partial class CollectorTimesReader
             return new CollectorTimes
             {
                 CollectedUtc = DateTime.SpecifyKind(local - offset, DateTimeKind.Utc),
+                Collector = "uac",
                 CollectedFrom = "uac.log (its first line)"
             };
         }
@@ -173,6 +178,7 @@ public static partial class CollectorTimesReader
         return new CollectorTimes
         {
             CollectedUtc = runs[^1],
+            Collector = "kape",
             CollectedFrom = "KAPE console log name" + (runs.Count > 1 ? $" (the last of {runs.Count} KAPE runs into this folder)" : "")
         };
     }

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The outputs.json contract shared by ArtefactForge (which writes it) and the evidence lake
+    (which reads it). It must stay free of package dependencies and of references to the other
+    ArtefactForge projects, so the lake can read a case without the engine; a test checks this.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ArtefactForge.Lake.Contract</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="outputs.schema.json" LogicalName="ArtefactForge.Lake.Contract.outputs.schema.json" />
+  </ItemGroup>
+
+</Project>

@@ -62,6 +62,8 @@ public sealed class RunRequest
     public double? KeepFreeGB { get; set; }
     public bool Vss { get; set; }
     public bool SkipCompleted { get; set; } = true;
+    /// <summary>Build the evidence lake once every host is done.</summary>
+    public bool Lake { get; set; }
 
     /// <summary>Per-module option overrides as "Module.Option" -> value, so they survive a config file.</summary>
     public Dictionary<string, string> Set { get; set; } = new(StringComparer.OrdinalIgnoreCase);
