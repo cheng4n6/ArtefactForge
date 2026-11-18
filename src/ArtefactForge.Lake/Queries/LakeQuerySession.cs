@@ -100,8 +100,10 @@ public sealed class LakeQuerySession : IDisposable
         var missing = table.Columns.Where(c => !have.Contains(c)).ToList();
         if (missing.Count == 0) return;
         var added = string.Join(", ", missing.Select(c => "NULL::VARCHAR AS " + LakeDatabase.Identifier(c)));
+        // Named with the lake's own catalogue: "main." alone would find this view again.
+        var catalogue = LakeDatabase.Identifier((string)LakeDatabase.Scalar(_db, "SELECT current_database()")!);
         LakeDatabase.Execute(_db, $"CREATE TEMP VIEW {LakeDatabase.Identifier(table.Table)} AS " +
-                                  $"SELECT *, {added} FROM main.{LakeDatabase.Identifier(table.Table)}");
+                                  $"SELECT *, {added} FROM {catalogue}.main.{LakeDatabase.Identifier(table.Table)}");
     }
 
     /// <summary>
