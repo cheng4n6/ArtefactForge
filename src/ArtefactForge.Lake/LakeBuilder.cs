@@ -161,6 +161,8 @@ public static class LakeBuilder
                 null, hostNames, 0, 0);
         }
 
+        if (options.RunAnalyses) RunAnalyses(newPath, caseDirectory, lakeDirectory, tempDirectory, options, warnings, log, cancellationToken);
+
         DeleteFolder(tempDirectory);
         if (Directory.Exists(tempDirectory)) warnings.Add($"Could not remove the spill folder {tempDirectory}");
 
@@ -185,6 +187,31 @@ public static class LakeBuilder
             review ? $"Built {finalPath}: {summary}. Some sources need a look: see {LakeNames.LogFile}."
                    : $"Built {finalPath}: {summary}.",
             finalPath, hostNames, rawRows, timelineRows);
+    }
+
+    /// <summary>
+    /// The saved analyses over the finished lake, before it is swapped in, each writing its files
+    /// under &lt;lake&gt;\results. One that fails is a warning, so the build needs a look; the lake
+    /// itself stands.
+    /// </summary>
+    private static void RunAnalyses(string database, string caseDirectory, string lakeDirectory, string tempDirectory,
+        LakeOptions options, List<string> warnings, LakeLog log, CancellationToken cancellationToken)
+    {
+        var outputRoot = Queries.RansomwareResults.OutputRootFor(lakeDirectory);
+        try
+        {
+            Directory.CreateDirectory(tempDirectory);
+            using var session = new Queries.LakeQuerySession(database, caseDirectory, null, options, tempDirectory);
+            var written = Queries.RansomwareResults.Write(session, outputRoot, cancellationToken);
+            log.Write($"Ransomware from the lake's queries in {outputRoot}: {written.Describe()}");
+        }
+        catch (Exception ex) when (ex is DbException or IOException or UnauthorizedAccessException or InvalidDataException
+                                       or InvalidOperationException)
+        {
+            var warning = $"The ransomware queries failed, so {outputRoot} is missing or incomplete: {FirstLine(ex.Message)}";
+            warnings.Add(warning);
+            log.Write(warning);
+        }
     }
 
     private sealed record SourceLoad(string Status, string? Reason, long Rows, long Rejected, string? RawTable)

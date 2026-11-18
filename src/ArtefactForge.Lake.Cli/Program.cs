@@ -1,4 +1,5 @@
 using System.Globalization;
+using ArtefactForge.Lake.Queries;
 using ArtefactForge.Lake;
 using ArtefactForge.Lake.Cli;
 
@@ -21,6 +22,9 @@ namespace ArtefactForge.Lake.Cli
             {
                 case "build": return Build(args[1..], output, error);
                 case "kinds": return Kinds(output);
+                case "queries": return Queries(output);
+                case "query": return Query(args[1..], output, error);
+                case "ransomware": return RansomwareFiles(args[1..], output, error);
                 case null or "help" or "--help" or "-h" or "/?":
                     Usage(verb is null ? error : output);
                     return verb is null ? ExitUsage : ExitBuilt;
@@ -42,6 +46,18 @@ namespace ArtefactForge.Lake.Cli
             writer.WriteLine("  af-lake kinds");
             writer.WriteLine("      Lists the kinds of parser output mapped into the timeline. Any other CSV is");
             writer.WriteLine("      kept in a raw table as unmapped.<parser>_<file>.");
+            writer.WriteLine("  af-lake queries");
+            writer.WriteLine("      Lists the saved queries, with what each finds and the parameters it takes.");
+            writer.WriteLine("  af-lake query <folder> <name> [--out FILE] [--lake FILE] [--param NAME=VALUE ...]");
+            writer.WriteLine("      Runs a saved query on <folder>\\_Lake\\case.duckdb (or --lake FILE) and writes");
+            writer.WriteLine("      its rows to <folder>\\_Lake\\results\\<name>.csv, or to --out FILE. Files the");
+            writer.WriteLine("      query reads from the case (such as Ransomware-Overrides.csv) are read from");
+            writer.WriteLine("      <folder>. The lake is opened read-only.");
+            writer.WriteLine("  af-lake ransomware <folder> [--out DIR] [--lake FILE]");
+            writer.WriteLine("      Writes ArtefactForge's ransomware files (Ransomware.csv, and per host");
+            writer.WriteLine("      Ransomware\\RansomwareSummary.csv, RansomwareEvidence.csv and Note\\) from the");
+            writer.WriteLine("      lake's queries to <folder>\\_Lake\\results\\Ransomware, or to --out DIR, as a");
+            writer.WriteLine("      lake build does.");
             writer.WriteLine();
             writer.WriteLine("Exit codes: 0 built; 3 built, but some sources need a look (see lake.log);");
             writer.WriteLine("1 not built, or built but not swapped in; 2 bad arguments.");
@@ -55,6 +71,170 @@ namespace ArtefactForge.Lake.Cli
                 output.WriteLine($"{"",-22} files: {string.Join("  ", kind.FileNames)}");
             }
             return ExitBuilt;
+        }
+
+        private static int Queries(TextWriter output)
+        {
+            foreach (var query in LakeQueryCatalogue.All)
+            {
+                var kind = query.IsSetup ? " (setup: run by the queries that need it)" : "";
+                output.WriteLine($"{query.Name,-26} {query.Category,-11} {query.Severity,-9} {query.Title}{kind}");
+                if (query.Description.Length > 0) output.WriteLine($"{"",-26} {query.Description}");
+                foreach (var parameter in query.Parameters)
+                    output.WriteLine($"{"",-26} --param {parameter.Name}={parameter.Default}  {parameter.Description}");
+                foreach (var input in query.Inputs)
+                    output.WriteLine($"{"",-26} reads {input.FileName} from the case folder, if there is one");
+            }
+            return ExitBuilt;
+        }
+
+        private static int Query(string[] args, TextWriter output, TextWriter error)
+        {
+            string? folder = null, name = null, outFile = null, lake = null;
+            var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < args.Length; i++)
+            {
+                var arg = args[i];
+                string? Next()
+                {
+                    if (i + 1 < args.Length) return args[++i];
+                    error.WriteLine($"{arg} needs a value.");
+                    return null;
+                }
+                switch (arg.ToLowerInvariant())
+                {
+                    case "--out":
+                        if ((outFile = Next()) is null) return ExitUsage;
+                        break;
+                    case "--lake":
+                        if ((lake = Next()) is null) return ExitUsage;
+                        break;
+                    case "--param":
+                        var pair = Next();
+                        if (pair is null) return ExitUsage;
+                        var at = pair.IndexOf('=');
+                        if (at <= 0)
+                        {
+                            error.WriteLine($"--param takes NAME=VALUE, not '{pair}'.");
+                            return ExitUsage;
+                        }
+                        parameters[pair[..at].Trim()] = pair[(at + 1)..].Trim();
+                        break;
+                    default:
+                        if (arg.StartsWith("--", StringComparison.Ordinal) || (folder is not null && name is not null))
+                        {
+                            error.WriteLine($"Unexpected argument '{arg}'.");
+                            Usage(error);
+                            return ExitUsage;
+                        }
+                        if (folder is null) folder = arg; else name = arg;
+                        break;
+                }
+            }
+
+            if (folder is null || name is null)
+            {
+                error.WriteLine("query needs a folder and the name of a saved query (af-lake queries lists them).");
+                return ExitUsage;
+            }
+            if (!Directory.Exists(folder))
+            {
+                error.WriteLine($"Folder not found: {folder}");
+                return ExitUsage;
+            }
+            var query = LakeQueryCatalogue.Find(name);
+            if (query is null)
+            {
+                error.WriteLine($"No saved query named '{name}'; af-lake queries lists them.");
+                return ExitUsage;
+            }
+            if (query.IsSetup)
+            {
+                error.WriteLine($"{query.Name} is a setup step with no rows of its own; it runs with the queries that need it.");
+                return ExitUsage;
+            }
+            var known = LakeQueryCatalogue.All.Where(q => q == query || query.Requires.Contains(q.Name))
+                                              .SelectMany(q => q.Parameters).Select(p => p.Name)
+                                              .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var unknown in parameters.Keys.Where(k => !known.Contains(k)))
+            {
+                error.WriteLine($"{query.Name} takes no parameter '{unknown}'.");
+                return ExitUsage;
+            }
+
+            var database = lake ?? Path.Combine(folder, LakeNames.LakeFolder, LakeNames.DatabaseFile);
+            if (!File.Exists(database))
+            {
+                error.WriteLine($"No lake at {database}: build one with af-lake build {folder}");
+                return ExitFailed;
+            }
+            var target = outFile ?? Path.Combine(folder, LakeNames.LakeFolder, LakeNames.ResultsFolder, query.Name + ".csv");
+            try
+            {
+                using var session = new LakeQuerySession(database, folder, parameters);
+                var rows = session.RunToCsv(query, target);
+                output.WriteLine($"{query.Title}: {rows:N0} row(s) written to {target}");
+                return ExitBuilt;
+            }
+            catch (Exception ex) when (ex is System.Data.Common.DbException or IOException or UnauthorizedAccessException
+                                           or InvalidDataException)
+            {
+                error.WriteLine($"{query.Name} failed: {ex.Message.Split('\n')[0].Trim()}");
+                return ExitFailed;
+            }
+        }
+
+        private static int RansomwareFiles(string[] args, TextWriter output, TextWriter error)
+        {
+            string? folder = null, outDirectory = null, lake = null;
+            for (var i = 0; i < args.Length; i++)
+            {
+                var arg = args[i];
+                switch (arg.ToLowerInvariant())
+                {
+                    case "--out" when i + 1 < args.Length:
+                        outDirectory = args[++i];
+                        break;
+                    case "--lake" when i + 1 < args.Length:
+                        lake = args[++i];
+                        break;
+                    default:
+                        if (arg.StartsWith("--", StringComparison.Ordinal) || folder is not null)
+                        {
+                            error.WriteLine($"Unexpected argument '{arg}'.");
+                            Usage(error);
+                            return ExitUsage;
+                        }
+                        folder = arg;
+                        break;
+                }
+            }
+            if (folder is null || !Directory.Exists(folder))
+            {
+                error.WriteLine(folder is null ? "ransomware needs a case folder." : $"Folder not found: {folder}");
+                return ExitUsage;
+            }
+            var lakeDirectory = Path.Combine(folder, LakeNames.LakeFolder);
+            var database = lake ?? Path.Combine(lakeDirectory, LakeNames.DatabaseFile);
+            if (!File.Exists(database))
+            {
+                error.WriteLine($"No lake at {database}: build one with af-lake build {folder}");
+                return ExitFailed;
+            }
+            var root = outDirectory ?? RansomwareResults.OutputRootFor(lakeDirectory);
+            try
+            {
+                using var session = new LakeQuerySession(database, folder);
+                var written = RansomwareResults.Write(session, root);
+                output.WriteLine($"Ransomware files in {root}: {written.Describe()}");
+                return ExitBuilt;
+            }
+            catch (Exception ex) when (ex is System.Data.Common.DbException or IOException or UnauthorizedAccessException
+                                           or InvalidDataException)
+            {
+                error.WriteLine($"The ransomware queries failed: {ex.Message.Split('\n')[0].Trim()}");
+                return ExitFailed;
+            }
         }
 
         private static int Build(string[] args, TextWriter output, TextWriter error)

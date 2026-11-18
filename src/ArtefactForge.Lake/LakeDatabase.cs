@@ -14,9 +14,11 @@ internal static class LakeDatabase
     /// - memory and threads from <paramref name="options"/>, not DuckDB's 80% of RAM and every core;
     /// - spill files in <paramref name="tempDirectory"/>, on the case volume, not the system drive.
     /// </summary>
-    public static DuckDBConnection Open(string path, LakeOptions options, string tempDirectory)
+    public static DuckDBConnection Open(string path, LakeOptions options, string tempDirectory, bool readOnly = false)
     {
         var builder = new DuckDBConnectionStringBuilder { DataSource = path };
+        // Read-only for queries: nothing a saved query does can change the lake.
+        if (readOnly) builder["ACCESS_MODE"] = "READ_ONLY";
         var connection = new DuckDBConnection(builder.ConnectionString);
         try
         {

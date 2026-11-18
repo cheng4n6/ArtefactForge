@@ -24,6 +24,7 @@
   <ItemGroup>
     <!-- Read by name, so a kind is a folder with a signature.json and a map.sql, and nothing else. -->
     <EmbeddedResource Include="Schema\*.sql" LogicalName="Schema/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Queries\*.sql" LogicalName="Queries/%(Filename)%(Extension)" />
     <EmbeddedResource Include="Kinds\**\*.json;Kinds\**\*.sql" LogicalName="Kinds/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 

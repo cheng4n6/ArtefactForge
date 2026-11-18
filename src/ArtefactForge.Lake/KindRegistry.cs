@@ -144,6 +144,8 @@ public static partial class LakeNames
     public const string LogFile = "lake.log";
     public const string BuildFile = "build.json";
     public const string TempFolder = "tmp";
+    /// <summary>Where the lake build writes what its saved queries found, one folder per analysis.</summary>
+    public const string ResultsFolder = "results";
     public const string UnmappedPrefix = "unmapped.";
 
     /// <summary>raw_ plus the kind with anything but letters and digits as '_': raw_pecmd_timeline.</summary>
