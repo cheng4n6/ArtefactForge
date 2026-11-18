@@ -893,6 +893,8 @@
                                     <CheckBox x:Name="SkipCompleted" Content="Skip work already completed" IsChecked="True"/>
                                     <CheckBox x:Name="CleanupExtracted" Content="Delete extracted zips after parsing" Margin="0,6,0,0"
                                               ToolTip="Zipped collections are extracted into the case's _Extracted folder and kept. Tick to delete each one once its modules have finished, so a batch of zips only needs space for the few being worked on."/>
+                                    <CheckBox x:Name="BuildLakeAfterRun" Content="Build evidence lake when the run finishes" Margin="0,6,0,0"
+                                              ToolTip="Loads every host's output into one DuckDB file, _Lake\case.duckdb in the case folder, with a timeline across the hosts. It can also be built later from the Analysis tab."/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -1101,6 +1103,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="IOCs" FontWeight="SemiBold" Margin="0,6"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" x:Name="OverviewIocText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
@@ -1120,6 +1123,15 @@
                                 <TextBlock Grid.Row="5" Text="Data access" FontWeight="SemiBold" Margin="0,6"/>
                                 <TextBlock Grid.Row="5" Grid.Column="1" x:Name="OverviewDataAccessText" Style="{StaticResource Muted}" TextWrapping="Wrap"/>
                                 <Button Grid.Row="5" Grid.Column="2" Content="Open" Click="OnOverviewGo" Tag="DataAccessTab" Margin="0,3"/>
+                                <!-- Built only when asked; the build runs in the background with its progress in the line. -->
+                                <TextBlock Grid.Row="6" Text="Evidence lake" FontWeight="SemiBold" Margin="0,6"/>
+                                <TextBlock Grid.Row="6" Grid.Column="1" x:Name="OverviewLakeText" Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                           Margin="0,0,10,0"/>
+                                <StackPanel Grid.Row="6" Grid.Column="2" Orientation="Horizontal" Margin="0,3">
+                                    <Button x:Name="BuildLakeButton" Content="Build evidence lake" Click="OnBuildLake" Margin="0,0,6,0"
+                                            ToolTip="Load every host's output into _Lake\case.duckdb, in the background"/>
+                                    <Button x:Name="OpenLakeButton" Content="Open folder" Click="OnOpenLakeFolder"/>
+                                </StackPanel>
                             </Grid>
                         </Border>
                     </TabItem>

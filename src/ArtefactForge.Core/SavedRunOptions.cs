@@ -20,6 +20,8 @@ public sealed class SavedRunOptions
     public bool Vss { get; set; }
     public bool SkipCompleted { get; set; } = true;
     public bool CleanupExtracted { get; set; }
+    /// <summary>Build the evidence lake when the run finishes. Off unless the analyst ticks it.</summary>
+    public bool BuildLake { get; set; }
     /// <summary>No new module starts while free memory is under this; 0 turns it off.</summary>
     public double KeepFreeGB { get; set; } = 1;
 
@@ -38,6 +40,7 @@ public sealed class SavedRunOptions
             Vss = Vss,
             SkipCompleted = SkipCompleted,
             CleanupExtracted = CleanupExtracted,
+            BuildLake = BuildLake,
             KeepFreeGB = double.IsFinite(KeepFreeGB) ? Math.Clamp(KeepFreeGB, 0, MaxKeepFreeGB) : 1
         };
     }

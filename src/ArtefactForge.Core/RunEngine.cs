@@ -55,13 +55,24 @@ public sealed class RunEngine
     public event Action<ProgressEvent>? Progress;
     /// <summary>Progress of each zip being extracted, and the work found inside once it is.</summary>
     public event Action<ExtractionEvent>? Extraction;
+    /// <summary>What the evidence lake build is doing, line by line, when the run builds one.</summary>
+    public event Action<string>? LakeMessage;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     /// <summary>Set when output that could not be harvested was left in staging for the analyst.</summary>
     private volatile bool _keepStaging;
 
-    public async Task<RunReport> RunAsync(RunConfiguration config, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Runs the whole run on the thread pool, whatever thread calls it. Called from a window, every
+    /// step that carries on after a wait would otherwise queue behind the window's own work: moving
+    /// output out of staging, joining a Split step's parts, copying a tar's entries, the steps at
+    /// the end of the run. Progress and Extraction are raised on pool threads.
+    /// </summary>
+    public Task<RunReport> RunAsync(RunConfiguration config, CancellationToken cancellationToken = default) =>
+        Task.Run(() => RunOnPoolAsync(config, cancellationToken));
+
+    private async Task<RunReport> RunOnPoolAsync(RunConfiguration config, CancellationToken cancellationToken)
     {
         var started = DateTimeOffset.Now;
         _keepStaging = false;
@@ -99,12 +110,17 @@ public sealed class RunEngine
         // What the manifest lists as processed: zips appear once extracted, under their real root.
         var collections = config.Targets.Where(t => !t.IsArchive)
             .Select(t => new CollectionRecord(t.CollectionName, t.Root, t.Layout.Id, t.IsLive, null,
-                CollectorTimesReader.Read(t.Root, null, t.IsLive, started)))
+                CollectorTimesReader.Read(t.Root, null, t.IsLive, started)) { Platform = t.Layout.Platform })
             .ToList();
 
         // Zips run concurrently with each other and with collections on disk, so the report,
         // the manifest's collection list and the resume state are shared and locked.
         var gate = new object();
+        // Work finished in this run, kept apart from what earlier runs finished so nothing planned
+        // later in the run is skipped because of it. Saved as each module finishes: a run that is
+        // closed, crashes or loses power still leaves the next one knowing what was done.
+        var finishedNow = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var manifestGate = new object();
 
         // A host's own post-run steps start as soon as its last module finishes, beside the other
         // hosts' modules, instead of every host waiting for the whole batch. The steps that build
@@ -162,9 +178,40 @@ public sealed class RunEngine
         report.DurationSeconds = (DateTimeOffset.Now - started).TotalSeconds;
 
         report.MemoryFloorWaits = memoryFloor.Waits;
-        SaveState(statePath, completed, results);
+        SaveState(statePath, completed.Concat(finishedNow).Concat(results.Where(IsFinished).Select(StateKey)));
         foreach (var c in collections) report.CollectorTimes[c.CollectionName] = c.Times;
-        WriteManifests(report, logDir, config, collections, started);
+        WriteHostOutputs(report, config, collections);
+        // Only when asked. After every host's outputs.json, which it reads; before the manifest,
+        // so its result is listed there like any other step's. A stopped run builds none: the
+        // analyst can build it from what was finished, on the Analysis tab or with lake build.
+        if (config.BuildLake)
+            report.Results.Add(report.Cancelled
+                ? EvidenceLakeStep.NotBuilt(caseDir, "The run was stopped, so the evidence lake was not built; build it from the Analysis tab or with lake build")
+                : EvidenceLakeStep.Build(caseDir, config.MaxWorkers, config.KeepFreeMemoryBytes,
+                    new Reporter<string>(m => LakeMessage?.Invoke(m)), cancellationToken));
+        try
+        {
+            lock (manifestGate)
+            {
+                WriteManifests(report, report.Results, logDir, config, collections, started,
+                               report.DurationSeconds, finished: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Hours of finished work must not end as "run failed" with nothing to show: the
+            // results come back, with this among them for review.
+            report.Results.Add(new WorkResult
+            {
+                Collection = config.CaseName,
+                Module = "Manifest",
+                Category = "_Logs",
+                Status = WorkStatus.Failed,
+                Reason = "could not write the run manifest: " + ex.Message + " - is the output disk full?",
+                Destination = logDir,
+                Started = DateTimeOffset.Now
+            });
+        }
         await Ioc.IocSweep.AfterRunAsync(report, hostsDone, sweptEarly);   // the case's IOC hits for the hosts just processed
 
         // Rolls the per-collection system summaries into one inventory for the case. Runs after
@@ -212,6 +259,32 @@ public sealed class RunEngine
                 report.Results.AddRange(built);
                 hostsDone.Add(host);
                 if (swept is not null) sweptEarly.Add(swept);
+            }
+            WriteProgressManifest();
+        }
+
+        // The manifest so far, marked unfinished, each time a host is done. A run that never
+        // reaches its end still leaves a record of what ran, with which tools, on which hosts.
+        void WriteProgressManifest()
+        {
+            List<WorkResult> soFar;
+            List<CollectionRecord> hosts;
+            lock (gate)
+            {
+                soFar = report.Results.Concat(results).ToList();
+                hosts = collections.ToList();
+            }
+            lock (manifestGate)
+            {
+                try
+                {
+                    WriteManifests(report, soFar, logDir, config, hosts, started,
+                                   (DateTimeOffset.Now - started).TotalSeconds, finished: false);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // The manifest at the end of the run reports a log folder that cannot be written.
+                }
             }
         }
 
@@ -298,6 +371,8 @@ public sealed class RunEngine
                     ran.Add(result);
                     lock (gate)
                     {
+                        if (IsFinished(result) && finishedNow.Add(StateKey(result)))
+                            SaveState(statePath, completed.Concat(finishedNow));
                         var host = item.Target.CollectionName;
                         if (--left[host] == 0 && !cancellationToken.IsCancellationRequested)
                             hostSteps.Add(Task.Run(() => AfterHostAsync(host)));
@@ -399,7 +474,8 @@ public sealed class RunEngine
                 resolved.Add(match.Renamed(target.CollectionName));
                 // Read now: the collector's files go when the extracted collection is cleaned up.
                 var times = CollectorTimesReader.Read(match.Root, zipPath, false, started);
-                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath, times));
+                lock (gate) collections.Add(new CollectionRecord(target.CollectionName, match.Root, match.Layout.Id, false, zipPath, times)
+                    { Platform = match.Layout.Platform });
 
                 AddResult(ExtractionResult(target,
                     problems > 0 ? WorkStatus.CheckLog : WorkStatus.Completed,
@@ -429,7 +505,13 @@ public sealed class RunEngine
             // missing tools and cancelled work do need another go, so the zip is processed again.
             if (resolved.Count == pending.Count && problems == 0
                 && ran.All(r => r.Status is WorkStatus.Completed or WorkStatus.CheckLog or WorkStatus.NoOutput))
-                lock (gate) foreach (var key in doneKeys) completed.Add(key);
+            {
+                lock (gate)
+                {
+                    foreach (var key in doneKeys) finishedNow.Add(key);
+                    SaveState(statePath, completed.Concat(finishedNow));
+                }
+            }
 
             if (!config.CleanupExtracted) return;
 
@@ -476,7 +558,12 @@ public sealed class RunEngine
     }
 
     private sealed record CollectionRecord(string CollectionName, string Root, string Layout, bool IsLive, string? Archive,
-                                           CollectorTimes Times);
+                                           CollectorTimes Times)
+    {
+        /// <summary>For outputs.json; manifest.json already names the layout.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Platform Platform { get; init; }
+    }
 
     /// <summary>Reports on the caller's thread, unlike Progress&lt;T&gt;, which posts to whatever context created it.</summary>
     private sealed class Reporter<T>(Action<T> report) : IProgress<T>
@@ -783,6 +870,7 @@ public sealed class RunEngine
                     OutputFilesCreated = r == 0 ? harvested.Files.Count : 0,
                     OutputBytes = r == 0 ? harvested.Bytes : 0,
                     OutputFiles = r == 0 ? harvested.Files : [],
+                    DeliveredTo = r == 0 && harvested.Files.Count > 0 ? harvestTo : null,
                     Error = run.Outcome.Error ?? run.Outcome.LogError
                 });
             }
@@ -1096,23 +1184,51 @@ public sealed class RunEngine
         return durations;
     }
 
-    private static void SaveState(string path, HashSet<string> existing, IEnumerable<WorkResult> results)
-    {
-        // Only genuinely finished work is remembered, so a re-run retries failures and timeouts.
-        foreach (var result in results.Where(r => r.Status is WorkStatus.Completed or WorkStatus.CheckLog))
-        {
-            existing.Add(result.Collection + "|" + result.Module + "|" + (result.Iteration ?? "-"));
-        }
+    /// <summary>Only genuinely finished work is remembered, so a re-run retries failures and timeouts.</summary>
+    private static bool IsFinished(WorkResult result) => result.Status is WorkStatus.Completed or WorkStatus.CheckLog;
 
-        try { File.WriteAllText(path, JsonSerializer.Serialize(existing.OrderBy(k => k), JsonOptions)); }
-        catch { /* a lost state file only costs a re-run */ }
+    private static string StateKey(WorkResult result) =>
+        result.Collection + "|" + result.Module + "|" + (result.Iteration ?? "-");
+
+    /// <summary>
+    /// Written through a temporary file, as it is saved while the run is going: a crash part-way
+    /// through a save leaves the last whole state, not half of one.
+    /// </summary>
+    private static void SaveState(string path, IEnumerable<string> keys)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(
+                keys.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(k => k), JsonOptions);
+            Ioc.AtomicFile.WriteAllText(path, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A lost state file only costs a re-run.
+        }
     }
 
-    private static void WriteManifests(
-        RunReport report, string logDir, RunConfiguration config, IReadOnlyList<CollectionRecord> collections,
-        DateTimeOffset started)
+    /// <summary>
+    /// Each host's outputs.json. Before the manifest, so a host whose list could not be written is
+    /// in the manifest and the results like any other problem.
+    /// </summary>
+    private static void WriteHostOutputs(
+        RunReport report, RunConfiguration config, IReadOnlyList<CollectionRecord> collections)
     {
-        var ordered = report.Results
+        var hosts = new Dictionary<string, HostContext>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in collections) hosts[c.CollectionName] = new HostContext(c.Platform, c.Times);
+        report.Results.AddRange(HostOutputs.Write(report.CaseDirectory, report.Results, config.Modules, hosts, DateTime.UtcNow));
+    }
+
+    /// <param name="finished">
+    /// False for the manifest written as each host is done: it lists the run so far, and the
+    /// processing log, which is added to, is left for the end.
+    /// </param>
+    private static void WriteManifests(
+        RunReport report, IEnumerable<WorkResult> results, string logDir, RunConfiguration config,
+        IReadOnlyList<CollectionRecord> collections, DateTimeOffset started, double durationSeconds, bool finished)
+    {
+        var ordered = results
             .OrderBy(r => r.Collection, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Category, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Module, StringComparer.OrdinalIgnoreCase)
@@ -1130,7 +1246,8 @@ public sealed class RunEngine
             },
             Case = config.CaseName,
             Started = started,
-            DurationSeconds = report.DurationSeconds,
+            DurationSeconds = durationSeconds,
+            Finished = finished,
             config.MaxWorkers,
             config.MaxHeavyWorkers,
             report.MemoryBudgetBytes,
@@ -1157,6 +1274,7 @@ public sealed class RunEngine
             foreach (var p in r.Processors) csv.AppendLine(Row(r, p));
         }
         File.WriteAllText(Path.Combine(logDir, "manifest.csv"), csv.ToString());
+        if (!finished) return;
 
         var log = new StringBuilder();
         log.AppendLine(started.ToString("yyyy-MM-dd HH:mm:ss") + " === " + BuildInfo.Describe()

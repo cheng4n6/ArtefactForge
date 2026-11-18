@@ -1,0 +1,22 @@
+# Version updates for the NuGet packages and the Actions the workflow uses, once a week, as
+# pull requests that run the build and tests like any other. Security alerts are separate and
+# already on. Minor and patch updates of a kind arrive together, so a quiet week is one PR.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      nuget-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ['*']

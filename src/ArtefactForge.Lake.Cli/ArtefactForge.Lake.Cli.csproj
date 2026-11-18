@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArtefactForge.Lake\ArtefactForge.Lake.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>af-lake</AssemblyName>
+    <RootNamespace>ArtefactForge.Lake.Cli</RootNamespace>
+    <ApplicationIcon>..\..\design\icon\artefactforge.ico</ApplicationIcon>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

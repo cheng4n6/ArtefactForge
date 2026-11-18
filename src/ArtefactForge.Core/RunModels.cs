@@ -72,6 +72,12 @@ public sealed class RunConfiguration
     /// cleanup on still only needs space for two extracted collections.
     /// </summary>
     public int ArchivesAtOnce { get; init; } = 2;
+
+    /// <summary>
+    /// Build the evidence lake (<see cref="EvidenceLake"/>) once every host is done. Off by
+    /// default: the lake is built only when the analyst asks for it.
+    /// </summary>
+    public bool BuildLake { get; init; }
 }
 
 public enum ExtractionStage { Extracting, Extracted, Failed, CleanedUp, Skipped }
@@ -143,6 +149,12 @@ public sealed class ProcessorRecord
     /// renamed. Recorded so the chain from command line to the file on disk survives the rename.
     /// </summary>
     public List<string> OutputFiles { get; init; } = [];
+    /// <summary>
+    /// The folder <see cref="OutputFiles"/> were moved into: the module's destination, or its
+    /// _Incomplete folder when the tool was killed. Not in manifest.json, which has the reason.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? DeliveredTo { get; init; }
     public string? Error { get; init; }
 }
 
