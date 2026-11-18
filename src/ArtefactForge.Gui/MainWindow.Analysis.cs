@@ -105,6 +105,7 @@ public partial class MainWindow
         {
             var none = new OverviewLine(caseDir is null ? "No case chosen." : "Nothing yet: the case has not been run.");
             ShowOverview(none, none, none, none, none, none);
+            RefreshLakeOverview(caseDir);
             return;
         }
 
@@ -116,6 +117,7 @@ public partial class MainWindow
         // A slower refresh for an earlier case must not overwrite a newer one.
         if (version != _overviewVersion) return;
         _ipHistory = lines.Ip.Cache;
+        RefreshLakeOverview(caseDir);
         ShowOverview(lines.Ioc, lines.Ransomware, lines.Rdp, lines.Ip.Line, lines.Evidence, lines.DataAccess);
     }
 

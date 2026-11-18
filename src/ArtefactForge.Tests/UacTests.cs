@@ -84,6 +84,30 @@ public class UacTests
         return (record, root);
     }
 
+    [Fact]
+    public async Task A_name_with_a_line_break_stays_one_row_of_the_extraction_log()
+    {
+        using var dir = new TempDirectory();
+        var odd = "[root]/tmp/two\nlines, one file";
+        var link = "[root]/tmp/link";
+        var tar = TarGz(dir, "uac.tar.gz",
+            [.. Basics(), new(odd, "x"), new(link, Link: "/tmp/a\nb", Type: TarEntryType.SymbolicLink)]);
+
+        var (_, root) = await Extract(dir, tar);
+
+        static List<string[]> Rows(string path)
+        {
+            using var reader = new StreamReader(path);
+            return ArtefactForge.Core.Ioc.CsvText.Records(reader).Select(r => ArtefactForge.Core.Ioc.CsvText.Split(r.Text)).ToList();
+        }
+        var log = Rows(Path.Combine(dir.Path, "extract.csv"));
+        Assert.All(log, row => Assert.Equal(4, row.Length));
+        Assert.Contains(log, row => row[0] == odd);
+        var links = Rows(Path.Combine(root, CollectionExtractor.SymlinkList));
+        Assert.All(links, row => Assert.Equal(3, row.Length));
+        Assert.Contains(links, row => row[1] == "/tmp/a\nb");
+    }
+
     [Theory]
     [InlineData("[root]/etc/passwd", "etc/passwd")]
     [InlineData("[root]/", null)]

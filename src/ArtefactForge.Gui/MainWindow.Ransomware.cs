@@ -93,6 +93,7 @@ public partial class MainWindow
     /// <summary>Checks again: hosts whose output or overrides changed are read again, then the case file and report.</summary>
     private async void OnRansomwareCheck(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("checking for ransomware again")) return;
         if (AnalysisCaseDirectory() is not { } caseDir || !Directory.Exists(caseDir)) return;
         _ransomwareBusy = true;
         SetRansomwareEnabled();

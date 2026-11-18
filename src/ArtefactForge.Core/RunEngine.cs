@@ -55,13 +55,24 @@ public sealed class RunEngine
     public event Action<ProgressEvent>? Progress;
     /// <summary>Progress of each zip being extracted, and the work found inside once it is.</summary>
     public event Action<ExtractionEvent>? Extraction;
+    /// <summary>What the evidence lake build is doing, line by line, when the run builds one.</summary>
+    public event Action<string>? LakeMessage;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     /// <summary>Set when output that could not be harvested was left in staging for the analyst.</summary>
     private volatile bool _keepStaging;
 
-    public async Task<RunReport> RunAsync(RunConfiguration config, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Runs the whole run on the thread pool, whatever thread calls it. Called from a window, every
+    /// step that carries on after a wait would otherwise queue behind the window's own work: moving
+    /// output out of staging, joining a Split step's parts, copying a tar's entries, the steps at
+    /// the end of the run. Progress and Extraction are raised on pool threads.
+    /// </summary>
+    public Task<RunReport> RunAsync(RunConfiguration config, CancellationToken cancellationToken = default) =>
+        Task.Run(() => RunOnPoolAsync(config, cancellationToken));
+
+    private async Task<RunReport> RunOnPoolAsync(RunConfiguration config, CancellationToken cancellationToken)
     {
         var started = DateTimeOffset.Now;
         _keepStaging = false;
@@ -171,8 +182,13 @@ public sealed class RunEngine
         foreach (var c in collections) report.CollectorTimes[c.CollectionName] = c.Times;
         WriteHostOutputs(report, config, collections);
         // Only when asked. After every host's outputs.json, which it reads; before the manifest,
-        // so its result is listed there like any other step's.
-        if (config.BuildLake) report.Results.Add(EvidenceLake.Build(caseDir));
+        // so its result is listed there like any other step's. A stopped run builds none: the
+        // analyst can build it from what was finished, on the Analysis tab or with lake build.
+        if (config.BuildLake)
+            report.Results.Add(report.Cancelled
+                ? EvidenceLakeStep.NotBuilt(caseDir, "The run was stopped, so the evidence lake was not built; build it from the Analysis tab or with lake build")
+                : EvidenceLakeStep.Build(caseDir, config.MaxWorkers, config.KeepFreeMemoryBytes,
+                    new Reporter<string>(m => LakeMessage?.Invoke(m)), cancellationToken));
         try
         {
             lock (manifestGate)

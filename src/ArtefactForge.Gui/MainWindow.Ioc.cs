@@ -177,6 +177,7 @@ public partial class MainWindow
 
     private async void OnIocAdd(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("adding IOCs")) return;
         var caseDir = AnalysisCaseDirectory();
         var value = IocValueBox.Text.Trim();
         if (caseDir is null || value.Length == 0) return;
@@ -198,6 +199,7 @@ public partial class MainWindow
 
     private async void OnIocImport(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("importing IOCs")) return;
         var caseDir = AnalysisCaseDirectory();
         if (caseDir is null) return;
         var dialog = new OpenFileDialog
@@ -217,6 +219,7 @@ public partial class MainWindow
 
     private async void OnIocRemove(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("removing IOCs")) return;
         var caseDir = AnalysisCaseDirectory();
         var selected = IocGrid.SelectedItems.OfType<IocRow>().Select(r => r.Entry).ToList();
         if (caseDir is null || selected.Count == 0) return;
@@ -236,6 +239,7 @@ public partial class MainWindow
 
     private async void OnIocSweepAll(object sender, RoutedEventArgs e)
     {
+        if (LakeBuildBlocks("sweeping for IOCs")) return;
         var caseDir = AnalysisCaseDirectory();
         if (caseDir is null) return;
         await RunIocAsync(caseDir, async progress => (await IocSweep.RebuildAllAsync(caseDir, progress)).Describe());

@@ -750,8 +750,11 @@ public static class CollectionExtractor
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* reported by the caller */ }
     }
 
-    private static string Csv(params string[] fields) =>
-        string.Join(",", fields.Select(f => f.Contains(',') || f.Contains('"') ? "\"" + f.Replace("\"", "\"\"") + "\"" : f));
+    /// <summary>
+    /// One CSV row. A Unix name can hold a line break, and so can a link target; quoted, the row
+    /// stays one record instead of splitting the extraction log or _symlinks.csv in two.
+    /// </summary>
+    private static string Csv(params string[] fields) => string.Join(",", fields.Select(Ioc.CsvText.Escape));
 
     internal static string Size(long bytes) =>
         bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):F1} GB" : $"{bytes / (double)(1L << 20):F0} MB";

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The evidence lake: loads the parser CSVs of a case into one DuckDB file, a raw table per kind of
+    source plus a cross-host timeline. It references only the outputs.json contract, DuckDB.NET and
+    the BCL, never the engine or another ArtefactForge project, so it can be built and run on plain
+    parser output without ArtefactForge; a test checks this.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ArtefactForge.Lake</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.6.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArtefactForge.Lake.Contract\ArtefactForge.Lake.Contract.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Read by name, so a kind is a folder with a signature.json and a map.sql, and nothing else. -->
+    <EmbeddedResource Include="Schema\*.sql" LogicalName="Schema/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Kinds\**\*.json;Kinds\**\*.sql" LogicalName="Kinds/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ArtefactForge.Lake.Tests" />
+  </ItemGroup>
+
+</Project>

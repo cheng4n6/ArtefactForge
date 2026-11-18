@@ -63,6 +63,38 @@ public class IocSweepTests
     }
 
     [Fact]
+    public async Task A_sweep_for_hashes_alone_does_not_read_files_with_no_hash_column()
+    {
+        using var dir = Case();
+        var added = IocList.Add(dir.Path, [IocEntry.Create(IocType.Hash, "0123456789ABCDEF0123456789ABCDEF01234567")]);
+
+        var result = await IocSweep.SweepAsync(dir.Path, added);
+
+        // Only the Amcache output has a hash column; the event log and MFT output cannot hold a match.
+        Assert.Equal(1, result.FilesScanned);
+        Assert.Equal(2, result.FilesPassedOver);
+        Assert.Equal(1, result.Hits);
+        Assert.Contains("2 files with no hash column were not read", result.Describe());
+    }
+
+    [Fact]
+    public async Task A_sweep_with_any_other_IOC_still_reads_every_file()
+    {
+        using var dir = Case();
+        var added = IocList.Add(dir.Path,
+        [
+            IocEntry.Create(IocType.Hash, "0123456789ABCDEF0123456789ABCDEF01234567"),
+            IocEntry.Create(IocType.FileName, "notes.txt")
+        ]);
+
+        var result = await IocSweep.SweepAsync(dir.Path, added);
+
+        Assert.Equal(3, result.FilesScanned);
+        Assert.Equal(0, result.FilesPassedOver);
+        Assert.Equal(2, result.Hits);
+    }
+
+    [Fact]
     public async Task Hashes_are_found_in_hash_columns()
     {
         using var dir = Case();
