@@ -105,12 +105,12 @@ public sealed class LakeBuilderTests
         Assert.Equal(LakeOutcome.BuiltCheckLog, result.Outcome);
         var source = Assert.Single(result.Sources, s => s.Path == "Prefetch/PECmd_Output_Timeline.csv");
         Assert.Equal(SourceStatus.HeaderMismatch, source.Status);
-        Assert.Equal("unmapped.pecmd", source.Kind);
+        Assert.Equal("unmapped.pecmd_output_timeline", source.Kind);
         Assert.Contains("missing RunTime, ExecutableName", source.Reason);
         Assert.True(source.NeedsReview);
         using var lake = OpenLake(LakePath(temp));
         Assert.Equal(0L, Scalar(lake, $"SELECT count(*) FROM timeline WHERE source_id = {source.SourceId}"));
-        Assert.Equal("UPDATER.EXE", Scalar(lake, $"SELECT Program FROM raw_unmapped_pecmd WHERE source_id = {source.SourceId}"));
+        Assert.Equal("UPDATER.EXE", Scalar(lake, $"SELECT Program FROM raw_unmapped_pecmd_output_timeline WHERE source_id = {source.SourceId}"));
         Assert.Contains("header_mismatch", File.ReadAllText(Path.Combine(temp.Path, "_Lake", "build.json")));
     }
 
@@ -124,11 +124,11 @@ public sealed class LakeBuilderTests
 
         var lnk = Assert.Single(result.Sources, s => s.Path == "LNKFiles/alice/alice_LECmd_Recent.csv");
         Assert.Equal(SourceStatus.Loaded, lnk.Status);
-        Assert.Equal("unmapped.lecmd", lnk.Kind);
+        Assert.Equal("unmapped.lecmd_recent", lnk.Kind);
         Assert.Equal(1, lnk.RowsLoaded);
         Assert.Equal(0, lnk.TimelineRows);
         using var lake = OpenLake(LakePath(temp));
-        var row = Assert.Single(Rows(lake, "SELECT * FROM raw_unmapped_lecmd"));
+        var row = Assert.Single(Rows(lake, "SELECT * FROM raw_unmapped_lecmd_recent"));
         Assert.Equal("HOST01", row["host"]);
         Assert.Equal(1L, row["row_no"]);
         Assert.Equal(@"C:\Users\alice\Documents\a.docx", row["LocalPath"]);
@@ -145,7 +145,7 @@ public sealed class LakeBuilderTests
 
         Assert.Equal(LakeOutcome.Built, result.Outcome);
         using var lake = OpenLake(LakePath(temp));
-        var rows = Rows(lake, "SELECT host, Name, Size, Owner FROM raw_unmapped_tool ORDER BY host");
+        var rows = Rows(lake, "SELECT host, Name, Size, Owner FROM raw_unmapped_tool_a ORDER BY host");
         Assert.Equal("1", rows[0]["Size"]);
         Assert.Null(rows[0]["Owner"]);
         Assert.Equal("alice", rows[1]["Owner"]);
@@ -162,7 +162,7 @@ public sealed class LakeBuilderTests
         var source = Assert.Single(result.Sources);
         Assert.Contains("Host to csv_Host", source.Reason);
         using var lake = OpenLake(LakePath(temp));
-        var row = Assert.Single(Rows(lake, "SELECT host, csv_Host FROM raw_unmapped_summary"));
+        var row = Assert.Single(Rows(lake, "SELECT host, csv_Host FROM raw_unmapped_summary_hosts"));
         Assert.Equal("HOST01", row["csv_Host"]);
     }
 

@@ -41,7 +41,7 @@ namespace ArtefactForge.Lake.Cli
             writer.WriteLine("      <folder>\\_Lake\\case.duckdb, or to --out DIR.");
             writer.WriteLine("  af-lake kinds");
             writer.WriteLine("      Lists the kinds of parser output mapped into the timeline. Any other CSV is");
-            writer.WriteLine("      kept in a raw table as unmapped.<parser>.");
+            writer.WriteLine("      kept in a raw table as unmapped.<parser>_<file>.");
             writer.WriteLine();
             writer.WriteLine("Exit codes: 0 built; 3 built, but some sources need a look (see lake.log);");
             writer.WriteLine("1 not built, or built but not swapped in; 2 bad arguments.");

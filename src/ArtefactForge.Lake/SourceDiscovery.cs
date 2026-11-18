@@ -209,7 +209,7 @@ public static partial class SourceDiscovery
                 ? "missing " + string.Join(", ", missing)
                 : $"{source.Header.Count} columns where {expected.RequiredColumns.Count} were expected";
             source.Parser ??= expected.Parser;
-            return Unmapped(source, SourcePlan.HeaderMismatch,
+            return Unmapped(source, name, SourcePlan.HeaderMismatch,
                 $"named like {expected.Kind} but its header does not fit ({detail}); loaded raw, not mapped");
         }
 
@@ -224,7 +224,7 @@ public static partial class SourceDiscovery
             if (best[0].RequiredColumns.Count > best[1].RequiredColumns.Count)
                 return Map(source, best[0], byParser ? null : $"recognised as {best[0].Kind} by its header");
         }
-        return Unmapped(source, SourcePlan.Unmapped, null);
+        return Unmapped(source, name, SourcePlan.Unmapped, null);
     }
 
     private static DiscoveredSource Map(DiscoveredSource source, KindDefinition kind, string? note)
@@ -237,10 +237,10 @@ public static partial class SourceDiscovery
         return source;
     }
 
-    private static DiscoveredSource Unmapped(DiscoveredSource source, SourcePlan plan, string? reason)
+    private static DiscoveredSource Unmapped(DiscoveredSource source, string name, SourcePlan plan, string? reason)
     {
         source.Plan = plan;
-        source.Kind = LakeNames.Unmapped(source.Parser ?? "unknown");
+        source.Kind = LakeNames.Unmapped(source.Parser ?? "unknown", name);
         source.Reason = reason;
         return source;
     }

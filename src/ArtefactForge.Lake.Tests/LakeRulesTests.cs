@@ -67,6 +67,35 @@ public sealed class LakeRulesTests
     public void File_names_lose_a_tool_timestamp_and_the_users_prefix(string name, string? user, string expected) =>
         Assert.Equal(expected, SourceDiscovery.StripName(name, user));
 
+    [Theory]
+    [InlineData("LECmd", "LECmd_Recent.csv", "unmapped.lecmd_recent")]
+    [InlineData("LECmd", "LECmd_OfficeRecent.csv", "unmapped.lecmd_officerecent")]
+    [InlineData("RECmd", "RECmd_NTUSER_TypedURLs.csv", "unmapped.recmd_ntuser_typedurls")]
+    [InlineData("ArtefactForge", "RemoteAccessSources.csv", "unmapped.artefactforge_remoteaccesssources")]
+    [InlineData("chainsaw", "sigma.csv", "unmapped.chainsaw_sigma")]
+    [InlineData("Amcache", "Amcache_ProgramEntries.csv", "unmapped.amcache_programentries")]
+    [InlineData("SBECmd", "SBECmd.csv", "unmapped.sbecmd")]
+    [InlineData("unknown", "EOS_LIVE REGISTRY.csv", "unmapped.unknown_eos_live_registry")]
+    public void An_unmapped_table_is_named_by_parser_and_file_stem(string parser, string file, string expected) =>
+        Assert.Equal(expected, LakeNames.Unmapped(parser, file));
+
+    [Fact]
+    public void The_same_unmapped_file_from_two_users_and_two_hosts_shares_one_table()
+    {
+        using var temp = new TempDirectory();
+        temp.Write(@"HOST01\LNKFiles\alice\alice_LECmd_Recent.csv", "SourceFile,LocalPath\r\na.lnk,a.docx\r\n");
+        temp.Write(@"HOST01\LNKFiles\bob\bob_LECmd_Recent.csv", "SourceFile,LocalPath\r\nb.lnk,b.docx\r\n");
+        temp.Write(@"HOST02\LNKFiles\alice\20261101100301_alice_LECmd_Recent.csv", "SourceFile,LocalPath\r\nc.lnk,c.docx\r\n");
+        temp.Write(@"HOST02\LNKFiles\alice\alice_LECmd_OfficeRecent.csv", "SourceFile,LocalPath\r\nd.lnk,d.docx\r\n");
+
+        var result = LakeBuilder.Build(temp.Path, new LakeOptions { Threads = 1, MemoryLimitBytes = 1L << 29 });
+
+        Assert.Equal(3, result.Sources.Count(s => s.Kind == "unmapped.lecmd_recent"));
+        Assert.Equal("unmapped.lecmd_officerecent", Assert.Single(result.Sources, s => s.Path.Contains("Office")).Kind);
+        using var lake = OpenLake(Path.Combine(temp.Path, "_Lake", "case.duckdb"));
+        Assert.Equal(3L, Scalar(lake, "SELECT count(*) FROM raw_unmapped_lecmd_recent"));
+    }
+
     [Fact]
     public void Every_kind_has_a_mapping_and_a_raw_table_name()
     {
