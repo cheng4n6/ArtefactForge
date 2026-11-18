@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-11-18
+
+### Features
+
+- **Evidence lake (preview):** a case's parser output can be loaded into one DuckDB file with a
+  cross-host timeline of the Windows and Linux artefacts. Build it from the run options
+  ("Build evidence lake when the run finishes", `--lake`), from the Analysis tab's Overview, or
+  with the new `af-lake.exe`.
+- **Evidence lake:** Linux log lines that only carry the host's local time are converted to UTC,
+  and the case report has an Evidence lake section.
+- **Evidence lake:** saved queries, run with `af-lake query`. The ransomware checks now also run
+  as lake queries, written to `_Lake\results\Ransomware` for comparison with the Ransomware step,
+  which is unchanged.
+- **Output:** each host folder has an outputs.json recording the tool, version, module and command
+  line that produced each file.
+- **Run:** progress is saved as each module finishes, so a run that is closed or crashes part-way
+  picks up where it stopped with Skip completed.
+- **Run:** the window stays responsive during a run and while the evidence path is detected.
+- **IOC sweep:** a sweep for hashes only skips output files that have no hash column.
+
+### Bug fixes
+
+- **Run:** a manifest that cannot be written at the end of a run no longer fails the whole run.
+- **Run:** MFTECmd_USNJournal and LinuxBodyfile are counted at their measured memory, so
+  memory-heavy modules are scheduled side by side only when there is room.
+- **Extraction:** a Linux file name with a line break in it no longer splits its row of the
+  extraction log or `_symlinks.csv`.
+
+### Changes
+
+- **Run:** a tool whose module sets no timeout is now stopped after 24 hours.
+
 ## 0.5.0 - 2026-11-11
 
 ### Features
