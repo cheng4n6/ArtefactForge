@@ -25,6 +25,13 @@ public sealed record LakeOptions
     /// </summary>
     public string? LakeDirectory { get; init; }
 
+    /// <summary>
+    /// Run the saved analyses once the lake is built and write what they find under
+    /// &lt;lake&gt;\results (for now the ransomware files, beside the ones ArtefactForge writes, to
+    /// compare). Their failure leaves the lake built but marked for a look.
+    /// </summary>
+    public bool RunAnalyses { get; init; } = true;
+
     /// <summary>The program building the lake, recorded in lake_meta and build.json.</summary>
     public string Producer { get; init; } = "af-lake";
 
