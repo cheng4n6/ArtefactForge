@@ -1,0 +1,12 @@
+{
+  "kind": "linux.syslog",
+  "parser": "LinuxSyslog",
+  "description": "syslog, messages, kern.log and daemon.log (ArtefactForge LinuxSyslog_Events): every line with a UTC time",
+  "fileNames": [ "^LinuxSyslog_Events\\.csv$" ],
+  "requiredColumns": [ "Timestamp", "TimestampUtc", "YearInferred", "RawTime", "Host", "Process", "PID", "Message", "Log", "SourceFile" ],
+  "nameRequired": true,
+  "timeColumn": "TimestampUtc",
+  "localTimeColumn": "Timestamp",
+  "emptyTimeNote": "with only the host's local time and no time zone for the host to convert it with",
+  "mappingVersion": 1
+}

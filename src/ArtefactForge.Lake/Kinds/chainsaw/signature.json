@@ -1,0 +1,11 @@
+{
+  "kind": "chainsaw",
+  "parser": "chainsaw",
+  "description": "Chainsaw hunt CSVs: each Sigma or built-in rule hit; the groups' own columns stay in raw_chainsaw",
+  "fileNames": [ "^Chainsaw_[A-Za-z0-9_ -]+\\.csv$", "^sigma\\.csv$" ],
+  "requiredColumns": [ "timestamp", "detections", "path" ],
+  "optionalColumns": [ "count", "Event.System.Provider", "Event ID", "Record ID", "Computer", "Event Data" ],
+  "timeColumn": "timestamp",
+  "timeParse": "offset",
+  "mappingVersion": 1
+}

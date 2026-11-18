@@ -1,0 +1,13 @@
+{
+  "kind": "linux.audit",
+  "parser": "LinuxAudit",
+  "description": "auditd events (ArtefactForge LinuxAudit_Events): commands run, logons and account changes",
+  "fileNames": [ "^LinuxAudit_Events\\.csv$" ],
+  "requiredColumns": [
+    "TimestampUtc", "EventId", "RecordTypes", "Syscall", "Success", "PID", "PPID", "AuditUser", "User",
+    "Exe", "Comm", "CommandLine", "Cwd", "Paths", "Key", "Operation", "Account", "Address", "Result"
+  ],
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with no UTC time",
+  "mappingVersion": 1
+}

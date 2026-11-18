@@ -1,0 +1,9 @@
+{
+  "kind": "rbcmd",
+  "parser": "RBCmd",
+  "description": "Recycle Bin (RBCmd): each file deleted to the Recycle Bin, when, by which user SID",
+  "fileNames": [ "^RBCmd(_.*)?\\.csv$" ],
+  "requiredColumns": [ "SourceName", "FileType", "FileName", "FileSize", "DeletedOn" ],
+  "timeColumn": "DeletedOn",
+  "mappingVersion": 1
+}

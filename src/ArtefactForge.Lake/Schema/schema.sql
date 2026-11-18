@@ -1,6 +1,30 @@
 -- The evidence lake's fixed tables and views. The raw_<kind> tables are not here: each is created
 -- from the columns of the first CSV loaded into it, and widened when a later file has more.
 
+-- Helpers the mappings share, kept in the lake so a query can use them too.
+-- A time as the tools write it: UTC, up to 7 fractional digits (DuckDB keeps 6).
+CREATE MACRO lake_ts(x) AS TRY_CAST(x AS TIMESTAMP);
+-- A time with an offset (Hayabusa's "2026-09-15 08:12:57.190 +00:00", Chainsaw's ISO 8601),
+-- moved to UTC whatever the session's time zone; a time without one is taken as UTC.
+CREATE MACRO lake_ts_offset(x) AS
+    timezone('UTC', TRY_CAST(regexp_replace(x, '\s+([+-]\d\d:?\d\d|Z)$', '\1') AS TIMESTAMPTZ));
+-- The last part of a Windows or Unix path.
+CREATE MACRO lake_file_name(p) AS nullif(regexp_extract(p, '[^\\/]+$'), '');
+-- A file name's extension in lower case with the dot; a long "extension" is not one.
+CREATE MACRO lake_extension(n) AS nullif(lower(regexp_extract(n, '(\.[^.\\/ ]{1,10})$', 1)), '');
+-- The profile a path is under: alice in C:\Users\alice\... or /home/alice/...
+CREATE MACRO lake_path_user(p) AS
+    nullif(coalesce(nullif(regexp_extract(p, '(?i)[\\/]Users[\\/]([^\\/]+)[\\/]', 1), ''),
+                    regexp_extract(p, '^/home/([^/]+)/', 1)), '');
+-- \Device\HarddiskVolume4\Windows\... and \VOLUME{...}\Windows\... as \Windows\...
+-- A local time (no zone written) in UTC, from the host's IANA zone (its offset on that date) or
+-- a fixed offset; null when there is neither. The year, if the log had none, is as given.
+CREATE MACRO lake_local_utc(x, iana, fixed_offset) AS
+    CASE WHEN iana IS NOT NULL THEN timezone('UTC', timezone(iana, TRY_CAST(x AS TIMESTAMP)))
+         WHEN fixed_offset IS NOT NULL THEN timezone('UTC', TRY_CAST(x || fixed_offset AS TIMESTAMPTZ))
+    END;
+CREATE MACRO lake_volume_path(p) AS regexp_replace(p, '(?i)^\\(Device\\HarddiskVolume\d+|VOLUME\{[^}]*\})', '');
+
 CREATE TABLE lake_meta (
     key   VARCHAR PRIMARY KEY,
     value VARCHAR
@@ -38,8 +62,28 @@ CREATE TABLE sources (
     rows_rejected  BIGINT,
     timeline_rows  BIGINT,
     size           BIGINT,
-    mtime          TIMESTAMP
+    mtime          TIMESTAMP,
+    time_unread    BIGINT,            -- rows whose time the mapping could not read: raw only
+    time_converted BIGINT             -- rows whose local time was converted to UTC with the host's zone
 );
+
+-- Each host's time zone as the lake can use it: an IANA name ("Europe/London"), which gives
+-- each time its own offset across daylight saving changes, else a fixed offset ("+01:00",
+-- "UTC-05:00"), else none. Windows zone names ("GMT Standard Time") are not IANA names and are
+-- left out, so they never stand in for a zone they are not.
+CREATE VIEW host_zones AS
+SELECT h.host,
+       h.time_zone,
+       n.name AS iana,
+       CASE WHEN n.name IS NULL
+            -- Only a zone that is nothing but an offset ("+05:30", "UTC+05:30"): the offset after a
+            -- named zone is the one in effect at one moment, wrong on the other side of a DST change.
+            THEN nullif(regexp_extract(h.time_zone, '^\(?(?:UTC|GMT)?\s*([+-]\d\d:?\d\d)\)?$', 1), '')
+       END AS fixed_offset
+FROM hosts h
+LEFT JOIN pg_timezone_names() n
+       ON n.name = regexp_extract(h.time_zone, '^([A-Za-z]+(/[A-Za-z0-9_+-]+)+|UTC|GMT|Etc/[A-Za-z0-9+-]+)(\s|\(|$)', 1)
+      AND h.time_zone NOT LIKE '% Time%';
 
 -- The cross-host timeline: one row per timestamped event, from the raw tables by one reviewed
 -- mapping per kind. source_id and row_no lead back to the exact row of the exact CSV.
@@ -114,3 +158,16 @@ SELECT ts, ts_raw, ts_desc, host, kind, action, path, file_name, extension, size
        user_name, summary, source_id, row_no
 FROM timeline
 WHERE category = 'file';
+
+-- Sigma and Hayabusa hits.
+CREATE VIEW detections AS
+SELECT ts, ts_raw, host, kind, rule_title, severity, event_id, channel, provider, summary, source_id, row_no
+FROM timeline
+WHERE category = 'detection';
+
+-- Bytes each program sent and received, from SRUM: one row per program per interval.
+CREATE VIEW network_usage AS
+SELECT ts, host, user_name, user_sid, process_path, file_name AS program, bytes_in, bytes_out, summary,
+       source_id, row_no
+FROM timeline
+WHERE kind = 'srumecmd.network';

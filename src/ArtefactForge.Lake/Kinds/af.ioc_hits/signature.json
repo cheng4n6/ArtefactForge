@@ -1,0 +1,20 @@
+{
+  "kind": "af.ioc_hits",
+  "parser": "ArtefactForge",
+  "description": "ArtefactForge's IOC hits for the case (IocHits.csv); raw only",
+  "fileNames": [],
+  "caseFiles": [
+    "^IocHits\\.csv$"
+  ],
+  "requiredColumns": [
+    "IocType",
+    "Ioc",
+    "Host",
+    "Module",
+    "Time",
+    "OutputFile",
+    "LineNumber",
+    "MatchingLine"
+  ],
+  "mappingVersion": 1
+}

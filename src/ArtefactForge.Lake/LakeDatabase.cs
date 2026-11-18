@@ -31,6 +31,8 @@ internal static class LakeDatabase
                 $"SET temp_directory = {Literal(tempDirectory)}",
                 // Rows keep the order of their file, so row_no is the row's place in the CSV.
                 "SET preserve_insertion_order = true",
+                // A time with an offset is read into UTC whatever zone the machine is in.
+                "SET TimeZone = 'UTC'",
                 "SET lock_configuration = true"));
             return connection;
         }

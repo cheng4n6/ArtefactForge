@@ -1,0 +1,12 @@
+{
+  "kind": "jlecmd.custom",
+  "parser": "JLECmd",
+  "description": "Jump lists (JLECmd custom destinations): pinned and recent items an application keeps, at the jump list's last change",
+  "fileNames": [ "^JLECmd_CustomDestinations\\.csv$", "^CustomDestinations\\.csv$" ],
+  "requiredColumns": [
+    "SourceFile", "SourceCreated", "SourceModified", "AppId", "AppIdDescription", "EntryName", "LocalPath",
+    "TargetIDAbsolutePath", "Arguments"
+  ],
+  "timeColumn": "SourceModified",
+  "mappingVersion": 1
+}

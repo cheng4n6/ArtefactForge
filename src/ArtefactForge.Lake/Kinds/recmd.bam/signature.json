@@ -1,0 +1,10 @@
+{
+  "kind": "recmd.bam",
+  "parser": "RECmd",
+  "description": "BAM/DAM (RECmd BamDam plugin): the last run of each program per user SID",
+  "fileNames": [ "BamDam\\.csv$" ],
+  "requiredColumns": [ "Program", "BatchKeyPath", "ExecutionTime", "BatchValueName" ],
+  "exactColumns": true,
+  "timeColumn": "ExecutionTime",
+  "mappingVersion": 1
+}

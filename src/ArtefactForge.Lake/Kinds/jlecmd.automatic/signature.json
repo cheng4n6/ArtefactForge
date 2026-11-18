@@ -1,0 +1,12 @@
+{
+  "kind": "jlecmd.automatic",
+  "parser": "JLECmd",
+  "description": "Jump lists (JLECmd automatic destinations): each file an application opened, at its last use",
+  "fileNames": [ "^JLECmd_AutomaticDestinations\\.csv$", "^AutomaticDestinations\\.csv$" ],
+  "requiredColumns": [
+    "SourceFile", "AppId", "AppIdDescription", "EntryNumber", "CreationTime", "LastModified", "Path",
+    "InteractionCount", "LocalPath", "FileSize", "Arguments"
+  ],
+  "timeColumn": "LastModified",
+  "mappingVersion": 1
+}

@@ -1,0 +1,17 @@
+{
+  "kind": "af.data_access_case",
+  "parser": "ArtefactForge",
+  "description": "ArtefactForge's case data access report (DataAccess.csv); raw only",
+  "fileNames": [],
+  "caseFiles": [
+    "^DataAccess\\.csv$"
+  ],
+  "requiredColumns": [
+    "Date/Time (UTC)",
+    "System",
+    "User",
+    "Path",
+    "Activity"
+  ],
+  "mappingVersion": 1
+}

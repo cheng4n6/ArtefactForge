@@ -156,8 +156,9 @@ public static class Fixtures
         temp.Write($@"{host}\Prefetch\PECmd_Output.csv", PecmdOutputCsv());
         temp.Write($@"{host}\FileSystem\MFTECmd_MFT.csv", MftCsv(), byteOrderMark: true);
         temp.Write($@"{host}\FileSystem\MFTECmd_USNJournal.csv", UsnCsv(), byteOrderMark: true);
-        temp.Write($@"{host}\LNKFiles\alice\alice_LECmd_Recent.csv",
-            "SourceFile,SourceCreated,TargetCreated,LocalPath\r\nC:\\Users\\alice\\Recent\\a.lnk,2026-11-01 09:00:00,2026-10-01 10:00:00,C:\\Users\\alice\\Documents\\a.docx\r\n");
+        // A tool the lake has no mapping for.
+        temp.Write($@"{host}\Timeline\alice\alice_WxTCmd_Activity.csv",
+            "Id,Executable,StartTime,LocalPath\r\n1,notepad.exe,2026-11-01 09:00:00,C:\\Users\\alice\\Documents\\a.docx\r\n");
 
         OutputEntry Entry(string path, string parser, string toolFileName, string status = OutputStatus.Completed,
             string? user = null) => new()
@@ -178,7 +179,7 @@ public static class Fixtures
                 Entry("Prefetch/PECmd_Output.csv", "PECmd", "20261101100301_PECmd_Output.csv"),
                 Entry("FileSystem/MFTECmd_MFT.csv", "MFTECmd", "MFTECmd_MFT.csv"),
                 Entry("FileSystem/MFTECmd_USNJournal.csv", "MFTECmd", "MFTECmd_USNJournal.csv"),
-                Entry("LNKFiles/alice/alice_LECmd_Recent.csv", "LECmd", "20261101100301_LECmd_Recent.csv", user: "alice"),
+                Entry("Timeline/alice/alice_WxTCmd_Activity.csv", "WxTCmd", "20261101100301_Activity.csv", user: "alice"),
                 Entry("Amcache/AmcacheParser_Output.csv", "AmcacheParser", "Amcache_Output.csv", OutputStatus.Failed)
             ]
         };

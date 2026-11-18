@@ -1,0 +1,18 @@
+{
+  "kind": "af.data_access",
+  "parser": "ArtefactForge",
+  "description": "ArtefactForge's data access activity per host (DataAccess\\Activity.csv); raw only",
+  "fileNames": [
+    "^Activity\\.csv$"
+  ],
+  "requiredColumns": [
+    "TimeUtc",
+    "System",
+    "User",
+    "SID",
+    "Path",
+    "Activity",
+    "Source"
+  ],
+  "mappingVersion": 1
+}

@@ -1,0 +1,22 @@
+{
+  "kind": "af.remote_access",
+  "parser": "ArtefactForge",
+  "description": "ArtefactForge's remote access events per host (RemoteAccess\\RemoteAccess.csv); raw only",
+  "fileNames": [
+    "^RemoteAccess\\.csv$"
+  ],
+  "requiredColumns": [
+    "TimeUtc",
+    "Direction",
+    "Source",
+    "Kind",
+    "Account",
+    "Address",
+    "RemoteName",
+    "LogonId",
+    "SessionId",
+    "Computer",
+    "Detail"
+  ],
+  "mappingVersion": 1
+}

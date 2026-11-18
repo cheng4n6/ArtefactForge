@@ -1,0 +1,13 @@
+{
+  "kind": "sbecmd",
+  "parser": "SBECmd",
+  "description": "ShellBags (SBECmd): folders a user browsed, when first and last interacted with",
+  "fileNames": [ "^SBECmd(_.*)?\\.csv$", "_LIVE_REGISTRY\\.csv$" ],
+  "requiredColumns": [
+    "BagPath", "Slot", "AbsolutePath", "ShellType", "Value", "CreatedOn", "ModifiedOn", "LastWriteTime",
+    "FirstInteracted", "LastInteracted", "HasExplored"
+  ],
+  "optionalColumns": [ "SourceFile" ],
+  "timeColumn": "LastInteracted",
+  "mappingVersion": 1
+}

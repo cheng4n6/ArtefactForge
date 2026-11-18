@@ -1,0 +1,13 @@
+{
+  "kind": "recmd.autoruns",
+  "parser": "RECmd",
+  "description": "Autostart entries (ArtefactForge's RECmd Autoruns batch): each run key, service and other autostart value, at its key's last write",
+  "fileNames": [ "Autoruns\\.csv$" ],
+  "requiredColumns": [
+    "HivePath", "HiveType", "Description", "Category", "KeyPath", "ValueName", "ValueType", "ValueData",
+    "Comment", "Deleted", "LastWriteTimestamp"
+  ],
+  "nameRequired": true,
+  "timeColumn": "LastWriteTimestamp",
+  "mappingVersion": 1
+}

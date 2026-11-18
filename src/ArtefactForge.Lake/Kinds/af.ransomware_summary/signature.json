@@ -1,0 +1,24 @@
+{
+  "kind": "af.ransomware_summary",
+  "parser": "ArtefactForge",
+  "description": "ArtefactForge's ransomware verdict per host (Ransomware\\RansomwareSummary.csv) and for the case (Ransomware.csv); raw only, for comparison with lake queries",
+  "fileNames": [
+    "^RansomwareSummary\\.csv$"
+  ],
+  "caseFiles": [
+    "^Ransomware\\.csv$"
+  ],
+  "requiredColumns": [
+    "Collection",
+    "Host",
+    "Status",
+    "Extension",
+    "ExtensionBasis",
+    "NoteName",
+    "StartUtc",
+    "FinishUtc",
+    "FilesAffected",
+    "Source"
+  ],
+  "mappingVersion": 1
+}

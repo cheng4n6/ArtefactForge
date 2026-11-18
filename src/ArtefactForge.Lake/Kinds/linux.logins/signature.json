@@ -1,0 +1,11 @@
+{
+  "kind": "linux.logins",
+  "parser": "Parse-LinuxLogins",
+  "description": "wtmp and btmp (ArtefactForge LinuxLogins): logons, logoffs, boots and failed logons",
+  "fileNames": [ "^LinuxLogins_(wtmp|btmp)\\.csv$" ],
+  "requiredColumns": [ "TimestampUtc", "Type", "User", "Terminal", "Host", "PID", "Source" ],
+  "exactColumns": true,
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with no UTC time",
+  "mappingVersion": 1
+}
