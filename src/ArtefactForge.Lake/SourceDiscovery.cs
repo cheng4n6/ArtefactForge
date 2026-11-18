@@ -80,6 +80,43 @@ public static partial class SourceDiscovery
             .ToList();
     }
 
+    /// <summary>The host name given to files that belong to the whole case rather than one host.</summary>
+    public const string CaseHost = "(case)";
+
+    /// <summary>
+    /// Case-wide files in the case folder itself that a kind names in its caseFiles (such as
+    /// ArtefactForge's IocHits.csv), with host "(case)". Confirmed by header like any other file.
+    /// </summary>
+    public static IReadOnlyList<DiscoveredSource> CaseFiles(string caseDirectory)
+    {
+        var sources = new List<DiscoveredSource>();
+        foreach (var file in Directory.EnumerateFiles(caseDirectory, "*.csv").Order(StringComparer.OrdinalIgnoreCase))
+        {
+            var name = System.IO.Path.GetFileName(file);
+            var kinds = KindRegistry.All.Where(k => k.CaseFileMatches(name)).ToList();
+            if (kinds.Count == 0) continue;
+            var info = new FileInfo(file);
+            var source = new DiscoveredSource
+            {
+                Host = CaseHost, Path = name, FullPath = file, Parser = kinds[0].Parser,
+                Size = info.Length, ModifiedUtc = info.LastWriteTimeUtc
+            };
+            if (source.Size == 0) { sources.Add(Decide(source, SourcePlan.Skip, "empty file (0 bytes)")); continue; }
+            try { source.Header = ReadHeader(file); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                sources.Add(Decide(source, SourcePlan.Fail, $"could not read its header: {ex.Message}"));
+                continue;
+            }
+            var fitting = kinds.FirstOrDefault(k => k.HeaderFits(source.Header));
+            sources.Add(fitting is not null
+                ? Map(source, fitting, null)
+                : Unmapped(source, name, SourcePlan.HeaderMismatch,
+                    $"named like {kinds[0].Kind} but its header does not fit (missing {string.Join(", ", kinds[0].MissingColumns(source.Header))}); loaded raw"));
+        }
+        return sources;
+    }
+
     public static DiscoveredHost DiscoverHost(string name, string folder)
     {
         var manifestPath = OutputsManifestFile.PathIn(folder);

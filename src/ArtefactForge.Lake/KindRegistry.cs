@@ -24,6 +24,29 @@ public sealed record KindDefinition
     public IReadOnlyList<string> RequiredColumns { get; init; } = [];
     /// <summary>True when the file has exactly the required columns and no others.</summary>
     public bool ExactColumns { get; init; }
+    /// <summary>
+    /// Columns map.sql reads that only some versions or options of the tool write (Hayabusa's
+    /// profiles, Chainsaw's groups). A raw table without one gets it, empty, before mapping.
+    /// </summary>
+    public IReadOnlyList<string> OptionalColumns { get; init; } = [];
+    /// <summary>
+    /// The column whose time puts a row in the timeline. A row with a value there that the
+    /// mapping cannot read as a time is counted against its source, never dropped in silence.
+    /// </summary>
+    public string? TimeColumn { get; init; }
+    /// <summary>
+    /// What it means when <see cref="TimeColumn"/> is empty, for a kind whose rows can lack a UTC
+    /// time (Linux logs with only the host's local time). Such rows stay raw and are counted
+    /// against their source with this note; null when an empty time is not worth a look.
+    /// </summary>
+    public string? EmptyTimeNote { get; init; }
+    /// <summary>How <see cref="TimeColumn"/> is read: "plain" (UTC as written) or "offset" (with a +hh:mm or Z).</summary>
+    public string TimeParse { get; init; } = "plain";
+    /// <summary>
+    /// File names in the case folder itself (not a host's) that are this kind: case-wide files
+    /// such as ArtefactForge's IocHits.csv. They are loaded with host "(case)".
+    /// </summary>
+    public IReadOnlyList<string> CaseFiles { get; init; } = [];
     public int MappingVersion { get; init; } = 1;
     /// <summary>The SELECT whose rows go into timeline; null for a kind kept raw only.</summary>
     public string? MapSql { get; init; }
@@ -39,6 +62,12 @@ public sealed record KindDefinition
         var present = new HashSet<string>(header, StringComparer.OrdinalIgnoreCase);
         return RequiredColumns.Where(c => !present.Contains(c)).ToList();
     }
+
+    /// <summary>The SQL macro (schema.sql) that reads <see cref="TimeColumn"/>.</summary>
+    public string TimeFunction => TimeParse == "offset" ? "lake_ts_offset" : "lake_ts";
+
+    public bool CaseFileMatches(string fileName) =>
+        CaseFiles.Any(p => Regex.IsMatch(fileName, p, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
 
     public bool HeaderFits(IReadOnlyList<string> header) =>
         MissingColumns(header).Count == 0 && (!ExactColumns || header.Count == RequiredColumns.Count);

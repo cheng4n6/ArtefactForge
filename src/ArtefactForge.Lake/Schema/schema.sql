@@ -1,6 +1,24 @@
 -- The evidence lake's fixed tables and views. The raw_<kind> tables are not here: each is created
 -- from the columns of the first CSV loaded into it, and widened when a later file has more.
 
+-- Helpers the mappings share, kept in the lake so a query can use them too.
+-- A time as the tools write it: UTC, up to 7 fractional digits (DuckDB keeps 6).
+CREATE MACRO lake_ts(x) AS TRY_CAST(x AS TIMESTAMP);
+-- A time with an offset (Hayabusa's "2026-09-15 08:12:57.190 +00:00", Chainsaw's ISO 8601),
+-- moved to UTC whatever the session's time zone; a time without one is taken as UTC.
+CREATE MACRO lake_ts_offset(x) AS
+    timezone('UTC', TRY_CAST(regexp_replace(x, '\s+([+-]\d\d:?\d\d|Z)$', '\1') AS TIMESTAMPTZ));
+-- The last part of a Windows or Unix path.
+CREATE MACRO lake_file_name(p) AS nullif(regexp_extract(p, '[^\\/]+$'), '');
+-- A file name's extension in lower case with the dot; a long "extension" is not one.
+CREATE MACRO lake_extension(n) AS nullif(lower(regexp_extract(n, '(\.[^.\\/ ]{1,10})$', 1)), '');
+-- The profile a path is under: alice in C:\Users\alice\... or /home/alice/...
+CREATE MACRO lake_path_user(p) AS
+    nullif(coalesce(nullif(regexp_extract(p, '(?i)[\\/]Users[\\/]([^\\/]+)[\\/]', 1), ''),
+                    regexp_extract(p, '^/home/([^/]+)/', 1)), '');
+-- \Device\HarddiskVolume4\Windows\... and \VOLUME{...}\Windows\... as \Windows\...
+CREATE MACRO lake_volume_path(p) AS regexp_replace(p, '(?i)^\\(Device\\HarddiskVolume\d+|VOLUME\{[^}]*\})', '');
+
 CREATE TABLE lake_meta (
     key   VARCHAR PRIMARY KEY,
     value VARCHAR
@@ -38,7 +56,8 @@ CREATE TABLE sources (
     rows_rejected  BIGINT,
     timeline_rows  BIGINT,
     size           BIGINT,
-    mtime          TIMESTAMP
+    mtime          TIMESTAMP,
+    time_unread    BIGINT             -- rows whose time the mapping could not read: raw only
 );
 
 -- The cross-host timeline: one row per timestamped event, from the raw tables by one reviewed
@@ -114,3 +133,16 @@ SELECT ts, ts_raw, ts_desc, host, kind, action, path, file_name, extension, size
        user_name, summary, source_id, row_no
 FROM timeline
 WHERE category = 'file';
+
+-- Sigma and Hayabusa hits.
+CREATE VIEW detections AS
+SELECT ts, ts_raw, host, kind, rule_title, severity, event_id, channel, provider, summary, source_id, row_no
+FROM timeline
+WHERE category = 'detection';
+
+-- Bytes each program sent and received, from SRUM: one row per program per interval.
+CREATE VIEW network_usage AS
+SELECT ts, host, user_name, user_sid, process_path, file_name AS program, bytes_in, bytes_out, summary,
+       source_id, row_no
+FROM timeline
+WHERE kind = 'srumecmd.network';

@@ -31,9 +31,11 @@ public sealed record LakeSourceResult
     public string? Reason { get; init; }
     public long RowsLoaded { get; init; }
     public long RowsRejected { get; init; }
+    /// <summary>Rows whose time could not be read: in the raw table, not the timeline.</summary>
+    public long TimeUnread { get; init; }
     public long TimelineRows { get; init; }
 
-    public bool NeedsReview => Status is SourceStatus.HeaderMismatch or SourceStatus.Failed || RowsRejected > 0;
+    public bool NeedsReview => Status is SourceStatus.HeaderMismatch or SourceStatus.Failed || RowsRejected > 0 || TimeUnread > 0;
 }
 
 /// <summary>The words <see cref="LakeSourceResult.Status"/> takes.</summary>

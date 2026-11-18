@@ -109,6 +109,10 @@ public static class LakeBuilder
                 foreach (var host in hosts)
                     foreach (var source in host.Sources)
                         planned.Add((source, ++sourceId));
+                // A case folder's own case-wide files; a folder given as one host has none.
+                if (options.SingleHost is null)
+                    foreach (var source in SourceDiscovery.CaseFiles(caseDirectory))
+                        planned.Add((source, ++sourceId));
 
                 var loads = new Dictionary<int, SourceLoad>();
                 foreach (var (source, id) in planned)
@@ -126,7 +130,7 @@ public static class LakeBuilder
                         SourceId = id, Host = source.Host, Path = source.Path, Kind = source.Kind,
                         Parser = source.Parser, ParserVersion = source.ParserVersion,
                         OutputStatus = source.OutputStatus, Status = load.Status, Reason = load.Reason,
-                        RowsLoaded = load.Rows, RowsRejected = load.Rejected,
+                        RowsLoaded = load.Rows, RowsRejected = load.Rejected, TimeUnread = load.TimeUnread,
                         TimelineRows = timelineCounts.GetValueOrDefault(id)
                     });
                 }
@@ -183,7 +187,10 @@ public static class LakeBuilder
             finalPath, hostNames, rawRows, timelineRows);
     }
 
-    private sealed record SourceLoad(string Status, string? Reason, long Rows, long Rejected, string? RawTable);
+    private sealed record SourceLoad(string Status, string? Reason, long Rows, long Rejected, string? RawTable)
+    {
+        public long TimeUnread { get; init; }
+    }
 
     private static SourceLoad LoadSource(DuckDBConnection db, DiscoveredSource source, int id, LakeLog log)
     {
@@ -311,10 +318,15 @@ public static class LakeBuilder
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
+                var have = new HashSet<string>(ColumnsOf(db, "main", kind.RawTable), StringComparer.OrdinalIgnoreCase);
+                foreach (var column in kind.OptionalColumns.Where(c => !have.Contains(c)))
+                    LakeDatabase.Execute(db, $"ALTER TABLE {LakeDatabase.Identifier(kind.RawTable)} ADD COLUMN " +
+                                             $"{LakeDatabase.Identifier(column)} VARCHAR");
                 var before = LakeDatabase.Count(db, "SELECT count(*) FROM timeline");
                 LakeDatabase.Execute(db, $"INSERT INTO timeline BY NAME\n{kind.MapSql}");
                 var added = LakeDatabase.Count(db, "SELECT count(*) FROM timeline") - before;
                 log.Write($"Mapped {kind.Kind} (mapping version {kind.MappingVersion}): {added:N0} timeline rows");
+                CountUnreadTimes(db, kind, planned, loads, log);
             }
             catch (DbException ex)
             {
@@ -331,6 +343,41 @@ public static class LakeBuilder
         using var reader = command.ExecuteReader();
         while (reader.Read()) counts[reader.GetInt32(0)] = reader.GetInt64(1);
         return counts;
+    }
+
+    /// <summary>
+    /// Rows of a kind whose time column holds something the mapping could not read as a time.
+    /// They stay in the raw table but are not in the timeline, so each source says how many.
+    /// </summary>
+    private static void CountUnreadTimes(DuckDBConnection db, KindDefinition kind,
+        List<(DiscoveredSource Source, int Id)> planned, Dictionary<int, SourceLoad> loads, LakeLog log)
+    {
+        if (kind.TimeColumn is null) return;
+        var column = LakeDatabase.Identifier(kind.TimeColumn);
+        var counts = new List<(int Id, long Unread, long Empty)>();
+        using (var command = db.CreateCommand())
+        {
+            command.CommandText =
+                $"SELECT source_id, count(*) FILTER (WHERE nullif(trim({column}), '') IS NOT NULL AND {kind.TimeFunction}({column}) IS NULL), " +
+                $"count(*) FILTER (WHERE nullif(trim({column}), '') IS NULL) FROM {LakeDatabase.Identifier(kind.RawTable)} GROUP BY source_id";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) counts.Add((reader.GetInt32(0), reader.GetInt64(1), reader.GetInt64(2)));
+        }
+        foreach (var (id, unread, empty) in counts)
+        {
+            if (!loads.TryGetValue(id, out var load)) continue;
+            var notes = new List<string>();
+            if (unread > 0)
+                notes.Add($"{unread:N0} row(s) with a {kind.TimeColumn} that could not be read as a time: in the raw table, not the timeline");
+            var emptyCounted = kind.EmptyTimeNote is not null && empty > 0;
+            if (emptyCounted) notes.Add($"{empty:N0} row(s) {kind.EmptyTimeNote}: in the raw table, not the timeline");
+            if (notes.Count == 0) continue;
+            var note = string.Join("; ", notes);
+            var count = unread + (emptyCounted ? empty : 0);
+            loads[id] = load with { Reason = load.Reason is null ? note : load.Reason + "; " + note, TimeUnread = count };
+            var source = planned.First(p => p.Id == id).Source;
+            log.Write($"Check {source.Host}/{source.Path}: {note}");
+        }
     }
 
     private static void WriteHosts(DuckDBConnection db, IReadOnlyList<DiscoveredHost> hosts, List<string> warnings, LakeLog log)
@@ -377,7 +424,7 @@ public static class LakeBuilder
             var mapped = source.Plan == SourcePlan.Mapped && load.Status == SourceStatus.Loaded;
             using var command = db.CreateCommand();
             command.CommandText = "INSERT INTO sources VALUES ($id, $host, $path, $kind, $parser, $version, $outputStatus, " +
-                                  "$status, $reason, $raw, $mapping, $mappingVersion, $rows, $rejected, $timeline, $size, $mtime)";
+                                  "$status, $reason, $raw, $mapping, $mappingVersion, $rows, $rejected, $timeline, $size, $mtime, $unread)";
             command.Parameters.Add(new DuckDBParameter("id", id));
             command.Parameters.Add(new DuckDBParameter("host", source.Host));
             command.Parameters.Add(new DuckDBParameter("path", source.Path));
@@ -391,6 +438,7 @@ public static class LakeBuilder
             command.Parameters.Add(new DuckDBParameter("mapping", mapped ? (object)source.Kind! : DBNull.Value));
             command.Parameters.Add(new DuckDBParameter("mappingVersion", mapped ? (object)source.Definition!.MappingVersion : DBNull.Value));
             command.Parameters.Add(new DuckDBParameter("rows", load.Rows));
+            command.Parameters.Add(new DuckDBParameter("unread", load.TimeUnread));
             command.Parameters.Add(new DuckDBParameter("rejected", load.Rejected));
             command.Parameters.Add(new DuckDBParameter("timeline", result.TimelineRows));
             command.Parameters.Add(new DuckDBParameter("size", (object?)source.Size ?? DBNull.Value));
@@ -471,7 +519,7 @@ public static class LakeBuilder
             warnings = result.Warnings,
             sources = result.Sources.Select(s => new
             {
-                s.SourceId, s.Host, s.Path, s.Kind, s.Parser, s.ParserVersion, s.OutputStatus, s.Status,
+                s.SourceId, s.Host, s.Path, s.Kind, s.Parser, s.ParserVersion, s.OutputStatus, s.Status, s.TimeUnread,
                 s.Reason, s.RowsLoaded, s.RowsRejected, s.TimelineRows
             })
         };
