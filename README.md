@@ -33,8 +33,11 @@ one. It held up better than I expected. Bug reports are welcome, and so is appla
 - **Skips with a reason**, never in silence: `not present: %root%\$Boot`.
 - **Iterates per user profile**, with the username in the output filename.
 - **Records what ran**: exact command line, tool version and SHA-256, exit code, and output file
-  count and size, per invocation.
-- **Batch processes** a folder of collections and resumes where it stopped.
+  count and size, per invocation. Each host folder's `outputs.json` says which tool, version and
+  module produced each file.
+- **Batch processes** a folder of collections and resumes where it stopped, even after a crash
+  or power cut part-way through. A tool that hangs is stopped after 24 hours unless its module
+  allows longer.
 - **Processes Linux evidence on Windows**, as a folder (UAC output, a tar, or an X-Ways or FTK
   export), so no ext4 driver is needed. Where no Windows tool exists, such as the systemd journal,
   ArtefactForge carries its own parser.
@@ -65,6 +68,31 @@ whole case from the output already on disk, with no new tools and nothing run ag
 
 These are leads for an analyst to check, not conclusions. Several have so far only been proven
 on test data; see the beta warning above.
+
+## The evidence lake (preview)
+
+The evidence lake loads every host's parser output into one DuckDB file, `_Lake\case.duckdb`, so
+the whole case can be queried with SQL. Its timeline puts the event logs, Prefetch, the MFT and
+USN journal, Amcache, ShimCache, LNK files, jump lists, ShellBags, SRUM, Hayabusa and Chainsaw
+detections and the Linux logs on one UTC clock across hosts, so a hash, a program or an address
+can be followed from host to host. Every other CSV is kept in a table of its own, and `lake.log`
+lists anything that was not loaded and why.
+
+- **From ArtefactForge.** Tick "Build evidence lake when the run finishes" (`--lake` on the
+  command line), or use Build evidence lake on the Analysis tab's Overview, which shows how many
+  hosts and timeline rows it holds. `ArtefactForgeCli lake build <case>` builds it without a run,
+  and the case report gains an Evidence lake section.
+- **On its own.** `af-lake.exe`, in the same package, builds a lake from an ArtefactForge case
+  folder, or from one machine's EZ Tools or KAPE output, which it recognises by file name and
+  header.
+
+```
+af-lake build "D:\Cases\Case01"
+af-lake build "D:\Output\HOST01" --host HOST01
+af-lake kinds
+```
+
+<!-- Lake detection results (ransomware and others) go here once they land on main. -->
 
 ## Screenshots
 
