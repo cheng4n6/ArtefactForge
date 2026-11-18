@@ -98,6 +98,40 @@ public static class SystemInventory
     }
 
     /// <summary>
+    /// The summary facts of one collection folder, empty when it has no summary. The same facts
+    /// <see cref="Collect"/> reads for every collection.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Facts(string collectionDirectory)
+    {
+        var summary = Path.Combine(collectionDirectory, SummaryRelativePath);
+        return File.Exists(summary) ? ReadFacts(summary) : new Dictionary<string, string>();
+    }
+
+    /// <summary>
+    /// The host's own time zone setting from its summary, on Windows with the offset in effect
+    /// when the registry was last written, and where it came from in words. Null when the summary
+    /// records none.
+    /// </summary>
+    public static (string Zone, string From)? TimeZone(IReadOnlyDictionary<string, string> facts)
+    {
+        var zone = facts.TryGetValue("Timezone", out var z) ? z.Trim() : "";
+        if (zone.Length == 0) return null;
+        var from = "the system summary";
+        // ActiveTimeBias is minutes to add to local time for UTC. RECmd can print a negative
+        // DWORD as its unsigned value.
+        if (facts.TryGetValue("TimezoneActiveBiasMinutes", out var b) && long.TryParse(b.Trim(), out var bias))
+        {
+            if (bias > int.MaxValue) bias -= 1L << 32;
+            if (Math.Abs(bias) <= 24 * 60)
+            {
+                zone += $" ({CollectorTimesReader.Offset(TimeSpan.FromMinutes(-bias))})";
+                from += "; the offset is the one in effect when the registry was last written (ActiveTimeBias)";
+            }
+        }
+        return (zone, from);
+    }
+
+    /// <summary>
     /// Item -> Value from a summary CSV. Later rows win, which matters where a distribution
     /// supplies the same item from more than one source file.
     /// </summary>

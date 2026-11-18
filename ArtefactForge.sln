@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArtefactForge.Gui", "src\Ar
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArtefactForge.Tests", "src\ArtefactForge.Tests\ArtefactForge.Tests.csproj", "{EEA1B73C-0908-46DA-84D1-7678F4A32A5A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArtefactForge.Lake.Contract", "src\ArtefactForge.Lake.Contract\ArtefactForge.Lake.Contract.csproj", "{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,6 +73,18 @@ Global
 		{EEA1B73C-0908-46DA-84D1-7678F4A32A5A}.Release|x64.Build.0 = Release|Any CPU
 		{EEA1B73C-0908-46DA-84D1-7678F4A32A5A}.Release|x86.ActiveCfg = Release|Any CPU
 		{EEA1B73C-0908-46DA-84D1-7678F4A32A5A}.Release|x86.Build.0 = Release|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Debug|x64.Build.0 = Debug|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Debug|x86.Build.0 = Debug|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Release|x64.ActiveCfg = Release|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Release|x64.Build.0 = Release|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Release|x86.ActiveCfg = Release|Any CPU
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -80,5 +94,6 @@ Global
 		{986A4CEA-8A44-42AA-B96C-0A7AA1FBC93F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{3BF9FE3A-BA06-4164-B0B7-143A88255428} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{EEA1B73C-0908-46DA-84D1-7678F4A32A5A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{3ADDDD76-E560-4ECA-8FE8-479C2FC03EF2} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
