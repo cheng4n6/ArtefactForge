@@ -1,0 +1,11 @@
+{
+  "kind": "mftecmd.mft",
+  "parser": "MFTECmd",
+  "description": "Master File Table (MFTECmd $MFT): created and, when it differs, modified time from $STANDARD_INFORMATION; the other times stay in raw_mftecmd_mft",
+  "fileNames": [ "^MFTECmd_MFT\\.csv$", "^MFTECmd_\\$MFT_Output\\.csv$", "^MFT\\.csv$" ],
+  "requiredColumns": [
+    "EntryNumber", "SequenceNumber", "InUse", "ParentPath", "FileName", "FileSize",
+    "IsDirectory", "Created0x10", "LastModified0x10", "LastRecordChange0x10", "LastAccess0x10"
+  ],
+  "mappingVersion": 1
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "mftecmd.usnjournal",
+  "parser": "MFTECmd",
+  "description": "USN journal (MFTECmd $J): one row per change record",
+  "fileNames": [ "^MFTECmd_USNJournal\\.csv$", "^MFTECmd_\\$J_Output\\.csv$", "^USNJournal_J\\.csv$" ],
+  "requiredColumns": [
+    "Name", "Extension", "EntryNumber", "SequenceNumber", "ParentPath", "UpdateSequenceNumber",
+    "UpdateTimestamp", "UpdateReasons", "FileAttributes"
+  ],
+  "mappingVersion": 1
+}
