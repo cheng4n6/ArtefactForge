@@ -234,6 +234,14 @@ public static class LakeBuilder
             log.Write($"Data access from the lake's queries in {dataAccessRoot}: {written.Describe()}");
             return written.Problem;
         });
+
+        var iocRoot = Queries.IocResults.OutputRootFor(lakeDirectory);
+        Run("IOC sweep", iocRoot, session =>
+        {
+            var written = Queries.IocResults.Write(session, caseDirectory, iocRoot, cancellationToken);
+            log.Write($"IOC sweep from the lake's queries in {iocRoot}: {written.Describe()}");
+            return null;
+        });
     }
 
     private sealed record SourceLoad(string Status, string? Reason, long Rows, long Rejected, string? RawTable)

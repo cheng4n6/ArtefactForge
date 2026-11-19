@@ -31,6 +31,9 @@ public sealed class LakeQuerySession : IDisposable
         _db = LakeDatabase.Open(databasePath, options ?? new LakeOptions(), tempDirectory ?? Path.GetTempPath(), readOnly: true);
     }
 
+    /// <summary>The case folder input files are read from.</summary>
+    public string CaseDirectory => _caseDirectory;
+
     /// <summary>Runs <paramref name="query"/> (and the setup it requires) and hands its rows to <paramref name="read"/>.</summary>
     public T Run<T>(LakeQuery query, Func<DbDataReader, T> read)
     {
@@ -83,6 +86,43 @@ public sealed class LakeQuerySession : IDisposable
             if (_set.Add("input:" + input.Table)) LoadInput(input);
         foreach (var files in query.Files)
             if (_set.Add("files:" + files.Table)) LoadFiles(files);
+        foreach (var view in query.AllRows)
+            if (_set.Add("allrows:" + view)) LoadAllRows(view);
+    }
+
+    /// <summary>
+    /// A view over the rows of every raw table, from the hosts' files only ("(case)" files are the
+    /// case's own lists and results): each row's cells and its table's column names as lists, in
+    /// the table's column order, with NULL for an empty cell. Built from the lake's catalogue, so
+    /// a kind added later is included without the query changing.
+    /// </summary>
+    private void LoadAllRows(string view)
+    {
+        var catalogue = LakeDatabase.Identifier((string)LakeDatabase.Scalar(_db, "SELECT current_database()")!);
+        var tables = new List<(string Table, List<string> Columns)>();
+        using (var command = _db.CreateCommand())
+        {
+            command.CommandText = "SELECT table_name, column_name FROM duckdb_columns() WHERE schema_name = 'main' " +
+                                  "AND database_name = current_database() AND starts_with(table_name, 'raw_') " +
+                                  "ORDER BY table_name, column_index";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var table = reader.GetString(0);
+                if (tables.Count == 0 || tables[^1].Table != table) tables.Add((table, []));
+                var column = reader.GetString(1);
+                if (column is not ("host" or "source_id" or "row_no")) tables[^1].Columns.Add(column);
+            }
+        }
+        var selects = tables.Where(t => t.Columns.Count > 0).Select(t =>
+            $"SELECT host, source_id, row_no, {LakeDatabase.Literal(t.Table)} AS raw_table, " +
+            $"[{string.Join(", ", t.Columns.Select(LakeDatabase.Literal))}] AS names, " +
+            $"[{string.Join(", ", t.Columns.Select(c => LakeDatabase.Identifier(c) + "::VARCHAR"))}] AS cells " +
+            $"FROM {catalogue}.main.{LakeDatabase.Identifier(t.Table)} WHERE host <> '(case)'").ToList();
+        var name = LakeDatabase.Identifier(view);
+        LakeDatabase.Execute(_db, selects.Count == 0
+            ? $"CREATE TEMP TABLE {name} (host VARCHAR, source_id INTEGER, row_no BIGINT, raw_table VARCHAR, names VARCHAR[], cells VARCHAR[])"
+            : $"CREATE TEMP VIEW {name} AS {string.Join(" UNION ALL ", selects)}");
     }
 
     /// <summary>

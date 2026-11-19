@@ -26,6 +26,7 @@ namespace ArtefactForge.Lake.Cli
                 case "query": return Query(args[1..], output, error);
                 case "ransomware": return RansomwareFiles(args[1..], output, error);
                 case "data-access": return DataAccessFiles(args[1..], output, error);
+                case "ioc": return IocFiles(args[1..], output, error);
                 case null or "help" or "--help" or "-h" or "/?":
                     Usage(verb is null ? error : output);
                     return verb is null ? ExitUsage : ExitBuilt;
@@ -64,6 +65,9 @@ namespace ArtefactForge.Lake.Cli
             writer.WriteLine("      host DataAccess\\Users.csv, Activity.csv and Sources.csv) from the lake's queries");
             writer.WriteLine("      to <folder>\\_Lake\\results\\DataAccess, or to --out DIR, as a lake build does.");
             writer.WriteLine("      The compromised users are read from <folder>\\CompromisedUsers.csv.");
+            writer.WriteLine("  af-lake ioc <folder> [--out DIR] [--lake FILE]");
+            writer.WriteLine("      Sweeps every host's rows for the IOCs in <folder>\\IOCs.csv and writes IocHits.csv");
+            writer.WriteLine("      to <folder>\\_Lake\\results\\IOC, or to --out DIR, as a lake build does.");
             writer.WriteLine();
             writer.WriteLine("Exit codes: 0 built; 3 built, but some sources need a look (see lake.log);");
             writer.WriteLine("1 not built, or built but not swapped in; 2 bad arguments.");
@@ -202,6 +206,13 @@ namespace ArtefactForge.Lake.Cli
             {
                 var written = DataAccessResults.Write(session, root);
                 return ($"Data access files in {root}: {written.Describe()}", written.Problem);
+            }, output, error);
+
+        private static int IocFiles(string[] args, TextWriter output, TextWriter error) =>
+            AnalysisFiles(args, "ioc", IocResults.OutputRootFor, (session, root) =>
+            {
+                var written = IocResults.Write(session, session.CaseDirectory, root);
+                return ($"IOC sweep in {root}: {written.Describe()}", null);
             }, output, error);
 
         /// <summary>
