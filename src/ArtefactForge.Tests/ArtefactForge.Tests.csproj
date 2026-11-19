@@ -19,8 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Synthetic databases built from libdnf's schema by Fixtures/dnf/make-dnf-fixtures.py, yum's by Fixtures/yum/make-yum-fixtures.py. No evidence. -->
-    <None Include="Fixtures\**\*" Exclude="Fixtures\**\*.py" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Synthetic databases built from libdnf's schema by Fixtures/dnf/make-dnf-fixtures.py, yum's by Fixtures/yum/make-yum-fixtures.py,
+         and an IIS collection by Fixtures/iis/Build-IisFixtures.ps1. No evidence. -->
+    <None Include="Fixtures\**\*" Exclude="Fixtures\**\*.py;Fixtures\**\*.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

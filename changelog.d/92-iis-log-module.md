@@ -1,0 +1,4 @@
+### Features
+
+* **IIS web server logs:** new WindowsIisLogs module. It reads IIS W3C logs for web and FTP sites (inetpub\logs\LogFiles, Windows\System32\LogFiles on servers upgraded from IIS 6, and log folders named in applicationHost.config) and HTTP.sys error logs into WebLogs\: IisLogs_Requests.csv (every request, UTC), IisLogs_Flagged.csv (web shell, Exchange exploit, injection and scanner patterns, and POSTs to scripts in static folders), IisLogs_HttpErr.csv and IisLogs_Sites.csv (each site's applications and physical paths). A log whose logged fields changed part way through is read correctly; other log formats, zipped archives and damaged lines are named in the module's log for review.
+* **Evidence lake:** IIS requests are in the timeline as web rows, with the X-Forwarded-For address as the client when it is logged.
