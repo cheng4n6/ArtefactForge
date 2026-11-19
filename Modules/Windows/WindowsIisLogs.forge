@@ -23,10 +23,15 @@ OutputName: IisLogs
 # applications and physical paths, from applicationHost.config when it was collected; without it
 # site names are left blank.
 #
-# Requires names the default log folder only, so a server that logs only to a custom folder or to
-# Windows\System32\LogFiles is skipped for now.
-Requires:
+# It runs when the collection has any of: the default log folder, a site folder under
+# Windows\System32\LogFiles, or applicationHost.config (which may name a custom log folder, and
+# gives the site list on its own). HTTPERR alone does not count: every Windows host has that folder,
+# IIS or not.
+RequiresAny:
   - '%root%\inetpub\logs\LogFiles'
+  - '%root%\Windows\System32\LogFiles\W3SVC*'
+  - '%root%\Windows\System32\LogFiles\FTPSVC*'
+  - '%root%\Windows\System32\inetsrv\config\applicationHost.config'
 Platform: windows
 Elevation: live              # the folders are admin-only on a live system; collections read fine
 Priority: 45
