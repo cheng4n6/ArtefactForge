@@ -287,6 +287,23 @@ public class IisLogExportTests
     }
 
     [Fact]
+    public void A_collection_with_only_the_configuration_gives_the_site_list_and_reports_nothing()
+    {
+        using var dir = new TempDirectory();
+        Write(dir.Path, @"Windows\System32\inetsrv\config\applicationHost.config",
+            "<configuration><system.applicationHost><sites><site name=\"Default Web Site\" id=\"1\"><application path=\"/\">"
+            + "<virtualDirectory path=\"/\" physicalPath=\"%SystemDrive%\\inetpub\\wwwroot\" /></application></site>"
+            + "</sites></system.applicationHost></configuration>");
+
+        var (log, errors, output) = Run(dir.Path);
+
+        Assert.Equal("", errors);
+        Assert.Contains("No IIS log folders", log);
+        Assert.Equal("Default Web Site", Rows(output, IisLogExport.SitesFile).Single()["SiteName"]);
+        Assert.False(File.Exists(Path.Combine(output, IisLogExport.RequestsFile)));
+    }
+
+    [Fact]
     public void A_log_the_server_still_has_open_is_read()
     {
         using var dir = new TempDirectory();
