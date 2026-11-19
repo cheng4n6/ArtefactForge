@@ -2,6 +2,8 @@
 -- are mapped; what the Maps put in PayloadData1-6 differs per event and stays in raw_evtxecmd,
 -- except the target user, logon type and source address of logon events, which the standard
 -- Security maps write as "Target: DOMAIN\user", "LogonType 3" and "WORKSTATION (10.0.0.5)".
+-- A process start's parent comes from the Payload's EventData (version 2): ParentProcessName in
+-- Security 4688, ParentImage in Sysmon 1. A Payload that is not JSON gives no parent.
 WITH e AS (
     SELECT r.*,
            TRY_CAST(r.EventId AS INTEGER) AS eid,
@@ -38,6 +40,17 @@ m AS (
                ELSE 'system'
            END AS cat
     FROM e
+),
+p AS (
+    SELECT m.*,
+           CASE WHEN m.cat = 'process' AND json_valid(m.Payload)
+                     AND json_type(m.Payload, '$.EventData.Data') = 'ARRAY'
+                THEN nullif(trim(json_extract_string(
+                         list_filter(json_extract(m.Payload, '$.EventData.Data[*]'),
+                                     d -> json_extract_string(d, '$."@Name"') IN ('ParentProcessName', 'ParentImage'))[1],
+                         '$."#text"')), '')
+           END AS parent_image
+    FROM m
 )
 SELECT
     TRY_CAST(TimeCreated AS TIMESTAMP)                      AS ts,
@@ -75,6 +88,7 @@ SELECT
     CASE WHEN cat NOT IN ('process', 'service') THEN nullif(ExecutableInfo, '') END
                                                             AS process_path,
     TRY_CAST(ProcessId AS BIGINT)                           AS process_id,
+    parent_image                                            AS parent_path,
     CASE WHEN cat = 'logon'
          THEN nullif(nullif(regexp_extract(RemoteHost, '\(([^)]*)\)\s*$', 1), '-'), '')
     END                                                     AS src_ip,
@@ -88,5 +102,5 @@ SELECT
                                                             AS summary,
     source_id,
     row_no
-FROM m
+FROM p
 WHERE TRY_CAST(TimeCreated AS TIMESTAMP) IS NOT NULL
