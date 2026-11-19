@@ -1,0 +1,39 @@
+Description: IIS web server logs (W3C) - every request, HTTP.sys errors and the site list
+Category: WebLogs
+Author: ArtefactForge
+Version: '1.0'
+ExportFormat: csv
+OutputName: IisLogs
+# IIS W3C logs in each site's folder (W3SVC<n> for web sites, FTPSVC<n> for FTP) under
+# inetpub\logs\LogFiles, Windows\System32\LogFiles (servers upgraded from IIS 6) and any log folder
+# applicationHost.config names on the system drive; and HTTP.sys's HTTPERR logs, the requests it
+# rejected before IIS saw them. Exchange's OWA, ECP, EWS and ActiveSync traffic is in the Default
+# Web Site and Exchange Back End sites' logs. NCSA and IIS native format logs, zipped archives and
+# lines that do not fit their #Fields line are named in the .err.log, not parsed.
+#
+# W3C times are UTC whatever the "local time rollover" setting, which changes only the file names.
+# Each #Fields line sets the columns for the lines after it, so a log whose logged fields changed
+# part way through (IIS writes a new block in the same file) is read correctly. Fields the module
+# has no column for, such as custom ones, are kept in Extra as name=value. A logged X-Forwarded-For
+# is kept in ForwardedFor, and the lake's timeline takes it as the client address.
+#
+# IisLogs_Flagged.csv holds requests matching web shell, Exchange exploit, injection and scanner
+# patterns, and POSTs answered by a script in a folder that normally holds static files: a triage
+# aid for where to start reading, not a detection verdict. IisLogs_Sites.csv lists each site's
+# applications and physical paths, from applicationHost.config when it was collected; without it
+# site names are left blank.
+#
+# Requires names the default log folder only, so a server that logs only to a custom folder or to
+# Windows\System32\LogFiles is skipped for now.
+Requires:
+  - '%root%\inetpub\logs\LogFiles'
+Platform: windows
+Elevation: live              # the folders are admin-only on a live system; collections read fine
+Priority: 45
+IoWeight: heavy
+Timeout: 14400
+Processors:
+  -
+    Executable: builtin:WindowsIisLogs
+    CommandLine: --root "%root%" --out "%destinationDirectory%"
+    ExportFormat: csv

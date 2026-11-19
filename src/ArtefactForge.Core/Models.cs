@@ -132,6 +132,12 @@ public sealed class ModuleDefinition
     // --- ArtefactForge extensions ---
     /// <summary>Canonical globs that must resolve or the module is skipped with a reason.</summary>
     public IReadOnlyList<string> Requires { get; init; } = [];
+    /// <summary>
+    /// Canonical globs of which at least one must resolve, as well as every <see cref="Requires"/>,
+    /// for an artefact a system can keep in more than one place (IIS logs in inetpub or in
+    /// System32\LogFiles). Empty means no such condition.
+    /// </summary>
+    public IReadOnlyList<string> RequiresAny { get; init; } = [];
     public IterationMode Iterate { get; init; } = IterationMode.None;
     public Platform Platform { get; init; } = Platform.Any;
     public int Priority { get; init; } = 50;

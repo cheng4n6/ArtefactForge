@@ -46,7 +46,9 @@ public static class Builtins
         ["LinuxBodyfile"] = (args, log, errors, token) =>
             BodyfileExport.Run(Required(args, "root"), Required(args, "out"), log, errors, token),
         ["WindowsDhcpServerLog"] = (args, log, errors, token) =>
-            DhcpServerLogExport.Run(Required(args, "root"), Required(args, "out"), log, errors, token)
+            DhcpServerLogExport.Run(Required(args, "root"), Required(args, "out"), log, errors, token),
+        ["WindowsIisLogs"] = (args, log, errors, token) =>
+            IisLogExport.Run(Required(args, "root"), Required(args, "out"), log, errors, token)
     };
 
     public static IEnumerable<string> Names => Registry.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase);

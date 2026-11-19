@@ -89,7 +89,7 @@ public static class RunPlanner
 
     private static void PlanSingle(RunConfiguration config, RunPlan plan, ModuleDefinition module, ResolvedTarget target)
     {
-        var missing = FirstUnmatched(module.Requires, target.Root, user: null);
+        var missing = Missing(module, target.Root, user: null);
         if (missing is not null) { plan.Skipped.Add(Skip(module, target, $"not present: {missing}")); return; }
 
         plan.Items.Add(new WorkItem
@@ -110,7 +110,7 @@ public static class RunPlanner
         {
             // Requires is re-checked per user: only profiles that actually hold the artefact run,
             // so an empty Default or Public profile is not reported as NoOutput.
-            if (FirstUnmatched(module.Requires, target.Root, user.Name, user.Path) is not null) continue;
+            if (Missing(module, target.Root, user.Name, user.Path) is not null) continue;
 
             plan.Items.Add(new WorkItem
             {
@@ -140,6 +140,12 @@ public static class RunPlanner
         if (matches.Count == 0)
         {
             plan.Skipped.Add(Skip(module, target, $"not present: {module.Requires[0]}"));
+            return;
+        }
+        // The iterations come from the first Requires glob; RequiresAny only decides whether the module runs.
+        if (NoneMatched(module.RequiresAny, target.Root, null) is { } none)
+        {
+            plan.Skipped.Add(Skip(module, target, $"not present: {none}"));
             return;
         }
 
@@ -223,6 +229,10 @@ public static class RunPlanner
         return found.Values.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>What is missing for the module to run, as the skip reason gives it; null when nothing is.</summary>
+    private static string? Missing(ModuleDefinition module, string root, string? user = null, string? userHome = null) =>
+        FirstUnmatched(module.Requires, root, user, userHome) ?? NoneMatched(module.RequiresAny, root, user, userHome);
+
     private static string? FirstUnmatched(IReadOnlyList<string> requires, string root,
                                           string? user = null, string? userHome = null)
     {
@@ -230,6 +240,16 @@ public static class RunPlanner
             if (!PathGlob.AnyMatch(Resolve(requirement, root, user, userHome)))
                 return requirement;
         return null;
+    }
+
+    /// <summary>
+    /// Null when the list is empty or one of its globs resolves; otherwise every glob, so the skip
+    /// reason names each place that was looked in.
+    /// </summary>
+    private static string? NoneMatched(IReadOnlyList<string> any, string root, string? user = null, string? userHome = null)
+    {
+        if (any.Count == 0 || any.Any(g => PathGlob.AnyMatch(Resolve(g, root, user, userHome)))) return null;
+        return any.Count == 1 ? any[0] : "none of " + string.Join(", ", any);
     }
 
     private static string Resolve(string pattern, string root, string? user, string? userHome = null) =>

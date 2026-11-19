@@ -67,6 +67,7 @@ public static class ModuleLoader
             Prepare      = prepare,
             Options      = options,
             Requires     = dto.Requires ?? [],
+            RequiresAny  = dto.RequiresAny ?? [],
             Iterate      = Yaml.ParseEnum(dto.Iterate,   IterationMode.None,          "Iterate"),
             Platform     = Yaml.ParseEnum(dto.Platform,  Platform.Any,                "Platform"),
             IoWeight     = Yaml.ParseEnum(dto.IoWeight,  IoWeight.Light,              "IoWeight"),
@@ -208,6 +209,7 @@ public static class ModuleLoader
         public List<ProcessorDto>? Prepare { get; set; }
         public List<OptionDto>? Options { get; set; }
         public List<string>? Requires { get; set; }
+        public List<string>? RequiresAny { get; set; }
         public string? Iterate { get; set; }
         public string? Platform { get; set; }
         public int? Priority { get; set; }

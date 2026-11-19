@@ -1,0 +1,6 @@
+#Software: Microsoft HTTP API 2.0
+#Version: 1.0
+#Date: 2026-03-16 00:00:00
+#Fields: date time c-ip c-port s-ip s-port cs-version cs-method cs-uri sc-status s-siteid s-reason s-queuename
+2026-03-16 00:30:00 203.0.113.66 51234 192.0.2.10 443 HTTP/1.1 GET /%c0%af 400 - BadRequest -
+2026-03-16 00:31:00 203.0.113.66 51240 192.0.2.10 80 - - - - - Timer_ConnectionIdle -
