@@ -8,5 +8,6 @@
     "ProcessId", "Computer", "UserId", "MapDescription", "UserName", "RemoteHost",
     "PayloadData1", "PayloadData2", "ExecutableInfo", "SourceFile"
   ],
-  "mappingVersion": 1
+  "optionalColumns": [ "Payload" ],
+  "mappingVersion": 2
 }
