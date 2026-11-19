@@ -1,0 +1,14 @@
+{
+  "kind": "windows.iis",
+  "parser": "WindowsIisLogs",
+  "description": "IIS web server logs (ArtefactForge WindowsIisLogs, W3C): every request to a web or FTP site",
+  "fileNames": [ "^IisLogs_Requests\\.csv$" ],
+  "requiredColumns": [
+    "TimestampUtc", "RawTime", "SiteId", "SiteName", "ServerIP", "ServerPort", "Method", "UriStem", "UriQuery",
+    "Url", "Host", "Status", "BytesSent", "BytesReceived", "ClientIP", "ForwardedFor", "User", "UserAgent", "Flags"
+  ],
+  "nameRequired": true,
+  "timeColumn": "TimestampUtc",
+  "emptyTimeNote": "with no UTC time",
+  "mappingVersion": 1
+}
