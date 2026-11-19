@@ -123,19 +123,30 @@ public class SchedulingTests
         var modules = new List<ModuleDefinition>
         {
             Module(dir, "Short", 1, priority: 10, memoryHeavy: true),
-            Module(dir, "Long", 3, priority: 90, memoryHeavy: true)
+            Module(dir, "Long", 1, priority: 90, memoryHeavy: true)
         };
         var config = Config(dir, modules);
 
-        // The first run goes by Priority; the second knows Long took longer and starts it first.
+        // The first run has no earlier manifest, so Priority decides. With a budget of one byte the
+        // second module starts only once the first has finished, so the order is not a matter of timing.
         var first = await new RunEngine().RunAsync(config);
-        Assert.True(Span(first, "Short").Start < Span(first, "Long").Start);
+        Assert.True(Span(first, "Short").Start < Span(first, "Long").Start,
+            $"Short {Span(first, "Short")} started after Long {Span(first, "Long")}");
+        var manifest = Path.Combine(config.OutputRoot, config.CaseName, "_Logs", "manifest.json");
+        Assert.Equal(["Long", "Short"], RunEngine.LoadDurations(manifest).Keys.Where(k => k is "Long" or "Short").Order());
 
+        // What "last time" took is the input here, written as the manifest records it. Taking it from
+        // the first run's own timings made the test a race: the two tools differed by two seconds, and
+        // on a busy CI runner the first process started was slow enough to close that gap.
+        File.WriteAllText(manifest, """
+            { "Results": [ { "Module": "Short", "DurationSeconds": 1.0 },
+                           { "Module": "Long", "DurationSeconds": 600.0 } ] }
+            """);
         var second = await new RunEngine().RunAsync(new RunConfiguration
         {
             CaseName = config.CaseName, OutputRoot = config.OutputRoot, ToolRoots = config.ToolRoots,
             Targets = config.Targets, Modules = config.Modules, MaxWorkers = 1, MaxHeavyWorkers = 1,
-            MemoryBudgetBytes = 1, SkipCompleted = false
+            MemoryBudgetBytes = 1, KeepFreeMemoryBytes = 0, SkipCompleted = false
         });
         Assert.True(Span(second, "Long").Start < Span(second, "Short").Start,
             $"Long {Span(second, "Long")} started after Short {Span(second, "Short")}");
