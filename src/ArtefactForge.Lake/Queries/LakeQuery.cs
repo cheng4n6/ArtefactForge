@@ -51,6 +51,7 @@ public sealed record LakeQueryFiles(string Table, string Pattern, IReadOnlyList<
 ///   -- input: ransomware_overrides = Ransomware-Overrides.csv (Collection, Extension, NoteName)
 ///   -- table: raw_mftecmd_mft (FileName, ParentPath, FileSize)
 ///   -- files: da_profilelist = Registry/*ProfileList*.csv (KeyName, ProfileImagePath)
+///   -- allrows: lake_rows                (every host file's rows: see LakeQuerySession)
 ///   -- parameter: usn_min_files = 50 - renames to one extension before it is called
 ///
 /// A parameter is read in the SQL as getvariable('usn_min_files'), as text: cast it where a
@@ -71,6 +72,12 @@ public sealed partial record LakeQuery
     public IReadOnlyList<LakeQueryInput> Inputs { get; init; } = [];
     public IReadOnlyList<LakeQueryTable> Tables { get; init; } = [];
     public IReadOnlyList<LakeQueryFiles> Files { get; init; } = [];
+    /// <summary>
+    /// The name of a temporary view over every raw table's rows from the hosts' files (not the
+    /// case's own), for a query that looks at whole rows whatever their kind, as a text search
+    /// does: host, source_id, row_no, raw_table, and names and cells as lists in column order.
+    /// </summary>
+    public IReadOnlyList<string> AllRows { get; init; } = [];
     public IReadOnlyList<LakeQueryParameter> Parameters { get; init; } = [];
     public required string Sql { get; init; }
 
@@ -114,6 +121,8 @@ public sealed partial record LakeQuery
             Inputs = All("input").Select(v => ParseInput(name, v)).ToList(),
             Tables = All("table").Select(v => ParseTable(name, v)).ToList(),
             Files = All("files").Select(v => ParseFiles(name, v)).ToList(),
+            AllRows = All("allrows").Select(v => TableField().IsMatch(v + " ()") ? v.Trim()
+                          : throw new InvalidDataException($"Query {name}: allrows must name a table, not '{v}'")).ToList(),
             Parameters = All("parameter").Select(v => ParseParameter(name, v)).ToList(),
             Sql = text
         };
