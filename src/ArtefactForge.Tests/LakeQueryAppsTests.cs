@@ -21,7 +21,7 @@ public class LakeQueryAppsTests
         var path = string.Join(Path.PathSeparator, "nothing", "\"bin\"");
 
         Assert.Equal(chosen, LakeQueryApps.FindDuckDb(chosen, path, "local", _ => true));
-        Assert.Equal(onPath, LakeQueryApps.FindDuckDb(chosen, path, "local", p => p != chosen));
+        Assert.Equal(onPath, LakeQueryApps.FindDuckDb(chosen, path, "local", p => p == onPath || p == winget));
         Assert.Equal(winget, LakeQueryApps.FindDuckDb(null, path, "local", p => p == winget));
         Assert.Null(LakeQueryApps.FindDuckDb(null, path, "local", _ => false));
     }
@@ -119,7 +119,9 @@ public class LakeQueryAppsTests
 
         Assert.Equal("-con", plan.Start!.ArgumentList[0]);
         var con = plan.Start.ArgumentList[1].Split('|');
-        Assert.Contains("driver=duckdb", con);
+        Assert.Contains("driver=duckdb:duckdb_jdbc", con);
+        Assert.Contains("connect=true", con);
+        Assert.Contains("openConsole=true", con);
         Assert.Contains("url=jdbc:duckdb:" + lake, con);
         Assert.Contains("prop.duckdb.read_only=true", con);
         Assert.Contains("name=A B C", con);

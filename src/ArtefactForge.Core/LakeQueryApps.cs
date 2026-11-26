@@ -155,11 +155,13 @@ public static class LakeQueryApps
     public static ProcessStartInfo DBeaverStart(string dbeaver, string lakePath, string connectionName)
     {
         var start = new ProcessStartInfo(dbeaver) { UseShellExecute = false };
-        // DBeaver's -con takes name=value pairs split by "|", so neither may hold one; a Windows
-        // path cannot, and the name is cleaned here.
+        // DBeaver's -con takes name=value pairs split by "|"; a Windows path cannot hold one, and
+        // the name is cleaned here. The driver is named as provider:driver id (DBeaver's DuckDB
+        // plugin), because a bare "duckdb" only matches the driver's display name. A -con
+        // connection is temporary: it is not saved in the analyst's DBeaver workspace.
         var name = connectionName.Replace('|', ' ').Replace('=', ' ');
         start.ArgumentList.Add("-con");
-        start.ArgumentList.Add($"driver=duckdb|name={name}|url=jdbc:duckdb:{lakePath}|prop.duckdb.read_only=true|connect=true|openConsole=true");
+        start.ArgumentList.Add($"driver=duckdb:duckdb_jdbc|name={name}|url=jdbc:duckdb:{lakePath}|prop.duckdb.read_only=true|connect=true|openConsole=true");
         return start;
     }
 
