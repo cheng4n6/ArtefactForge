@@ -253,7 +253,8 @@ public class EvidenceLakeStepTests
             format = "evidence-lake-build", startedUtc = "2026-11-18T10:15:00Z", result, message,
             database = result == "notswapped" ? "case.duckdb.new" : "case.duckdb",
             hosts = new[] { "HOST01", "HOST02" }, timelineRows = 1234567, sourcesLoaded = 9,
-            sourcesHeaderMismatch = mismatched, sourcesFailed = 0, warnings = Array.Empty<string>()
+            sourcesHeaderMismatch = mismatched, sourcesFailed = 0, warnings = Array.Empty<string>(),
+            duckDbVersion = "v1.5.2"
         }));
     }
 
@@ -277,6 +278,7 @@ public class EvidenceLakeStepTests
         Assert.Equal(2, status.Hosts);
         Assert.Contains("2 hosts, 1,234,567 timeline rows", status.Describe());
         Assert.StartsWith("Built ", status.Describe());
+        Assert.Equal("v1.5.2", status.DuckDbVersion);
     }
 
     [Theory]
