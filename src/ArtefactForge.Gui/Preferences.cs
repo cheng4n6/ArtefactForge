@@ -39,6 +39,12 @@ public static class Preferences
 
         /// <summary>The Run options card as last used.</summary>
         public SavedRunOptions RunOptions { get; set; } = new();
+
+        /// <summary>duckdb.exe, when the analyst pointed at it rather than leave it to be found on PATH.</summary>
+        public string? DuckDbPath { get; set; }
+
+        /// <summary>dbeaver.exe, when the analyst pointed at it rather than leave it to be found.</summary>
+        public string? DBeaverPath { get; set; }
     }
 
     public static Values Current { get; } = Load();

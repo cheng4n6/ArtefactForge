@@ -1130,6 +1130,16 @@
                                 <StackPanel Grid.Row="6" Grid.Column="2" Orientation="Horizontal" Margin="0,3">
                                     <Button x:Name="BuildLakeButton" Content="Build evidence lake" Click="OnBuildLake" Margin="0,0,6,0"
                                             ToolTip="Load every host's output into _Lake\case.duckdb, in the background"/>
+                                    <Button x:Name="QueryLakeButton" Content="Query lake..." Click="OnQueryLake" Margin="0,0,6,0"
+                                            ToolTip="Open case.duckdb read-only in the DuckDB CLI, DuckDB's web UI or DBeaver">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="DuckDB CLI" Tag="DuckDbCli" Click="OnQueryLakeWith"/>
+                                                <MenuItem Header="DuckDB UI (in the browser)" Tag="DuckDbUi" Click="OnQueryLakeWith"/>
+                                                <MenuItem Header="DBeaver" Tag="DBeaver" Click="OnQueryLakeWith"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                     <Button x:Name="OpenLakeButton" Content="Open folder" Click="OnOpenLakeFolder"/>
                                 </StackPanel>
                             </Grid>

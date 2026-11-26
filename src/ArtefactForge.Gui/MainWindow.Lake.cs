@@ -75,6 +75,7 @@ public partial class MainWindow
             : _lakeBuilding ? "Building"
             : "Load every host's output into _Lake\\case.duckdb, in the background";
         OpenLakeButton.IsEnabled = exists && Directory.Exists(EvidenceLakeStep.FolderFor(caseDir!));
+        UpdateQueryLakeButton(caseDir);
     }
 
     private async void OnBuildLake(object sender, RoutedEventArgs e)

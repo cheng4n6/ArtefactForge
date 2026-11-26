@@ -158,7 +158,8 @@ public static class EvidenceLakeStep
                 SourcesLoaded = (int)Number("sourcesLoaded"),
                 NeedingReview = (int)(Number("sourcesHeaderMismatch") + Number("sourcesFailed")),
                 Warnings = root.TryGetProperty("warnings", out var w) && w.ValueKind == JsonValueKind.Array ? w.GetArrayLength() : 0,
-                DatabasePath = database is null ? null : Path.Combine(FolderFor(caseDirectory), database)
+                DatabasePath = database is null ? null : Path.Combine(FolderFor(caseDirectory), database),
+                DuckDbVersion = Text("duckDbVersion")
             };
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -182,6 +183,8 @@ public sealed record LakeStatus
     public int NeedingReview { get; init; }
     public int Warnings { get; init; }
     public string? DatabasePath { get; init; }
+    /// <summary>The DuckDB version that wrote the lake: a program opening it must be this version or later.</summary>
+    public string? DuckDbVersion { get; init; }
 
     /// <summary>True when there is a lake to open, whatever else needs a look.</summary>
     public bool HasLake => Result is "built" or "checklog" or "notswapped";
