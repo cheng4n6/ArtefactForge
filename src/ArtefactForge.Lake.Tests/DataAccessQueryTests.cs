@@ -242,9 +242,9 @@ public class DataAccessQueryTests(PreparedDataAccessLake lake) : IClassFixture<P
         var root = DataAccessResults.OutputRootFor(result.LakeDirectory!);
         Assert.Equal(
         [
-            "\uFEFF\"Date/Time (UTC)\",\"System\",\"User\",\"Path\",\"Activity\"",
-            "\"2026-03-01 10:00:00\",\"HOST01\",\"alice\",\"C:\\Finance\\Q1.xlsx\",\"Opened\"",
-            "\"2026-03-02 10:00:00\",\"HOST01\",\"alice\",\"C:\\Finance\\Q1.xlsx\",\"Opened\""
+            "\uFEFF\"Date/Time (UTC)\",\"System\",\"User\",\"Path\",\"Activity\",\"Artefact\"",
+            "\"2026-03-01 10:00:00\",\"HOST01\",\"alice\",\"C:\\Finance\\Q1.xlsx\",\"Opened\",\"LNK (Recent)\"",
+            "\"2026-03-02 10:00:00\",\"HOST01\",\"alice\",\"C:\\Finance\\Q1.xlsx\",\"Opened\",\"LNK (Recent)\""
         ], File.ReadAllLines(Path.Combine(root, DataAccessResults.CaseFileName)));
         Assert.Equal("\"HOST01\",\"alice\",\"S-1-5-21-1-1-1-1104\",\"C:\\Users\\alice\",\"ProfileList; Output folders\"",
                      File.ReadAllLines(Path.Combine(root, "HOST01", "DataAccess", DataAccessResults.UsersFileName))[1]);

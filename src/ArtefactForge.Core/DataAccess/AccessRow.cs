@@ -6,7 +6,8 @@ namespace ArtefactForge.Core.DataAccess;
 
 /// <summary>
 /// One time a user opened, browsed or reached a file or folder. The host file keeps the SID and
-/// the artefact it came from; the case's DataAccess.csv has only the five columns the client gets.
+/// the artefact it came from; the case's DataAccess.csv has the columns the client gets, with the
+/// artefact named last so the analyst can check a row against its source.
 /// </summary>
 public sealed record AccessRow(DateTime TimeUtc, string System, string User, string Sid, string Path,
                                string Activity, string Source)
@@ -23,7 +24,29 @@ public sealed record AccessRow(DateTime TimeUtc, string System, string User, str
     public const string Accessed = "Accessed (file audit)";
 
     public static readonly string[] HostColumns = ["TimeUtc", "System", "User", "SID", "Path", "Activity", "Source"];
-    public static readonly string[] CaseColumns = ["Date/Time (UTC)", "System", "User", "Path", "Activity"];
+    public static readonly string[] CaseColumns = ["Date/Time (UTC)", "System", "User", "Path", "Activity", "Artefact"];
+
+    /// <summary>
+    /// The artefact a row came from, as the case's DataAccess.csv names it. Where two artefacts
+    /// gave the same row, it is the one whose row was kept (the first read).
+    /// </summary>
+    public string Artefact => ArtefactFor(Source, Activity);
+
+    /// <summary>
+    /// The artefact behind a row, short enough to filter on: the input's name, except that the
+    /// Security events input is named by its event ID and the Linux one by its file.
+    /// </summary>
+    public static string ArtefactFor(string source, string activity) => source switch
+    {
+        DataAccessReport.SecurityEvents => activity switch
+        {
+            ShareAccessed => "Security 5140",
+            AccessedOverShare => "Security 5145",
+            _ => "Security 4663"
+        },
+        DataAccessReport.LinuxRecent => activity == OpenedInVim ? ".viminfo" : "recently-used.xbel",
+        _ => source
+    };
 
     /// <summary>Two rows saying the same thing, from two artefacts, are one row in the report.</summary>
     public (DateTime, string, string, string, string) Key =>
@@ -51,7 +74,7 @@ public sealed record AccessRow(DateTime TimeUtc, string System, string User, str
         {
             Linux.CsvFile.WriteRow(writer, CaseColumns);
             foreach (var r in rows)
-                Linux.CsvFile.WriteRow(writer, IpHistoryRecord.Format(r.TimeUtc), r.System, r.User, r.Path, r.Activity);
+                Linux.CsvFile.WriteRow(writer, IpHistoryRecord.Format(r.TimeUtc), r.System, r.User, r.Path, r.Activity, r.Artefact);
         });
 
     /// <summary>The number of rows in a written file, without keeping them.</summary>

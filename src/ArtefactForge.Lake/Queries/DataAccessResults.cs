@@ -31,7 +31,7 @@ public static class DataAccessResults
     public static readonly string[] UserColumns = ["System", "Username", "SID", "ProfilePath", "Source"];
     public static readonly string[] ActivityColumns = ["TimeUtc", "System", "User", "SID", "Path", "Activity", "Source"];
     public static readonly string[] SourceColumns = ["Source", "Status", "Rows", "Input"];
-    public static readonly string[] CaseColumns = ["Date/Time (UTC)", "System", "User", "Path", "Activity"];
+    public static readonly string[] CaseColumns = ["Date/Time (UTC)", "System", "User", "Path", "Activity", "Artefact"];
 
     /// <summary>Where the lake build writes them: &lt;lake&gt;\results\DataAccess.</summary>
     public static string OutputRootFor(string lakeDirectory) => Path.Combine(lakeDirectory, LakeNames.ResultsFolder, Folder);
