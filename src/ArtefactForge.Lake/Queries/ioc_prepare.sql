@@ -69,7 +69,8 @@ WITH forms AS (
         ELSE [e.v] END) AS form
     FROM ioc_entry e
 )
-SELECT input_row, type_label, value, ioc_type, v, form, lower(form) AS lower_form,
+SELECT row_number() OVER (ORDER BY input_row, form) AS variant_id,
+       input_row, type_label, value, ioc_type, v, form, lower(form) AS lower_form,
        '(?i)' || CASE ioc_type
            WHEN 'Path' THEN ioc_literal(form)
                || CASE WHEN ends_with(form, '\') OR ends_with(form, '/') THEN '' ELSE '($|[^' || ioc_name_class() || '])' END
@@ -88,33 +89,37 @@ CREATE TEMP TABLE IF NOT EXISTS ioc_modules (output_file VARCHAR, module VARCHAR
 -- --- the rows -----------------------------------------------------------------------------------
 -- Each row as one line, and where its hash and time columns are. A Hash IOC is only looked for in
 -- a file with a hash column (CsvHeader.HashColumns); every other type in any row.
+-- Rows that contain one of the forms, ignoring case: only these are tested against the form's
+-- pattern, as IocMatcher first looks for any value in a record before testing each.
 CREATE OR REPLACE TEMP TABLE ioc_candidate AS
 WITH rows AS (
+    -- A line break inside a cell as the sweep reads it: the file's lines joined with \n.
     SELECT r.host, r.source_id, r.row_no, r.names, r.cells,
-           array_to_string(list_transform(r.cells, c -> ioc_csv_cell(c)), ',') AS line
+           regexp_replace(array_to_string(list_transform(r.cells, c -> ioc_csv_cell(c)), ','), '\r\n|\r', chr(10), 'g') AS line
     FROM ioc_lake_rows r
     WHERE EXISTS (SELECT 1 FROM ioc_variant)
 )
-SELECT r.*, v.input_row, v.type_label, v.value, v.ioc_type, v.v, v.pattern
+SELECT r.*, v.variant_id, v.input_row
 FROM rows r JOIN ioc_variant v ON contains(lower(r.line), v.lower_form);
 
-CREATE OR REPLACE TEMP TABLE ioc_hit AS
-WITH matched AS (
-    SELECT DISTINCT c.host, c.source_id, c.row_no, c.names, c.cells, c.line, c.input_row, c.type_label, c.value
-    FROM ioc_candidate c
-    WHERE (c.ioc_type <> 'Hash' AND regexp_matches(c.line, c.pattern))
-       OR (c.ioc_type = 'Hash' AND len(list_filter(range(1, len(c.names) + 1), i ->
-               ioc_hash_column(c.names[i])
-               AND length(ioc_trim(c.cells[i])) >= length(c.v)
-               AND ((length(ioc_trim(c.cells[i])) = length(c.v) + 4 AND starts_with(ioc_trim(c.cells[i]), '0000')
-                     AND ends_with(lower(ioc_trim(c.cells[i])), lower(c.v)))
-                    OR regexp_matches(ioc_trim(c.cells[i]), c.pattern)))) > 0)
-)
-SELECT m.*,
-       s.path,
-       m.host || '\' || replace(s.path, '/', '\') AS output_file,
-       -- The first time or date column with a value, in column order (CsvHeader.TimeOf).
-       coalesce(list_filter(list_transform(range(1, len(m.names) + 1),
-                                           i -> CASE WHEN ioc_time_column(m.names[i]) THEN ioc_trim(m.cells[i]) END),
-                            t -> t IS NOT NULL AND t <> '')[1], '') AS time
-FROM matched m JOIN sources s ON s.source_id = m.source_id;
+-- Whether a candidate row holds the IOC as a whole value: anywhere in the line, or for a hash in
+-- a hash column only (as a whole value, or as Amcache's 0000-prefixed FileId). It is called once
+-- per form with that form's pattern written in as text (ArtefactForge's IOC step does this from
+-- ioc_variant), so each pattern is compiled once: a pattern read from a column would be compiled
+-- again for every row.
+CREATE OR REPLACE TEMP MACRO ioc_row_matches(line, names, cells, ioc_type, v, pattern) AS
+    CASE WHEN ioc_type <> 'Hash' THEN regexp_matches(line, pattern)
+         ELSE len(list_filter(range(1, len(names) + 1), i ->
+                  ioc_hash_column(names[i])
+                  AND length(ioc_trim(cells[i])) >= length(v)
+                  AND ((length(ioc_trim(cells[i])) = length(v) + 4 AND starts_with(ioc_trim(cells[i]), '0000')
+                        AND ends_with(lower(ioc_trim(cells[i])), lower(v)))
+                       OR regexp_matches(ioc_trim(cells[i]), pattern)))) > 0 END;
+
+-- The rows each IOC was found in, filled one form at a time.
+CREATE OR REPLACE TEMP TABLE ioc_matched (source_id INTEGER, row_no BIGINT, input_row BIGINT);
+
+-- A row's line in its file: the header is line 1, and a cell holding line breaks (a quoted
+-- multi-line value) pushes every later row down by that many lines, as the C# sweep counts them.
+CREATE OR REPLACE TEMP MACRO ioc_breaks(cells) AS
+    len(regexp_split_to_array(array_to_string(list_transform(cells, c -> coalesce(c, '')), ''), '\r\n|\r|\n')) - 1;

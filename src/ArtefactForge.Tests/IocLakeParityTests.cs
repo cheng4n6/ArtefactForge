@@ -92,6 +92,13 @@ public class IocLakeParityTests
             "SourceFile,SourceCreated,LocalPath",
             @"C:\Users\alice\Recent\a.lnk,2026-03-10 08:00:00,C:\Temp\evil.exe",
             @"C:\Users\alice\Recent\b.lnk,2026-03-10 08:00:01,C:\Staging\loot.zip");
+        // Cells that span lines push the rows after them down: the hit's line is its line in the file.
+        Write(Path.Combine(caseDir, "HOST02", "Notes", "Notes.csv"),
+            "Id,Text,EventTime",
+            "1,\"line one\r\nline two\nline three\",2026-03-15 08:00:00",
+            "2,connect 10.0.0.1,2026-03-15 08:00:01",
+            "3,\"another\r\nbreak at 10.0.0.1\",2026-03-15 08:00:02",
+            "4,then 10.0.0.1 again,2026-03-15 08:00:03");
         // A host with nothing on the list.
         Write(Path.Combine(caseDir, "HOST03", "Tools", "Other.csv"), "A,B", "1,2");
 
@@ -151,6 +158,9 @@ public class IocLakeParityTests
         Assert.Contains(lake, h => h.Ioc == Sha1 && h.OutputFile.EndsWith("Amcache_UnassociatedFileEntries.csv") && h.LineNumber == 2);
         Assert.DoesNotContain(lake, h => h.Ioc == Sha1 && h.LineNumber == 4 && h.OutputFile.Contains("Amcache"));
         Assert.Contains(lake, h => h.Time == "2026-03-17 11:00:00");
+        Assert.Equal([5L, 6L, 8L], lake.Where(h => h.OutputFile.EndsWith("Notes.csv")).Select(h => h.LineNumber));
+        // A cell's line break as the C# sweep writes it: the file's lines joined with \n.
+        Assert.Contains(lake, h => h.MatchingLine == "3,\"another\nbreak at 10.0.0.1\",2026-03-15 08:00:02");
     }
 
     [Fact]

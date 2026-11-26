@@ -58,8 +58,27 @@ public static class IocResults
         }
         cancellationToken.ThrowIfCancellationRequested();
 
-        var rows = session.RunToRows(Query("ioc_hits"));
+        // The list first: it runs the setup, which finds the candidate rows and each form's pattern.
         var iocs = session.RunToRows(Query("ioc_list"));
+        var forms = new List<(long Id, string Pattern)>();
+        using (var command = session.CreateCommand())
+        {
+            command.CommandText = "SELECT variant_id, pattern FROM ioc_variant ORDER BY variant_id";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) forms.Add((reader.GetInt64(0), reader.GetString(1)));
+        }
+        // One statement per form with its pattern as text, so the pattern is compiled once; the
+        // test itself is the query's (ioc_row_matches).
+        foreach (var (id, pattern) in forms)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            session.Execute(
+                "INSERT INTO ioc_matched SELECT c.source_id, c.row_no, c.input_row FROM ioc_candidate c " +
+                $"JOIN ioc_variant v ON v.variant_id = c.variant_id WHERE c.variant_id = {id} " +
+                $"AND ioc_row_matches(c.line, c.names, c.cells, v.ioc_type, v.v, {LakeDatabase.Literal(pattern)})");
+        }
+
+        var rows = session.RunToRows(Query("ioc_hits"));
         Directory.CreateDirectory(outputRoot);
         var path = Path.Combine(outputRoot, HitsFileName);
         using (var writer = new StreamWriter(path + ".tmp", false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)))
