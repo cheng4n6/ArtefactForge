@@ -387,6 +387,8 @@ public class DataAccessTests
         Assert.Contains("id=\"dataaccess\"", html);
         Assert.Contains("2026-02-01 09:00:00", html);
         Assert.Contains("Opened 2", html);
+        Assert.Contains("<th>Artefact</th>", html);
+        Assert.Contains("LNK (Recent) 2", html);
     }
 
     // --- the case ---------------------------------------------------------------------------------
@@ -426,6 +428,29 @@ public class DataAccessTests
             ],
             rows.Select(r => (r["Date/Time (UTC)"], r["System"], r["Path"])));
         Assert.All(rows, r => Assert.Equal(("alice", "Opened"), (r["User"], r["Activity"])));
+        // Budget.xlsx is in the LNK and the jump list; the LNK is read first, so its row is kept.
+        Assert.All(rows, r => Assert.Equal(DataAccessReport.LnkRecent, r["Artefact"]));
+    }
+
+    [Theory]
+    [InlineData(DataAccessReport.LnkRecent, AccessRow.Opened, "LNK (Recent)")]
+    [InlineData(DataAccessReport.JumpLists, AccessRow.Opened, "Jump lists")]
+    [InlineData(DataAccessReport.ShellBags, AccessRow.FolderBrowsed, "ShellBags")]
+    [InlineData(DataAccessReport.OpenSave, AccessRow.OpenedOrSaved, "OpenSavePidlMRU")]
+    [InlineData(DataAccessReport.SecurityEvents, AccessRow.ShareAccessed, "Security 5140")]
+    [InlineData(DataAccessReport.SecurityEvents, AccessRow.AccessedOverShare, "Security 5145")]
+    [InlineData(DataAccessReport.SecurityEvents, AccessRow.Read, "Security 4663")]
+    [InlineData(DataAccessReport.SecurityEvents, AccessRow.Deleted, "Security 4663")]
+    [InlineData(DataAccessReport.LinuxRecent, AccessRow.Opened, "recently-used.xbel")]
+    [InlineData(DataAccessReport.LinuxRecent, AccessRow.OpenedInVim, ".viminfo")]
+    public void The_case_report_names_each_rows_artefact(string source, string activity, string expected)
+    {
+        Assert.Equal(expected, AccessRow.ArtefactFor(source, activity));
+
+        using var dir = new TempDirectory();
+        var file = Path.Combine(dir.Path, "DataAccess.csv");
+        AccessRow.WriteCase(file, [new AccessRow(new DateTime(2026, 2, 1, 9, 0, 0), "HOST01", "alice", "", @"D:\x", activity, source)]);
+        Assert.Equal(expected, ReadCsv(file)[0]["Artefact"]);
     }
 
     [Fact]
